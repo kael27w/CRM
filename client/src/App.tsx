@@ -9,7 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import Pipeline from "@/pages/pipeline";
 import Clients from "@/pages/clients";
 import Policies from "@/pages/policies";
-import Calendar from "@/pages/calendar";
+import Calendar from "@/pages/calendar-new"; // Using our new calendar component
 import Underwriting from "@/pages/underwriting";
 import Analytics from "@/pages/analytics";
 import Communications from "@/pages/communications";
