@@ -140,21 +140,20 @@ const Communications: React.FC = () => {
         <div className="lg:col-span-1">
           <Card className="h-full">
             <CardHeader className="pb-3">
-              <div className="flex justify-between items-center">
+              <div>
                 <CardTitle>Communication History</CardTitle>
-                <Button variant="outline" size="sm">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filter
-                </Button>
               </div>
-              <div className="relative">
+              <div className="relative mt-2">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
                 <Input
                   placeholder="Search communications"
-                  className="pl-10"
+                  className="pl-10 pr-10"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+                <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8">
+                  <Filter className="h-4 w-4" />
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4 max-h-[calc(100vh-320px)] overflow-y-auto">
