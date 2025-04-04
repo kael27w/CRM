@@ -97,20 +97,20 @@ const Calendar: React.FC = () => {
       </div>
 
       {view === 'calendar' ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2">
-            <CardContent className="p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <Card className="lg:col-span-3 w-full">
+            <CardContent className="p-6">
               <CalendarComponent
                 mode="single"
                 selected={date}
                 onSelect={setDate}
-                className="rounded-md border w-full max-w-none"
+                className="rounded-md border w-full"
                 classNames={{
                   day_today: "bg-primary/10 font-bold text-primary",
-                  table: "w-full border-collapse",
-                  cell: "p-0",
-                  head_cell: "text-muted-foreground rounded-md w-10 font-medium text-xs",
-                  day: "h-10 w-10 p-0 font-normal text-sm aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                  table: "w-full border-collapse space-y-1",
+                  cell: "p-0 text-center",
+                  head_cell: "text-muted-foreground rounded-md w-12 font-medium text-sm p-2",
+                  day: "h-12 w-12 p-0 font-normal text-base aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground rounded-md mx-auto"
                 }}
               />
             </CardContent>

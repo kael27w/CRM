@@ -35,17 +35,18 @@ const PolicyStatusChart: React.FC<PolicyStatusChartProps> = ({ data, totalPolici
               <Tooltip
                 formatter={(value, name, props) => [value, props.payload.status]}
               />
+              {/* Conditional rendering for both light and dark mode */}
               <text
                 x="50%"
                 y="50%"
                 textAnchor="middle"
                 dominantBaseline="middle"
-                className="text-slate-900 dark:text-white"
+                fill="transparent"
               >
-                <tspan x="50%" dy="-10" fontSize="24" fontWeight="600">
+                <tspan x="50%" dy="-10" fontSize="24" fontWeight="600" className="fill-black dark:fill-white">
                   {totalPolicies}
                 </tspan>
-                <tspan x="50%" dy="24" fontSize="12" fill="#94a3b8">
+                <tspan x="50%" dy="24" fontSize="12" className="fill-slate-400 dark:fill-slate-300">
                   Total Policies
                 </tspan>
               </text>

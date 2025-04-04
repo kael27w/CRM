@@ -15,40 +15,40 @@ interface ClientCardProps {
 const ClientCard: React.FC<ClientCardProps> = ({ client, onClick, onContact }) => {
   return (
     <Card 
-      className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+      className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow relative"
       onClick={onClick}
     >
+      {/* Status badge positioned absolutely in the top-right corner */}
+      <Badge 
+        variant={client.status === 'active' ? 'default' : 'secondary'}
+        className={`absolute top-2 right-2 z-10 ${
+          client.status === 'active' 
+            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
+            : ''
+        }`}
+      >
+        {client.status}
+      </Badge>
+
       <CardContent className="p-6">
         <div className="flex flex-col space-y-4">
-          {/* Header with avatar and status */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <Avatar className="h-14 w-14">
-                <AvatarImage src={client.profileImage} alt={client.name} />
-                <AvatarFallback>
-                  {client.name.split(' ').map(n => n[0]).join('')}
-                </AvatarFallback>
-              </Avatar>
-              <div className="ml-4">
-                <h3 className="text-base font-medium text-slate-900 dark:text-white">{client.name}</h3>
-                {client.occupation && (
-                  <div className="flex items-center mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    <Briefcase className="h-3 w-3 mr-1" />
-                    <span>{client.occupation}</span>
-                  </div>
-                )}
-              </div>
+          {/* Header with avatar and name */}
+          <div className="flex items-center">
+            <Avatar className="h-14 w-14">
+              <AvatarImage src={client.profileImage} alt={client.name} />
+              <AvatarFallback>
+                {client.name.split(' ').map(n => n[0]).join('')}
+              </AvatarFallback>
+            </Avatar>
+            <div className="ml-4">
+              <h3 className="text-base font-medium text-slate-900 dark:text-white">{client.name}</h3>
+              {client.occupation && (
+                <div className="flex items-center mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  <Briefcase className="h-3 w-3 mr-1" />
+                  <span>{client.occupation}</span>
+                </div>
+              )}
             </div>
-            <Badge 
-              variant={client.status === 'active' ? 'default' : 'secondary'}
-              className={
-                client.status === 'active' 
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 
-                  : ''
-              }
-            >
-              {client.status}
-            </Badge>
           </div>
           
           {/* Contact information in separate rows */}
