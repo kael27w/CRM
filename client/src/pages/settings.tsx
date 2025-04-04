@@ -40,51 +40,51 @@ const Settings: React.FC = () => {
             <div className="space-y-1">
               <Button 
                 variant={activeTab === 'profile' ? 'default' : 'ghost'} 
-                className="w-full justify-start" 
+                className="w-full justify-start text-left" 
                 onClick={() => setActiveTab('profile')}
               >
-                <User className="h-4 w-4 mr-2" />
-                Profile
+                <User className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">Profile</span>
               </Button>
               <Button 
                 variant={activeTab === 'account' ? 'default' : 'ghost'} 
-                className="w-full justify-start" 
+                className="w-full justify-start text-left" 
                 onClick={() => setActiveTab('account')}
               >
-                <Shield className="h-4 w-4 mr-2" />
-                Account Security
+                <Shield className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">Account Security</span>
               </Button>
               <Button 
                 variant={activeTab === 'notifications' ? 'default' : 'ghost'} 
-                className="w-full justify-start" 
+                className="w-full justify-start text-left" 
                 onClick={() => setActiveTab('notifications')}
               >
-                <Bell className="h-4 w-4 mr-2" />
-                Notifications
+                <Bell className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">Notifications</span>
               </Button>
               <Button 
                 variant={activeTab === 'users' ? 'default' : 'ghost'} 
-                className="w-full justify-start" 
+                className="w-full justify-start text-left" 
                 onClick={() => setActiveTab('users')}
               >
-                <Users className="h-4 w-4 mr-2" />
-                User Management
+                <Users className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">User Management</span>
               </Button>
               <Button 
                 variant={activeTab === 'workflow' ? 'default' : 'ghost'} 
-                className="w-full justify-start" 
+                className="w-full justify-start text-left" 
                 onClick={() => setActiveTab('workflow')}
               >
-                <Workflow className="h-4 w-4 mr-2" />
-                Workflow Settings
+                <Workflow className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">Workflow Settings</span>
               </Button>
               <Button 
                 variant={activeTab === 'system' ? 'default' : 'ghost'} 
-                className="w-full justify-start" 
+                className="w-full justify-start text-left" 
                 onClick={() => setActiveTab('system')}
               >
-                <SettingsIcon className="h-4 w-4 mr-2" />
-                System Settings
+                <SettingsIcon className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">System Settings</span>
               </Button>
             </div>
           </CardContent>
