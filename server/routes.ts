@@ -5,9 +5,8 @@ import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { 
   insertUserSchema, 
-  insertClientSchema, 
-  insertPolicySchema, 
-  insertTaskSchema, 
+  insertContactSchema,  // Renamed from insertClientSchema
+  insertDealSchema,     // Renamed from insertPolicySchema  
   insertActivitySchema
 } from "@shared/schema";
 
@@ -58,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/clients", async (req, res) => {
     try {
-      const validatedData = insertClientSchema.parse(req.body);
+      const validatedData = insertContactSchema.parse(req.body);
       const client = await storage.createClient(validatedData);
       res.status(201).json(client);
     } catch (error) {
@@ -69,7 +68,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Policy routes
+  // Deal routes (formerly Policy routes)
   app.get("/api/policies", async (req, res) => {
     try {
       const policies = await storage.getPolicies();
@@ -93,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/policies", async (req, res) => {
     try {
-      const validatedData = insertPolicySchema.parse(req.body);
+      const validatedData = insertDealSchema.parse(req.body);
       const policy = await storage.createPolicy(validatedData);
       res.status(201).json(policy);
     } catch (error) {
@@ -122,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Task routes
+  // Task routes - now using activity schema for tasks
   app.get("/api/tasks", async (req, res) => {
     try {
       const tasks = await storage.getTasks();
@@ -134,7 +133,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/tasks", async (req, res) => {
     try {
-      const validatedData = insertTaskSchema.parse(req.body);
+      // Use the activity schema with type='task'
+      const taskData = { ...req.body, type: 'task' };
+      const validatedData = insertActivitySchema.parse(taskData);
       const task = await storage.createTask(validatedData);
       res.status(201).json(task);
     } catch (error) {

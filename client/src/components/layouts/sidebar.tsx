@@ -4,30 +4,33 @@ import { cn } from '@/lib/utils';
 import { useAppContext } from '@/lib/context/app-context';
 import {
   LayoutDashboard,
-  ClipboardList,
+  KanbanSquare,
   Users,
   Building2,
   Package,
   Calendar,
-  Settings
+  Settings,
+  BarChart3,
+  PieChart,
+  CheckSquare,
+  HelpCircle
 } from 'lucide-react';
 
 const Sidebar: React.FC = () => {
   const [location] = useLocation();
   const { isSidebarOpen } = useAppContext();
 
-  // Updated navigation items based on new CRM structure
-  const navItems = [
+  // Main navigation items
+  const mainNavItems = [
     { 
       href: '/', 
       label: 'Dashboard', 
       icon: <LayoutDashboard className="h-5 w-5 mr-3" />
-    },
-    { 
-      href: '/pipelines', 
-      label: 'Pipelines', 
-      icon: <ClipboardList className="h-5 w-5 mr-3" />
-    },
+    }
+  ];
+
+  // Records navigation items
+  const recordNavItems = [
     { 
       href: '/contacts', 
       label: 'Contacts', 
@@ -42,11 +45,48 @@ const Sidebar: React.FC = () => {
       href: '/products', 
       label: 'Products', 
       icon: <Package className="h-5 w-5 mr-3" />
+    }
+  ];
+
+  // Sales navigation items
+  const salesNavItems = [
+    { 
+      href: '/pipelines', 
+      label: 'Pipelines', 
+      icon: <KanbanSquare className="h-5 w-5 mr-3" />
     },
     { 
       href: '/activities', 
       label: 'Activities', 
-      icon: <Calendar className="h-5 w-5 mr-3" />
+      icon: <CheckSquare className="h-5 w-5 mr-3" />
+    }
+  ];
+
+  // Analytics navigation items
+  const analyticsNavItems = [
+    { 
+      href: '/analytics', 
+      label: 'Analytics', 
+      icon: <BarChart3 className="h-5 w-5 mr-3" />
+    },
+    { 
+      href: '/reports', 
+      label: 'Reports', 
+      icon: <PieChart className="h-5 w-5 mr-3" />
+    }
+  ];
+
+  // Support navigation items
+  const supportNavItems = [
+    { 
+      href: '/settings', 
+      label: 'Settings', 
+      icon: <Settings className="h-5 w-5 mr-3" />
+    },
+    { 
+      href: '/help', 
+      label: 'Help', 
+      icon: <HelpCircle className="h-5 w-5 mr-3" />
     }
   ];
 
@@ -56,6 +96,45 @@ const Sidebar: React.FC = () => {
       ? "text-white bg-blue-600" 
       : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
   );
+
+  // Render a section of navigation items with a heading
+  const renderNavSection = (items: any[], title: string) => {
+    if (!isSidebarOpen && items !== mainNavItems) {
+      return (
+        <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+          {items.map((item) => (
+            <Link 
+              key={item.href} 
+              href={item.href} 
+              className={getNavItemClasses(item.href)}
+            >
+              {item.icon}
+            </Link>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+        {isSidebarOpen && (
+          <h3 className="px-3 mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            {title}
+          </h3>
+        )}
+        {items.map((item) => (
+          <Link 
+            key={item.href} 
+            href={item.href} 
+            className={getNavItemClasses(item.href)}
+          >
+            {item.icon}
+            {isSidebarOpen && <span>{item.label}</span>}
+          </Link>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className={cn(
@@ -69,8 +148,9 @@ const Sidebar: React.FC = () => {
           </h1>
         </div>
         
-        <nav className="flex-1 px-2 pb-4 space-y-1 mt-3">
-          {navItems.map((item) => (
+        <nav className="flex-1 px-2 pb-4 mt-3">
+          {/* Main section doesn't need a heading */}
+          {mainNavItems.map((item) => (
             <Link 
               key={item.href} 
               href={item.href} 
@@ -81,15 +161,17 @@ const Sidebar: React.FC = () => {
             </Link>
           ))}
 
-          <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-            <Link 
-              href="/settings" 
-              className={getNavItemClasses('/settings')}
-            >
-              <Settings className="h-5 w-5 mr-3" />
-              {isSidebarOpen && <span>Settings</span>}
-            </Link>
-          </div>
+          {/* Records section */}
+          {renderNavSection(recordNavItems, "Records")}
+          
+          {/* Sales section */}
+          {renderNavSection(salesNavItems, "Sales")}
+          
+          {/* Analytics section */}
+          {renderNavSection(analyticsNavItems, "Analytics")}
+          
+          {/* Support section */}
+          {renderNavSection(supportNavItems, "Support")}
         </nav>
       </div>
     </div>

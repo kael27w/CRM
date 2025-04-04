@@ -6,14 +6,16 @@ import { ThemeProvider } from "@/lib/context/app-context";
 import NotFound from "@/pages/not-found";
 import MainLayout from "@/components/layouts/main-layout";
 import Dashboard from "@/pages/dashboard";
-import Pipelines from "@/pages/pipelines"; // Updated to pipelines (plural)
-import Contacts from "@/pages/contacts"; // New contacts page
-import Companies from "@/pages/companies"; // New companies page
-import Products from "@/pages/products"; // New products page
-import Activities from "@/pages/activities"; // New activities page (replacing calendar)
 import Settings from "@/pages/settings";
 
-// Temporary implementation for pages we need to create
+// Import our actual implemented pages
+import ContactsPage from "./pages/contacts";
+import CompaniesPage from "./pages/companies";
+import ProductsPage from "./pages/products";
+import ActivitiesPage from "./pages/activities";
+import PipelinesPage from "./pages/pipelines";
+
+// For pages we haven't created yet
 const PlaceholderPage: React.FC<{title: string}> = ({title}) => (
   <div className="space-y-6">
     <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{title}</h1>
@@ -23,12 +25,9 @@ const PlaceholderPage: React.FC<{title: string}> = ({title}) => (
   </div>
 );
 
-// Define placeholder components until we implement them
-const ContactsPage = () => <PlaceholderPage title="Contacts" />;
-const CompaniesPage = () => <PlaceholderPage title="Companies" />;
-const ProductsPage = () => <PlaceholderPage title="Products" />;
-const ActivitiesPage = () => <PlaceholderPage title="Activities" />;
-const PipelinesPage = () => <PlaceholderPage title="Pipelines" />;
+// Reports page placeholder
+const ReportsPage = () => <PlaceholderPage title="Reports" />;
+const HelpPage = () => <PlaceholderPage title="Help & Support" />;
 
 function Router() {
   return (
@@ -39,7 +38,10 @@ function Router() {
       <Route path="/companies" component={CompaniesPage} />
       <Route path="/products" component={ProductsPage} />
       <Route path="/activities" component={ActivitiesPage} />
+      <Route path="/analytics" component={Dashboard} /> {/* Using Dashboard temporarily */}
+      <Route path="/reports" component={ReportsPage} />
       <Route path="/settings" component={Settings} />
+      <Route path="/help" component={HelpPage} />
       <Route component={NotFound} />
     </Switch>
   );
