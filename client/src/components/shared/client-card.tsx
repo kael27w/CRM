@@ -40,7 +40,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onClick, onContact }) =
               </div>
             </div>
             <Badge 
-              variant={client.status === 'active' ? 'success' : 'secondary'}
+              variant={client.status === 'active' ? 'default' : 'secondary'}
               className={
                 client.status === 'active' 
                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' 

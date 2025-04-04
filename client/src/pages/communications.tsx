@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   XCircle,
   Filter,
-  Share2
+  Share2,
+  Calendar
 } from 'lucide-react';
 
 const Communications: React.FC = () => {
@@ -222,8 +223,72 @@ const Communications: React.FC = () => {
               </Tabs>
             </CardHeader>
             <CardContent>
-              <TabsContent value="email" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {messageTab === 'email' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">Recipient</label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select recipient" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sarah">Sarah Johnson</SelectItem>
+                          <SelectItem value="michael">Michael Rodriguez</SelectItem>
+                          <SelectItem value="emily">Emily Chen</SelectItem>
+                          <SelectItem value="david">David Wilson</SelectItem>
+                          <SelectItem value="jennifer">Jennifer Martinez</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">Template</label>
+                      <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select template (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {emailTemplates.map(template => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Subject</label>
+                    <Input placeholder="Email subject" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Message</label>
+                    <Textarea 
+                      placeholder="Compose your message here..." 
+                      className="min-h-[200px]"
+                      defaultValue={selectedTemplate === 'renewal' ? 
+                        "Dear [Client Name],\n\nThis is a friendly reminder that your life insurance policy #[Policy Number] is due for renewal on [Renewal Date].\n\nTo ensure continuous coverage, please review the attached renewal documents and contact us with any questions.\n\nBest regards,\n[Your Name]\nInsureFlow Insurance Agency" : ''}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <Button variant="outline">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Attach Files
+                    </Button>
+                    <div className="space-x-2">
+                      <Button variant="outline">Save Draft</Button>
+                      <Button>
+                        <Send className="h-4 w-4 mr-2" />
+                        Send Email
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {messageTab === 'sms' && (
+                <div className="space-y-4">
                   <div>
                     <label className="text-sm font-medium mb-1 block">Recipient</label>
                     <Select>
@@ -240,152 +305,94 @@ const Communications: React.FC = () => {
                     </Select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-1 block">Template</label>
-                    <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select template (optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">None</SelectItem>
-                        {emailTemplates.map(template => (
-                          <SelectItem key={template.id} value={template.id}>
-                            {template.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <label className="text-sm font-medium mb-1 block">Message</label>
+                    <Textarea 
+                      placeholder="Type your SMS message here..." 
+                      className="min-h-[150px]"
+                    />
+                    <div className="flex justify-end mt-1">
+                      <span className="text-xs text-slate-500">0/160 characters</span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Subject</label>
-                  <Input placeholder="Email subject" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Message</label>
-                  <Textarea 
-                    placeholder="Compose your message here..." 
-                    className="min-h-[200px]"
-                    value={selectedTemplate === 'renewal' ? 
-                      "Dear [Client Name],\n\nThis is a friendly reminder that your life insurance policy #[Policy Number] is due for renewal on [Renewal Date].\n\nTo ensure continuous coverage, please review the attached renewal documents and contact us with any questions.\n\nBest regards,\n[Your Name]\nInsureFlow Insurance Agency" : ''}
-                  />
-                </div>
-                <div className="flex justify-between items-center">
-                  <Button variant="outline">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Attach Files
-                  </Button>
-                  <div className="space-x-2">
-                    <Button variant="outline">Save Draft</Button>
+                  <div className="flex justify-end">
                     <Button>
                       <Send className="h-4 w-4 mr-2" />
-                      Send Email
+                      Send SMS
                     </Button>
                   </div>
                 </div>
-              </TabsContent>
+              )}
 
-              <TabsContent value="sms" className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Recipient</label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select recipient" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sarah">Sarah Johnson</SelectItem>
-                      <SelectItem value="michael">Michael Rodriguez</SelectItem>
-                      <SelectItem value="emily">Emily Chen</SelectItem>
-                      <SelectItem value="david">David Wilson</SelectItem>
-                      <SelectItem value="jennifer">Jennifer Martinez</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Message</label>
-                  <Textarea 
-                    placeholder="Type your SMS message here..." 
-                    className="min-h-[150px]"
-                  />
-                  <div className="flex justify-end mt-1">
-                    <span className="text-xs text-slate-500">0/160 characters</span>
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send SMS
-                  </Button>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="call" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Client</label>
-                    <Select>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select client" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sarah">Sarah Johnson</SelectItem>
-                        <SelectItem value="michael">Michael Rodriguez</SelectItem>
-                        <SelectItem value="emily">Emily Chen</SelectItem>
-                        <SelectItem value="david">David Wilson</SelectItem>
-                        <SelectItem value="jennifer">Jennifer Martinez</SelectItem>
-                      </SelectContent>
-                    </Select>
+              {messageTab === 'call' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">Client</label>
+                      <Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select client" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sarah">Sarah Johnson</SelectItem>
+                          <SelectItem value="michael">Michael Rodriguez</SelectItem>
+                          <SelectItem value="emily">Emily Chen</SelectItem>
+                          <SelectItem value="david">David Wilson</SelectItem>
+                          <SelectItem value="jennifer">Jennifer Martinez</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">Call Status</label>
+                      <Select defaultValue="completed">
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="completed">
+                            <div className="flex items-center">
+                              <CheckCircle2 className="h-4 w-4 mr-2 text-green-500" />
+                              Completed
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="attempted">
+                            <div className="flex items-center">
+                              <XCircle className="h-4 w-4 mr-2 text-red-500" />
+                              Attempted (No Answer)
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="scheduled">
+                            <div className="flex items-center">
+                              <Clock className="h-4 w-4 mr-2 text-blue-500" />
+                              Scheduled
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-1 block">Call Status</label>
-                    <Select defaultValue="completed">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="completed">
-                          <div className="flex items-center">
-                            <CheckCircle2 className="h-4 w-4 mr-2 text-green-500" />
-                            Completed
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="attempted">
-                          <div className="flex items-center">
-                            <XCircle className="h-4 w-4 mr-2 text-red-500" />
-                            Attempted (No Answer)
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="scheduled">
-                          <div className="flex items-center">
-                            <Clock className="h-4 w-4 mr-2 text-blue-500" />
-                            Scheduled
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <label className="text-sm font-medium mb-1 block">Call Subject</label>
+                    <Input placeholder="Brief description of call purpose" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Call Notes</label>
+                    <Textarea 
+                      placeholder="Enter details about the call here..." 
+                      className="min-h-[150px]"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <Button variant="outline">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Schedule Follow-up
+                    </Button>
+                    <Button>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Log Call
+                    </Button>
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Call Subject</label>
-                  <Input placeholder="Brief description of call purpose" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Call Notes</label>
-                  <Textarea 
-                    placeholder="Enter details about the call here..." 
-                    className="min-h-[150px]"
-                  />
-                </div>
-                <div className="flex justify-between items-center">
-                  <Button variant="outline">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Schedule Follow-up
-                  </Button>
-                  <Button>
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Log Call
-                  </Button>
-                </div>
-              </TabsContent>
+              )}
             </CardContent>
           </Card>
         </div>
