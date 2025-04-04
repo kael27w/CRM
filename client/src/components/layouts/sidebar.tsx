@@ -6,12 +6,9 @@ import {
   LayoutDashboard,
   ClipboardList,
   Users,
-  FileText,
+  Building2,
+  Package,
   Calendar,
-  CheckSquare,
-  ChartBar,
-  MessageSquare,
-  Files,
   Settings
 } from 'lucide-react';
 
@@ -19,6 +16,7 @@ const Sidebar: React.FC = () => {
   const [location] = useLocation();
   const { isSidebarOpen } = useAppContext();
 
+  // Updated navigation items based on new CRM structure
   const navItems = [
     { 
       href: '/', 
@@ -26,44 +24,29 @@ const Sidebar: React.FC = () => {
       icon: <LayoutDashboard className="h-5 w-5 mr-3" />
     },
     { 
-      href: '/pipeline', 
-      label: 'Pipeline', 
+      href: '/pipelines', 
+      label: 'Pipelines', 
       icon: <ClipboardList className="h-5 w-5 mr-3" />
     },
     { 
-      href: '/clients', 
-      label: 'Client Manager', 
+      href: '/contacts', 
+      label: 'Contacts', 
       icon: <Users className="h-5 w-5 mr-3" />
     },
     { 
-      href: '/policies', 
-      label: 'Policy Manager', 
-      icon: <FileText className="h-5 w-5 mr-3" />
+      href: '/companies', 
+      label: 'Companies', 
+      icon: <Building2 className="h-5 w-5 mr-3" />
     },
     { 
-      href: '/calendar', 
-      label: 'Calendar', 
+      href: '/products', 
+      label: 'Products', 
+      icon: <Package className="h-5 w-5 mr-3" />
+    },
+    { 
+      href: '/activities', 
+      label: 'Activities', 
       icon: <Calendar className="h-5 w-5 mr-3" />
-    },
-    { 
-      href: '/underwriting', 
-      label: 'Underwriting', 
-      icon: <CheckSquare className="h-5 w-5 mr-3" />
-    },
-    { 
-      href: '/analytics', 
-      label: 'Analytics', 
-      icon: <ChartBar className="h-5 w-5 mr-3" />
-    },
-    { 
-      href: '/communications', 
-      label: 'Communications', 
-      icon: <MessageSquare className="h-5 w-5 mr-3" />
-    },
-    { 
-      href: '/documents', 
-      label: 'Documents', 
-      icon: <Files className="h-5 w-5 mr-3" />
     }
   ];
 
@@ -82,7 +65,7 @@ const Sidebar: React.FC = () => {
       <div className="flex flex-col flex-grow pt-5 overflow-y-auto">
         <div className="flex items-center px-4 pb-6 border-b border-slate-200 dark:border-slate-700">
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-            {isSidebarOpen ? 'InsureFlow CRM' : 'IF'}
+            {isSidebarOpen ? 'Business CRM' : 'CRM'}
           </h1>
         </div>
         

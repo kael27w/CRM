@@ -1,0 +1,273 @@
+Okay, here are the instructions for the Replit developer, based on your detailed requirements and comparison to the target CRM. This assumes the Replit project is likely a web application using a common framework like React, Vue, or Angular.
+
+Replit CRM Update Instructions
+
+Objective: Update the existing CRM Replit application to align more closely with the features, layout, and functionality of the reference CRM described, incorporating specific UI changes, data structures, and interactions.
+
+Template Format:
+
+Pages Required:
+
+Dashboard:
+
+Primary landing page after login.
+
+Displays key performance indicators (KPIs), charts, and summaries.
+
+Features a top-left dropdown to switch between different dashboard views (Overview, Pipelines, Tasks, Events, Call Analytics, Email Analytics).
+
+Includes customizable widgets (KPI boxes, charts, target meters).
+
+Requires "Add Component" and "Reload Data" buttons.
+
+Pipelines:
+
+Displays deals/opportunities in a Kanban-style board view.
+
+Supports multiple distinct pipelines under a "Team Pipelines" category (e.g., Sales Pipeline, Customer Support, Living Trust Flow, Index Universal Life).
+
+Each pipeline has its own unique set of configurable stages (columns).
+
+Allows drag-and-drop of deals between stages.
+
+Includes templates section (Clone from Template - Teams/Industries) - Implementation detail: This might be a placeholder or link initially, focus on the core multi-pipeline functionality first.
+
+Contacts:
+
+Displays contact records in a filterable, sortable table view.
+
+Allows adding custom fields to the table columns.
+
+Provides row selection (individual and all).
+
+Includes filtering capabilities.
+
+Companies:
+
+Displays company records in a filterable, sortable table view.
+
+Allows adding custom fields to the table columns.
+
+Provides row selection (individual and all).
+
+Includes filtering capabilities.
+
+Products:
+
+Displays product records in a filterable, sortable table view.
+
+Allows adding custom fields to the table columns.
+
+Provides row selection (individual and all).
+
+Includes filtering capabilities.
+
+Activities:
+
+Displays tasks, events, and calls, primarily in a calendar view.
+
+When a date is clicked on the calendar, a list view of activities for that specific date should appear (likely on the right side).
+
+Allows creation and management of activities.
+
+Settings:
+
+Central location for application configuration (User management, Pipeline configuration, Custom fields setup, etc. - scope to be defined, but the page itself is needed).
+
+User Roles and Permissions:
+
+Admin: Full access to all data and settings. Can configure pipelines, custom fields, manage users, etc.
+
+User: Standard access. Can view/manage their own records (Contacts, Activities, Deals) and potentially view others based on sharing rules (TBD, start with basic access). Cannot access administrative settings unless specifically granted.
+
+Shared Components:
+
+Navigation System - Left Sidebar:
+
+Implement a collapsible vertical sidebar on the left.
+
+Order of Tabs:
+
+Dashboard
+
+Pipelines
+
+Contacts
+
+Companies
+
+Products
+
+Activities
+
+Settings
+
+Remove old tabs: Client Manager, Policy Manager, Calendar (replaced by Activities), Underwriting, Communications, Documents.
+
+Header/Top Bar:
+
+Positioned horizontally at the top.
+
+Elements (Right Aligned):
+
+Create New Record Button (+ Icon): Quick access to create Contacts, Companies, Deals, Activities, etc.
+
+Approval Forms (Note with Checkmark Icon): Link/indicator for approval processes (Functionality TBD, add icon first).
+
+Notifications (Bell Icon): Display system/user notifications.
+
+Signals (Electricity Symbol Icon): Indicator for real-time events/triggers (Functionality TBD, add icon first).
+
+Settings (Gear Icon): Link to the Settings page.
+
+Profile Icon (Circle with Picture/Initial): Access user profile, logout.
+
+Table View Component:
+
+Create a reusable table component.
+
+Props: columns (array of column definitions), data (array of objects).
+
+Features: Sorting, Filtering (per column or global search), Custom Column Visibility/Management, Row Selection (checkboxes on the left), Pagination.
+
+Pipeline (Kanban) View Component:
+
+Create a reusable Kanban board component.
+
+Props: stages (array of stage objects with name, color, ID), deals (array of deal objects with stage ID).
+
+Features: Drag-and-drop deals between stages, display deal summary card within stages, allow stage configuration (via three-dot menu).
+
+Dashboard Widget Component:
+
+Create reusable components for different widget types: KPI Box (Title, Value), Chart (Line, Bar, Pie), Target Meter (Speedometer style). Configurable via props.
+
+Modals/Popups:
+
+Create New Record: For creating Contacts, Companies, Products, Deals, Activities.
+
+Edit Record: For editing details of existing records.
+
+Edit Pipeline Stages: Accessed via three-dot menu on pipeline columns. Allows renaming stages and potentially changing associated colors.
+
+Add Dashboard Component: Allows user to select and configure a new widget for their dashboard.
+
+Custom Field Management: Interface for adding/editing custom fields for Contacts, Companies, Products.
+
+Detailed Implementation Notes:
+
+Pipelines Tab:
+
+Implement a mechanism to select which pipeline is currently viewed (e.g., tabs above the Kanban board, dropdown).
+
+Default Pipelines & Stages:
+
+Sales Pipeline: Qualification, Needs Analysis, Proposal/Price Quote, Negotiation/Review, Closed Won, Closed Lost.
+
+Customer Support: New Ticket, In Progress, On Hold, Closed, Deferred, Not an Issue.
+
+Living Trust Flow: Living Trust Presentation, Estate Funded, Notarizing Documents, Preparation, Needed Customer Appointment, Packaging, Cancelled.
+
+Index Universal Life: New Inquiry, Follow Up Done, Brochure Sent, Plan Selected, Payment Done, Policy Sold, Lost.
+
+Deal Card Display: Within each stage column, display cards representing deals. Show key info (e.g., Contact Name: Ted Watson, Product: Zilker Yearly Subscription, Value: $5671, Due Date: Tomorrow).
+
+Stage Editing: Implement a three-dot menu on the top-right of each stage column. Clicking this should open a modal/popover allowing the user to edit the Stage Name and view/change the associated color (used for the line/indicator at the top of the column).
+
+Contacts Tab:
+
+Switch from card view to the reusable Table View Component.
+
+Default Columns: Contact Name, Company Name, Email, Phone, Contact Owner.
+
+Implement "Add Field" functionality to allow users to define and display custom columns.
+
+Implement filtering controls (e.g., search bar, dropdowns for specific fields).
+
+Implement row selection checkboxes.
+
+Companies Tab:
+
+Create this new page using the reusable Table View Component.
+
+Default Columns: Company Name, Phone, Website, Company Owner.
+
+Implement "Add Field" functionality.
+
+Implement filtering controls.
+
+Implement row selection checkboxes.
+
+Products Tab:
+
+Create this new page using the reusable Table View Component.
+
+Default Columns: Product Name, Product Code, Product Active (e.g., Yes/No or Status), Product Owner.
+
+Implement "Add Field" functionality.
+
+Implement filtering controls.
+
+Implement row selection checkboxes.
+
+Activities Tab:
+
+Use a standard calendar library (e.g., FullCalendar or similar).
+
+Implement the interaction: Clicking a date on the calendar populates/shows a list panel (likely on the right) displaying activities scheduled for that day. Retain this functionality from the current Replit version if it exists.
+
+Dashboard Tab:
+
+Component Renaming: Update existing dashboard components (or create new ones) to match these titles:
+
+Contacts created - this month
+
+Pipelines won - this month
+
+Pipelines lost - this month
+
+Tasks closed - this month
+
+Events completed - this month
+
+Calls completed - this month
+
+Top 5 companies (List/Table)
+
+Open pipelines by stage - this month (Chart - likely Bar or Column)
+
+Revenue won by month (Chart - likely Line or Bar)
+
+Number of calls (Target Meter/Speedometer comparing actual vs. target)
+
+Dashboard Selector: Implement a dropdown (likely top-left) allowing users to switch between different pre-defined dashboard layouts: Overview, Pipelines Dashboard, Tasks Dashboard, Events Dashboard, Call Analytics, Email Analytics. (Initially, focus on the "Overview" structure defined above. Other dashboards can be basic placeholders).
+
+Customization Buttons:
+
+Add an "Add Component" button triggering a modal to select and add new widgets (KPI, Chart, Target Meter).
+
+Add a "Reload" button to refresh data for all components on the current dashboard view.
+
+Technical Requirements:
+
+Use Tailwind CSS (or maintain existing CSS framework if strongly preferred, but Tailwind is recommended for component-based UIs) for styling.
+
+Focus on component reusability (Table, Kanban Board, Dashboard Widgets, Modals).
+
+Implement URL-based routing for all pages and potentially sub-views (e.g., /dashboard/overview, /pipelines/sales, /contacts, /contacts/{contactId}).
+
+Create proper hooks and services for API data handling (fetching, creating, updating, deleting).
+
+Develop a mock API store/service with realistic data structures (including IDs, relationships between Contacts, Companies, Deals, Products, Activities) to simulate backend interactions during development. Use provided examples like the "Ted Watson" deal.
+
+Ensure the application is fully functional end-to-end based on these requirements using the mock data.
+
+Additional Considerations:
+
+Pay attention to UI consistency and intuitive user experience.
+
+Ensure state management is handled appropriately, especially for shared data across components.
+
+Consider responsiveness for different screen sizes, although desktop-first is likely the priority.
+
+Please develop this application with clean, maintainable code. Focus first on implementing the structural changes (sidebar, header), the core page views (especially the table and pipeline views with their specific configurations), and then the dashboard enhancements.

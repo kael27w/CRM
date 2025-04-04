@@ -7,7 +7,10 @@ import {
   Sun, 
   Moon, 
   Menu, 
-  X 
+  X,
+  Settings as SettingsIcon,
+  FileCheck,
+  Zap
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -18,8 +21,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Link } from 'wouter';
 
 const Header: React.FC = () => {
   const { toggleTheme, theme, toggleSidebar, isSidebarOpen } = useAppContext();
@@ -48,13 +57,60 @@ const Header: React.FC = () => {
               id="search" 
               name="search" 
               className="pl-10 pr-3 py-2 w-full md:w-64 lg:w-96"
-              placeholder="Search clients, policies..." 
+              placeholder="Search contacts, companies, deals..." 
               type="search"
             />
           </div>
         </div>
         
         <div className="flex items-center space-x-4">
+          {/* Create New Record Button */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Plus className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Create New</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>Contact</DropdownMenuItem>
+              <DropdownMenuItem>Company</DropdownMenuItem>
+              <DropdownMenuItem>Deal</DropdownMenuItem>
+              <DropdownMenuItem>Product</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Activity</DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem>Task</DropdownMenuItem>
+                      <DropdownMenuItem>Event</DropdownMenuItem>
+                      <DropdownMenuItem>Call</DropdownMenuItem>
+                      <DropdownMenuItem>Email</DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Approval Forms */}
+          <Button variant="ghost" size="icon">
+            <FileCheck className="h-5 w-5" />
+          </Button>
+          
+          {/* Notifications */}
+          <Button variant="ghost" size="icon">
+            <Bell className="h-5 w-5" />
+          </Button>
+          
+          {/* Signals */}
+          <Button variant="ghost" size="icon">
+            <Zap className="h-5 w-5" />
+          </Button>
+          
+          {/* Theme Toggle */}
           <Button 
             variant="ghost" 
             size="icon"
@@ -67,14 +123,18 @@ const Header: React.FC = () => {
             )}
           </Button>
           
-          <Button variant="ghost" size="icon">
-            <Bell className="h-5 w-5" />
+          {/* Settings */}
+          <Button 
+            variant="ghost" 
+            size="icon"
+            asChild
+          >
+            <Link href="/settings">
+              <SettingsIcon className="h-5 w-5" />
+            </Link>
           </Button>
           
-          <Button variant="ghost" size="icon">
-            <Plus className="h-5 w-5" />
-          </Button>
-          
+          {/* User Profile */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -95,7 +155,7 @@ const Header: React.FC = () => {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
+              <DropdownMenuItem>Account Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Log out</DropdownMenuItem>
             </DropdownMenuContent>
