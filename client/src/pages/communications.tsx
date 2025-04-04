@@ -135,7 +135,7 @@ const Communications: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Left Column - Communication History */}
         <div className="lg:col-span-1">
           <Card className="h-full">
@@ -168,22 +168,24 @@ const Communications: React.FC = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="ml-3 flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-slate-900 dark:text-white">{comm.clientName}</p>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center justify-between space-x-2">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{comm.clientName}</p>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">
                           {new Date(comm.date).toLocaleDateString()}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 mt-1">
-                        {getIconForType(comm.type)}
-                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">{comm.subject}</p>
+                        <span className="flex-shrink-0">{getIconForType(comm.type)}</span>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate">{comm.subject}</p>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
                         {comm.preview}
                       </p>
                       <div className="flex justify-between items-center mt-2">
-                        {getStatusBadge(comm.status)}
-                        <Button variant="ghost" size="sm" className="h-6">
+                        <div className="flex-shrink-0">
+                          {getStatusBadge(comm.status)}
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-6 flex-shrink-0">
                           <Share2 className="h-3 w-3 mr-1" />
                           <span className="text-xs">Share</span>
                         </Button>
@@ -271,14 +273,14 @@ const Communications: React.FC = () => {
                         "Dear [Client Name],\n\nThis is a friendly reminder that your life insurance policy #[Policy Number] is due for renewal on [Renewal Date].\n\nTo ensure continuous coverage, please review the attached renewal documents and contact us with any questions.\n\nBest regards,\n[Your Name]\nInsureFlow Insurance Agency" : ''}
                     />
                   </div>
-                  <div className="flex justify-between items-center">
-                    <Button variant="outline">
+                  <div className="flex flex-wrap justify-between items-center gap-3">
+                    <Button variant="outline" className="flex-shrink-0">
                       <FileText className="h-4 w-4 mr-2" />
                       Attach Files
                     </Button>
-                    <div className="space-x-2">
-                      <Button variant="outline">Save Draft</Button>
-                      <Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" className="flex-shrink-0">Save Draft</Button>
+                      <Button className="flex-shrink-0">
                         <Send className="h-4 w-4 mr-2" />
                         Send Email
                       </Button>
@@ -381,12 +383,12 @@ const Communications: React.FC = () => {
                       className="min-h-[150px]"
                     />
                   </div>
-                  <div className="flex justify-between items-center">
-                    <Button variant="outline">
+                  <div className="flex flex-wrap justify-between items-center gap-3">
+                    <Button variant="outline" className="flex-shrink-0">
                       <Calendar className="h-4 w-4 mr-2" />
                       Schedule Follow-up
                     </Button>
-                    <Button>
+                    <Button className="flex-shrink-0">
                       <CheckCircle2 className="h-4 w-4 mr-2" />
                       Log Call
                     </Button>

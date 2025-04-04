@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { 
   User, 
   Users, 
@@ -20,7 +21,9 @@ import {
   Monitor, 
   UploadCloud,
   Save,
-  Shield
+  Shield,
+  Trash2,
+  Plus
 } from 'lucide-react';
 
 const Settings: React.FC = () => {
