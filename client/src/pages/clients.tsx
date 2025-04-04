@@ -34,7 +34,7 @@ const Clients: React.FC = () => {
       <div className="mb-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Client Manager</h1>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Client Manager</h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage and organize your client relationships</p>
           </div>
           <Button>

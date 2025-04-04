@@ -112,7 +112,7 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Overview of your insurance business performance</p>
       </div>
 

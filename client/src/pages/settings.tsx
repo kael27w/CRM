@@ -32,7 +32,7 @@ const Settings: React.FC = () => {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Settings & Administration</h1>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Settings & Administration</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Configure your system preferences and manage users</p>
       </div>
 
