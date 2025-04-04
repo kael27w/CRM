@@ -23,8 +23,8 @@ const PolicyStatusChart: React.FC<PolicyStatusChartProps> = ({ data, totalPolici
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                outerRadius={70}
-                innerRadius={40}
+                outerRadius={80}
+                innerRadius={55}
                 fill="#8884d8"
                 dataKey="count"
               >
@@ -41,10 +41,10 @@ const PolicyStatusChart: React.FC<PolicyStatusChartProps> = ({ data, totalPolici
                 textAnchor="middle"
                 dominantBaseline="middle"
               >
-                <tspan x="50%" dy="-5" className="text-lg font-semibold">
+                <tspan x="50%" dy="-8" className="text-xl font-bold">
                   {totalPolicies}
                 </tspan>
-                <tspan x="50%" dy="20" className="text-sm text-slate-500">
+                <tspan x="50%" dy="22" className="text-xs text-slate-500">
                   Total Policies
                 </tspan>
               </text>

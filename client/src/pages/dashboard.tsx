@@ -134,25 +134,26 @@ const Dashboard: React.FC = () => {
           />
         </div>
 
-        <div className="col-span-1">
-          <UpcomingRenewals renewals={dashboardData.upcomingRenewals} />
-        </div>
-
-        <div className="col-span-1">
-          <TasksWidget 
-            tasks={dashboardData.upcomingRenewals.map(renewal => ({
-              id: renewal.id,
-              title: `Call ${renewal.client.name} about policy renewal`,
-              description: `${renewal.policy.type} Policy #${renewal.policy.policyNumber}`,
-              dueDate: renewal.policy.renewalDate!,
-              completed: false,
-              assignedToId: 1, // Current user
-              clientId: renewal.client.id,
-              policyId: renewal.policy.id,
-              createdAt: new Date().toISOString(),
-            } as Task))} 
-            onToggleTask={handleToggleTask}
-          />
+        <div className="col-span-1 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <UpcomingRenewals renewals={dashboardData.upcomingRenewals} />
+          </div>
+          <div>
+            <TasksWidget 
+              tasks={dashboardData.upcomingRenewals.map(renewal => ({
+                id: renewal.id,
+                title: `Call ${renewal.client.name} about policy renewal`,
+                description: `${renewal.policy.type} Policy #${renewal.policy.policyNumber}`,
+                dueDate: renewal.policy.renewalDate!,
+                completed: false,
+                assignedToId: 1, // Current user
+                clientId: renewal.client.id,
+                policyId: renewal.policy.id,
+                createdAt: new Date().toISOString(),
+              } as Task))} 
+              onToggleTask={handleToggleTask}
+            />
+          </div>
         </div>
 
         <div className="col-span-1 lg:col-span-3">

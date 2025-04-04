@@ -21,6 +21,29 @@ interface PremiumRevenueChartProps {
 const PremiumRevenueChart: React.FC<PremiumRevenueChartProps> = ({ data }) => {
   const [timeFrame, setTimeFrame] = useState<TimeFrame>('monthly');
 
+  // Transform data based on selected timeframe
+  const transformData = () => {
+    if (timeFrame === 'monthly') {
+      return data; // Monthly data is already in the right format
+    } else if (timeFrame === 'quarterly') {
+      // Group monthly data into quarters
+      return [
+        { month: 'Q1', revenue: data.slice(0, 3).reduce((sum, item) => sum + item.revenue, 0) },
+        { month: 'Q2', revenue: data.slice(3, 6).reduce((sum, item) => sum + item.revenue, 0) },
+        { month: 'Q3', revenue: data.slice(6, 9).reduce((sum, item) => sum + item.revenue, 0) },
+        { month: 'Q4', revenue: data.slice(9, 12).reduce((sum, item) => sum + item.revenue, 0) },
+      ];
+    } else if (timeFrame === 'annual') {
+      // Sum all monthly data for the annual view
+      return [
+        { month: 'Annual', revenue: data.reduce((sum, item) => sum + item.revenue, 0) },
+      ];
+    }
+    return data; // Default to monthly
+  };
+
+  const chartData = transformData();
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-5">
@@ -56,7 +79,7 @@ const PremiumRevenueChart: React.FC<PremiumRevenueChartProps> = ({ data }) => {
         <div className="mt-4 h-72">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
-              data={data}
+              data={chartData}
               margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
             >
               <defs>
@@ -79,7 +102,15 @@ const PremiumRevenueChart: React.FC<PremiumRevenueChartProps> = ({ data }) => {
               />
               <Tooltip 
                 formatter={(value) => [formatCurrency(value as number), 'Revenue']}
-                labelFormatter={(label) => `Month: ${label}`}
+                labelFormatter={(label) => {
+                  if (timeFrame === 'quarterly') {
+                    return `Quarter: ${label}`;
+                  } else if (timeFrame === 'annual') {
+                    return `Year Total`;
+                  } else {
+                    return `Month: ${label}`;
+                  }
+                }}
               />
               <Area 
                 type="monotone" 

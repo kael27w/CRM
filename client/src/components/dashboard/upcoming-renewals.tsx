@@ -23,15 +23,15 @@ const UpcomingRenewals: React.FC<UpcomingRenewalsProps> = ({ renewals }) => {
         <div className="mt-4 space-y-3">
           {renewals.map((renewal) => (
             <div key={renewal.id} className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-              <Avatar className="h-10 w-10">
+              <Avatar className="h-10 w-10 flex-shrink-0">
                 <AvatarImage src={renewal.client.profileImage} alt={renewal.client.name} />
                 <AvatarFallback>
                   {renewal.client.name.split(' ').map(n => n[0]).join('')}
                 </AvatarFallback>
               </Avatar>
-              <div className="ml-3 flex-1">
-                <p className="text-sm font-medium text-slate-900 dark:text-white">{renewal.client.name}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="ml-3 flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{renewal.client.name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {renewal.policy.type} • {formatCurrency(renewal.policy.coverageAmount)} • {
                     renewal.policy.renewalDate ? 
                     format(new Date(renewal.policy.renewalDate), 'MMM dd, yyyy') :
@@ -39,9 +39,9 @@ const UpcomingRenewals: React.FC<UpcomingRenewalsProps> = ({ renewals }) => {
                   }
                 </p>
               </div>
-              <div className="flex items-center space-x-2">
-                <Button size="sm">Contact</Button>
-                <Button variant="ghost" size="icon">
+              <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
+                <Button size="sm" className="whitespace-nowrap">Contact</Button>
+                <Button variant="ghost" size="icon" className="flex-shrink-0">
                   <MoreVertical className="h-5 w-5" />
                 </Button>
               </div>
