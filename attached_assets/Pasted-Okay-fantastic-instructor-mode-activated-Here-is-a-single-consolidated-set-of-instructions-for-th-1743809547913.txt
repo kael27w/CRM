@@ -1,0 +1,129 @@
+Okay, fantastic instructor mode activated! Here is a single, consolidated set of instructions for the Replit developer, incorporating all the refinements discussed across Dashboard, Pipelines, Contacts, Companies, Products, and Activities, plus page removals.
+
+Subject: Comprehensive CRM UI/UX Update Instructions
+
+Objective: Implement the following set of detailed updates across the CRM application to align its features, layout, and functionality more closely with the target CRM design, based on our previous discussions and the provided reference images. Focus on consistency, component reuse, and the specific details outlined below.
+
+I. Dashboard Refinements:
+
+Dashboard Selector (Top-Left): Implement the dropdown menu (like the "Overview" button in the image) allowing users to switch between dashboard views.
+
+Options: Overview, Pipelines Dashboard, Tasks Dashboard, Events Dashboard, Call Analytics, Email Analytics. Include a visual "+ New Dashboard" option (functionality deferred).
+
+Functionality: Selecting an option changes the displayed components and updates the URL route (e.g., /dashboard/overview).
+
+Pre-defined Dashboard Layouts: Configure specific default component sets for each dashboard view selected via the dropdown:
+
+Overview: KPIs (Contacts Created, Pipelines Won/Lost, Tasks Closed, Events Completed, Calls Completed), List (Top 5 Companies), Charts (Open Pipelines by Stage, Revenue Won by Month), Target Meter (Number of Calls). Remove any "Upcoming Renewals" or "Agent Performance" components.
+
+Pipelines: KPIs (Open Deals Value, Avg Deal Size, Win Rate), Charts (Deals Won vs Lost, Pipeline Conversion, Open Deals Value by Stage).
+
+Tasks: KPIs (Open/Overdue Tasks, Tasks Completed Today/Week), List (My Overdue Tasks), Chart (Tasks by Priority).
+
+Events: KPIs (Upcoming Events, Events Completed Week), List (My Upcoming Events), Chart (Events by Type).
+
+Call Analytics: Target Meter (Number of Calls), KPIs (Calls Made Today/Week, Avg Duration), Charts (Call Volume, Calls by Outcome).
+
+Email Analytics: KPIs (Emails Sent, Open Rate, CTR), Chart (Emails Sent Over Time), List (Top Performing Templates).
+
+Target Meter Component: Implement the specific semi-circular "Target Meter" component (matching the "Numero de llamadas" image style) showing Current Value, Target Value, and Remaining Value. Use this for "Number of Calls" on Overview and Call Analytics dashboards.
+
+Customization: Ensure the "+ Component" button (top-right area) allows adding widgets (KPI, Chart, Target Meter) to the current dashboard view, respecting a max limit of 10 components per view. Include the "Reload" button.
+
+II. Pipelines Page Refinements:
+
+Layout & Navigation:
+
+Remove Top Tabs: Eliminate horizontal tabs for switching pipelines.
+
+Implement Left Panel (Within Page): Add a panel on the left within the Pipelines page content area (not the main sidebar) listing selectable pipelines under "Team Pipelines".
+
+Pipelines: Sales Pipeline, Customer Support, Living Trust Flow, Index Universal Life.
+
+Templates: Include the visual "Clone from a Template" section below the list (For Teams, For Industries - functionality secondary).
+
+Kanban Board Header: Ensure the bar above the columns includes: Filter Icon (three lines), Views Dropdown, Sort By Dropdown, View Toggle Icons (Kanban/List), the Dynamic "+ Create" Button, and a Three-Dot Menu.
+
+Stage Names (Crucial): Configure the Kanban column headers (stages) exactly as follows for each pipeline:
+
+Sales: Qualification, Needs Analysis, Proposal/Price Quote, Negotiation/Review, Closed Won, Closed Lost.
+
+Customer Support: New Ticket, In Progress, On Hold, Closed, Deferred, Not an Issue.
+
+Living Trust Flow: Living Trust Presentation, Estate Funded, Notarizing Documents, Preparation, Needs Customer Appointment, Packaging, Cancelled.
+
+Index Universal Life: New Inquiry, Follow Up Done, Brochure Sent, Plan Selected, Payment Done, Policy Sold, Lost.
+
+Stage Editing: Ensure the three-dot menu on each column header allows renaming stages and changing colors.
+
+Dynamic "+ Create" Button: The main create button in the Kanban header must change its text label based on the active pipeline:
+
+Sales Pipeline -> "+ New Deal"
+
+Customer Support -> "+ New Ticket"
+
+Living Trust Flow -> "+ New Living Trust"
+
+Index Universal Life -> "+ New Inquiry"
+
+Ensure clicking it initiates creation of the correct item type.
+
+III. Contacts, Companies, & Products Page Consistency:
+
+Apply Consistently: Ensure the Contacts, Companies, and Products pages all share the following features, implemented using the reusable table component:
+
+Table View: Default view displaying data in columns.
+
+Filter Trigger: Use the small Filter Icon (three lines, top-left) next to the Views dropdown to toggle filter controls. Remove large/persistent filter inputs.
+
+"Views" Dropdown: Implement the dropdown (e.g., "All Contacts") with predefined views, a search bar inside, and a "+ Create View" button at the bottom leading to a configuration modal (define filters, columns, sort, name).
+
+"+ Create Field" Button: Add this near the table headers (right side) leading to a modal for defining custom field Label and Type. Update mock data/state to handle custom fields.
+
+Default Columns:
+
+Contacts: Contact Name, Company Name, Email, Phone, Contact Owner.
+
+Companies: Company Name, Phone, Website, Company Owner.
+
+Products: Product Name, Product Code, Product Active, Product Owner.
+
+Top-Right Controls: Consistently include: View Type Icon (Table), Primary Create Button (+ Contact, + Company, + Product), Three-Dot Menu.
+
+Row Selection: Include checkboxes on the left of each row.
+
+IV. Activities Page Revision:
+
+Tab Structure:
+
+Position tabs horizontally at the top of the content area: "Calendar" (first, default), "Tasks", "Events", "Calls".
+
+Remove "All Activities" and "Emails" tabs if present.
+
+"Calendar" Tab:
+
+Display a large, interactive monthly calendar view.
+
+Show activities (Tasks, Events, Calls) directly on calendar dates, using distinct colors/indicators per type.
+
+Include standard calendar controls: Today button, Prev/Next arrows, Month/Year display, Month/Week/Day view toggle buttons.
+
+Right-Side Panel (On Date Click):
+
+Clicking a date on the calendar reveals a panel on the right.
+
+Content Order:
+
+Top: A "To-Do List" showing all activities for the selected date.
+
+Bottom: Filter controls: Activity Types (checkboxes), Ownership (radios: My/All), Status (radios: Open/Closed/All).
+
+Functionality: Filters in this panel should dynamically update the activities displayed on the main calendar.
+
+V. Page Removals:
+
+Remove "Analytics" Page: Delete this page entirely and remove it from the main sidebar navigation.
+
+Remove "Reports" Page: Delete this page entirely and remove it from the main sidebar navigation.
+
+Final Check: Please ensure all implementations prioritize component reusability, clean code, and closely match the visual layout and interactions shown in the reference images provided earlier. Verify all specified names, labels, and dropdown options are implemented exactly as listed. Test the dynamic elements thoroughly (dashboard switching, dynamic pipeline button, interactive calendar/panel).

@@ -25,21 +25,19 @@ const PlaceholderPage: React.FC<{title: string}> = ({title}) => (
   </div>
 );
 
-// Reports page placeholder
-const ReportsPage = () => <PlaceholderPage title="Reports" />;
+// Help page placeholder
 const HelpPage = () => <PlaceholderPage title="Help & Support" />;
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/dashboard/:type" component={Dashboard} />
       <Route path="/pipelines" component={PipelinesPage} />
       <Route path="/contacts" component={ContactsPage} />
       <Route path="/companies" component={CompaniesPage} />
       <Route path="/products" component={ProductsPage} />
       <Route path="/activities" component={ActivitiesPage} />
-      <Route path="/analytics" component={Dashboard} /> {/* Using Dashboard temporarily */}
-      <Route path="/reports" component={ReportsPage} />
       <Route path="/settings" component={Settings} />
       <Route path="/help" component={HelpPage} />
       <Route component={NotFound} />

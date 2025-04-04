@@ -62,19 +62,7 @@ const Sidebar: React.FC = () => {
     }
   ];
 
-  // Analytics navigation items
-  const analyticsNavItems = [
-    { 
-      href: '/analytics', 
-      label: 'Analytics', 
-      icon: <BarChart3 className="h-5 w-5 mr-3" />
-    },
-    { 
-      href: '/reports', 
-      label: 'Reports', 
-      icon: <PieChart className="h-5 w-5 mr-3" />
-    }
-  ];
+  // We've removed the Analytics navigation items as requested
 
   // Support navigation items
   const supportNavItems = [
@@ -167,8 +155,7 @@ const Sidebar: React.FC = () => {
           {/* Sales section */}
           {renderNavSection(salesNavItems, "Sales")}
           
-          {/* Analytics section */}
-          {renderNavSection(analyticsNavItems, "Analytics")}
+          {/* Analytics section has been removed as requested */}
           
           {/* Support section */}
           {renderNavSection(supportNavItems, "Support")}
