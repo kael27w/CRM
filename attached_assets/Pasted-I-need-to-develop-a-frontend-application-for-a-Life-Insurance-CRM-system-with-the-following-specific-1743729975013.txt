@@ -1,0 +1,156 @@
+I need to develop a frontend application for a Life Insurance CRM system with the following specifications:
+Tech Stack
+
+Next.js 14+ (App Router)
+shadcn/ui component library
+Tailwind CSS for styling
+SWR for data fetching
+React Hook Form with Zod for form validation
+dnd-kit for drag-and-drop functionality
+Recharts for data visualization
+date-fns for date manipulation
+
+Pages Required:
+
+Dashboard/Home
+
+Premium revenue charts (monthly, quarterly)
+Policy status breakdown
+Upcoming renewals widget
+Task/follow-up widget
+Agent performance metrics
+
+
+Pipeline View
+
+Kanban board with customizable stages
+Drag-and-drop policy cards between stages
+Stage metrics (count, total value)
+Quick filter options
+
+
+Client Manager
+
+Filterable/sortable client list
+Detailed client profiles
+Family structure visualization
+Communication history
+Policy summary
+
+
+Policy Manager
+
+Policy listing with advanced filters
+Detailed policy information
+Coverage details and riders
+Premium payment schedule
+Beneficiary information
+
+
+Calendar & Activities
+
+Multi-view calendar
+Task management interface
+Meeting scheduler
+Activity logging
+
+
+Underwriting Tracker
+
+Requirements checklist
+Medical exam scheduling
+Document submission status
+Risk assessment visualization
+
+
+Analytics & Reporting
+
+Customizable dashboards
+Performance metrics
+Client acquisition/retention data
+Export capabilities
+
+
+Communications Hub
+
+Email template system
+SMS interface
+Call logging
+Document sharing
+
+
+Document Center
+
+Document categorization
+Version control
+E-signature integration
+Template generation
+
+
+Settings & Administration
+
+User management
+Workflow customization
+System configuration
+
+
+
+User Roles and Permissions:
+
+Insurance Agent: Create/manage clients and policies, schedule interactions
+Agency Manager: All agent permissions plus team management and reporting
+Underwriter: Assessment tools, application review, decision making
+Administrator: Full system access and configuration
+Client Service Rep: Limited client management and service tasks
+
+Shared Components:
+
+Navigation System: Left sidebar with collapsible sections, icon-based navigation
+Header/Top Bar: Global search, notifications, user profile dropdown, help button
+Client Card Component: Photo, name, policy count, status, quick actions
+Policy Card Component: Type icon, coverage details, status indicator, dates
+Activity Timeline: Chronological display of client/policy activities
+Breadcrumb Navigation: For hierarchical page structure
+Search Results Component: Categorized results with quick preview information
+
+Modals/Popups:
+
+Quick Add Modal: Context-aware new item creation
+Client/Policy Quick View: Summary information with action buttons
+Activity Logger: Interaction recording with follow-up scheduling
+Task Creator: Assignment and deadline management
+Document Viewer: Preview with sharing options
+Email Composer: Template-based with personalization
+Confirmation Dialogs: For critical actions
+
+Life Insurance-Specific Features:
+
+Policy Lifecycle Visualization: Application to renewal flow
+Risk Assessment Tools: Medical information and underwriting factors
+Beneficiary Management: Relationship mapping and allocation tracking
+Premium Calculator: Coverage and rider comparisons
+Needs Analysis Tool: Coverage requirements assessment
+Renewal Management: Automated workflows and notifications
+Compliance Checklist: Regulatory requirement tracking
+
+Technical Requirements:
+
+Implement proper component architecture with reusability
+Use Context API for state management
+Create custom hooks for business logic
+Develop mock API service layer with realistic data models
+Ensure dark/light theme support
+Implement responsive design for all screen sizes
+Create animations for key interactions (pipeline movements, etc.)
+Optimize performance with proper rendering strategies
+
+Additional Considerations:
+
+Focus on industry-specific UX patterns for insurance professionals
+Prioritize accessibility features
+Implement proper error handling and loading states
+Include detailed documentation for components
+Create a comprehensive test suite
+Ensure all forms have proper validation with meaningful error messages
+
+Please develop this application with clean, maintainable code focusing on the unique needs of life insurance professionals while providing an intuitive and efficient user experience.
