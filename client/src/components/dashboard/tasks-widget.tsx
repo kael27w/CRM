@@ -19,7 +19,7 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask }) => {
     if (isToday(new Date(dueDate))) {
       return "destructive";
     } else if (isTomorrow(new Date(dueDate))) {
-      return "warning";
+      return "outline"; // Changed from "warning" to "outline" since "warning" is not in the variant options
     }
     
     return "secondary";
@@ -38,17 +38,17 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask }) => {
   };
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-5">
+    <Card className="overflow-hidden h-full">
+      <CardContent className="p-5 flex flex-col h-full">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-medium text-slate-900 dark:text-white">My Tasks</h2>
           <Button variant="ghost" size="icon" className="rounded-full bg-slate-50 dark:bg-slate-800">
             <Plus className="h-5 w-5" />
           </Button>
         </div>
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-2 flex-grow overflow-auto">
           {tasks.map((task) => (
-            <div key={task.id} className="flex items-start py-2 border-t border-slate-100 dark:border-slate-800">
+            <div key={task.id} className="flex items-start p-3 bg-slate-50 dark:bg-slate-800 rounded-lg mb-2">
               <div className="flex-shrink-0 mt-1">
                 <Checkbox 
                   id={`task-${task.id}`} 
@@ -81,7 +81,7 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask }) => {
             </div>
           ))}
         </div>
-        <div className="mt-4">
+        <div className="mt-4 pt-2 border-t border-slate-100 dark:border-slate-800">
           <Button variant="link" className="p-0">View all tasks &rarr;</Button>
         </div>
       </CardContent>

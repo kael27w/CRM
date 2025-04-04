@@ -14,13 +14,13 @@ interface UpcomingRenewalsProps {
 
 const UpcomingRenewals: React.FC<UpcomingRenewalsProps> = ({ renewals }) => {
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-5">
+    <Card className="overflow-hidden h-full">
+      <CardContent className="p-5 flex flex-col h-full">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-medium text-slate-900 dark:text-white">Upcoming Renewals</h2>
           <Badge variant="secondary">This Week</Badge>
         </div>
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-3 flex-grow overflow-auto">
           {renewals.map((renewal) => (
             <div key={renewal.id} className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
               <Avatar className="h-10 w-10 flex-shrink-0">
@@ -48,7 +48,7 @@ const UpcomingRenewals: React.FC<UpcomingRenewalsProps> = ({ renewals }) => {
             </div>
           ))}
         </div>
-        <div className="mt-4">
+        <div className="mt-4 pt-2 border-t border-slate-100 dark:border-slate-800">
           <Button variant="link" className="p-0">View all renewals &rarr;</Button>
         </div>
       </CardContent>

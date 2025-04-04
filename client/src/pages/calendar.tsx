@@ -104,12 +104,19 @@ const Calendar: React.FC = () => {
                 mode="single"
                 selected={date}
                 onSelect={setDate}
-                className="rounded-md border"
+                className="rounded-md border w-full max-w-none"
+                classNames={{
+                  day_today: "bg-primary/10 font-bold text-primary",
+                  table: "w-full border-collapse",
+                  cell: "p-0",
+                  head_cell: "text-muted-foreground rounded-md w-10 font-medium text-xs",
+                  day: "h-10 w-10 p-0 font-normal text-sm aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                }}
               />
             </CardContent>
           </Card>
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-2">
               <CardTitle className="text-lg">
                 {date ? format(date, 'MMMM d, yyyy') : 'Select a date'}
               </CardTitle>
@@ -118,8 +125,8 @@ const Calendar: React.FC = () => {
               {date && getEventsForDate(date).length > 0 ? (
                 <div className="space-y-4">
                   {getEventsForDate(date).map(event => (
-                    <div key={event.id} className="flex items-start">
-                      <div className="mr-2 pt-1">
+                    <div key={event.id} className="flex items-start p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                      <div className="mr-3 pt-1">
                         <Checkbox id={`event-${event.id}`} />
                       </div>
                       <div className="flex-1">
@@ -127,7 +134,10 @@ const Calendar: React.FC = () => {
                           {getEventTypeIcon(event.type)}
                           <span className="text-sm font-medium">{event.title}</span>
                         </div>
-                        <div className="text-xs text-slate-500 mt-1">{event.time}</div>
+                        <div className="flex items-center text-xs text-slate-500 mt-1">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {event.time}
+                        </div>
                       </div>
                     </div>
                   ))}

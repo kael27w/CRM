@@ -23,8 +23,8 @@ const PolicyStatusChart: React.FC<PolicyStatusChartProps> = ({ data, totalPolici
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                outerRadius={80}
-                innerRadius={55}
+                outerRadius={90}
+                innerRadius={60}
                 fill="#8884d8"
                 dataKey="count"
               >
@@ -40,27 +40,33 @@ const PolicyStatusChart: React.FC<PolicyStatusChartProps> = ({ data, totalPolici
                 y="50%"
                 textAnchor="middle"
                 dominantBaseline="middle"
+                className="text-slate-900 dark:text-white"
               >
-                <tspan x="50%" dy="-8" className="text-xl font-bold">
+                <tspan x="50%" dy="-10" fontSize="24" fontWeight="600">
                   {totalPolicies}
                 </tspan>
-                <tspan x="50%" dy="22" className="text-xs text-slate-500">
+                <tspan x="50%" dy="24" fontSize="12" fill="#94a3b8">
                   Total Policies
                 </tspan>
               </text>
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-3">
           {data.map((item, index) => (
-            <div key={index} className="flex items-center">
+            <div key={index} className="flex items-center p-2 rounded-lg bg-slate-50 dark:bg-slate-800">
               <span 
-                className="h-3 w-3 inline-block rounded-full mr-2" 
+                className="h-4 w-4 inline-block rounded-full mr-2 flex-shrink-0" 
                 style={{ backgroundColor: item.color || COLORS[index % COLORS.length] }}
               ></span>
-              <span className="text-xs text-slate-600 dark:text-slate-400">
-                {item.status} ({item.percentage}%)
-              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                  {item.status}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {item.percentage}% ({item.count})
+                </span>
+              </div>
             </div>
           ))}
         </div>
