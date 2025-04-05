@@ -47,21 +47,6 @@ interface TargetMeterProps {
   unit?: string;
 }
 
-// Simple Number Counter Component (to replace Target Meter for Call Analytics)
-const SimpleCounter: React.FC<{ value: number; title: string }> = ({ value, title }) => {
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <PhoneCall className="h-5 w-5 text-slate-400" />
-      </div>
-      <div className="text-center py-6">
-        <div className="text-4xl font-bold text-slate-900 dark:text-white">{value}</div>
-      </div>
-    </div>
-  );
-};
-
 // Target Meter Component
 const TargetMeter: React.FC<TargetMeterProps> = ({ current, target, title, unit = '' }) => {
   const percentage = Math.min(Math.round((current / target) * 100), 100);
@@ -436,7 +421,7 @@ const Dashboard: React.FC = () => {
               title: "Emails Sent",
               value: 145,
               icon: <Mail className="h-6 w-6 text-blue-600" />,
-              change: 18,
+              change: 32,
               changeLabel: "vs last month",
               changeType: 'positive' as const,
               bgColor: "bg-blue-50 dark:bg-blue-900/20",
@@ -444,7 +429,7 @@ const Dashboard: React.FC = () => {
             },
             {
               title: "Open Rate",
-              value: "28%",
+              value: "68%",
               icon: <Mail className="h-6 w-6 text-emerald-600" />,
               change: 5,
               changeLabel: "vs last month",
@@ -453,19 +438,19 @@ const Dashboard: React.FC = () => {
               iconColor: "text-emerald-600 dark:text-emerald-400"
             },
             {
-              title: "Click Rate",
-              value: "12%",
+              title: "Click-Through Rate",
+              value: "24%",
               icon: <Mail className="h-6 w-6 text-amber-600" />,
-              change: -2,
+              change: 3,
               changeLabel: "vs last month",
-              changeType: 'negative' as const,
+              changeType: 'positive' as const,
               bgColor: "bg-amber-50 dark:bg-amber-900/20",
               iconColor: "text-amber-600 dark:text-amber-400"
             }
           ];
           
         default:
-          return [];
+          return statCards;
       }
     };
     
@@ -503,11 +488,12 @@ const Dashboard: React.FC = () => {
                   clientId: renewal.client.id,
                   policyId: renewal.policy.id,
                   createdAt: new Date().toISOString(),
-                } as Task))}
+                } as Task))} 
                 onToggleTask={handleToggleTask}
               />
-              <SimpleCounter 
-                value={callsCompleted} 
+              <TargetMeter 
+                current={callsCompleted} 
+                target={50} 
                 title="Number of Calls" 
               />
             </div>
@@ -547,10 +533,10 @@ const Dashboard: React.FC = () => {
             
             <div className="col-span-1 lg:col-span-3">
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Pipeline Overview</h3>
+                <h3 className="text-lg font-semibold mb-4">Open Deals Value by Stage</h3>
                 <div className="h-60 flex items-center justify-center">
                   <div className="text-center text-slate-500">
-                    Pipeline stages by deal count and value
+                    Chart: Open Deals Value by Stage visualization
                   </div>
                 </div>
               </div>
@@ -568,28 +554,6 @@ const Dashboard: React.FC = () => {
             </div>
             
             <div className="col-span-1 lg:col-span-2">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Task Status</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Tasks by Status visualization
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Task Due Dates</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Task Due Date Distribution
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1 lg:col-span-3">
               <TasksWidget 
                 tasks={dashboardData.upcomingRenewals.map(renewal => ({
                   id: renewal.id,
@@ -601,9 +565,20 @@ const Dashboard: React.FC = () => {
                   clientId: renewal.client.id,
                   policyId: renewal.policy.id,
                   createdAt: new Date().toISOString(),
-                } as Task))}
+                } as Task))} 
                 onToggleTask={handleToggleTask}
               />
+            </div>
+            
+            <div className="col-span-1">
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
+                <h3 className="text-lg font-semibold mb-4">Tasks by Priority</h3>
+                <div className="h-60 flex items-center justify-center">
+                  <div className="text-center text-slate-500">
+                    Chart: Tasks by Priority visualization
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         );
@@ -619,10 +594,10 @@ const Dashboard: React.FC = () => {
             
             <div className="col-span-1 lg:col-span-2">
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Upcoming Events</h3>
+                <h3 className="text-lg font-semibold mb-4">My Upcoming Events</h3>
                 <div className="h-60 flex items-center justify-center">
                   <div className="text-center text-slate-500">
-                    Calendar: Upcoming Events visualization
+                    List: Upcoming Events
                   </div>
                 </div>
               </div>
@@ -651,8 +626,9 @@ const Dashboard: React.FC = () => {
             </div>
             
             <div className="col-span-1">
-              <SimpleCounter 
-                value={42} 
+              <TargetMeter 
+                current={42} 
+                target={50} 
                 title="Number of Calls" 
               />
             </div>
@@ -673,7 +649,7 @@ const Dashboard: React.FC = () => {
                 <h3 className="text-lg font-semibold mb-4">Calls by Outcome</h3>
                 <div className="h-60 flex items-center justify-center">
                   <div className="text-center text-slate-500">
-                    Chart: Calls by Outcome (Successful, Voicemail, No Answer, etc.)
+                    Chart: Calls by Outcome visualization
                   </div>
                 </div>
               </div>
@@ -692,10 +668,10 @@ const Dashboard: React.FC = () => {
             
             <div className="col-span-1 lg:col-span-2">
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Email Performance</h3>
+                <h3 className="text-lg font-semibold mb-4">Emails Sent Over Time</h3>
                 <div className="h-60 flex items-center justify-center">
                   <div className="text-center text-slate-500">
-                    Chart: Email Open and Click Rates
+                    Chart: Emails Over Time visualization
                   </div>
                 </div>
               </div>
@@ -722,51 +698,51 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <div className="mb-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-            <div className="flex items-center mt-2">
-              <p className="hidden md:block text-sm text-slate-500 dark:text-slate-400 mr-3">
-                {dashboardType === 'overview' ? 'Overview of your business performance' : 
-                 `View your ${dashboardType} performance metrics`}
-              </p>
-              
-              {/* Dashboard Selector Dropdown (moved inline with header) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="min-w-[150px] justify-between">
-                    {dashboardNames[dashboardType]}
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
-                    Overview
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('pipelines')}>
-                    Pipelines Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('tasks')}>
-                    Tasks Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('events')}>
-                    Events Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('calls')}>
-                    Call Analytics
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('emails')}>
-                    Email Analytics
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-blue-600 flex items-center">
-                    <Plus className="mr-2 h-4 w-4" /> New Dashboard
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
+          <p className="hidden md:block mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {dashboardType === 'overview' ? 'Overview of your business performance' : 
+             `View your ${dashboardType} performance metrics`}
+          </p>
+        </div>
+        
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center space-x-2">
+            {/* Dashboard Selector Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="min-w-[150px] justify-between">
+                  {dashboardNames[dashboardType]}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
+                  Overview
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('pipelines')}>
+                  Pipelines Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('tasks')}>
+                  Tasks Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('events')}>
+                  Events Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('calls')}>
+                  Call Analytics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('emails')}>
+                  Email Analytics
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-blue-600 flex items-center">
+                  <Plus className="mr-2 h-4 w-4" /> New Dashboard
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <div className="flex items-center space-x-2">
@@ -780,30 +756,29 @@ const Dashboard: React.FC = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
                   <Plus className="mr-2 h-4 w-4" /> Component
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Add Component</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <BarChart2 className="mr-2 h-4 w-4 text-blue-500" />
-                  <span>KPI Box</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <Target className="mr-2 h-4 w-4 text-emerald-500" />
-                  <span>Target Meter</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <BarChart2 className="mr-2 h-4 w-4 text-purple-500" />
-                  <span>Chart</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <CheckCircle2 className="mr-2 h-4 w-4 text-amber-500" />
-                  <span>List Widget</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Add Component</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <BarChart2 className="mr-2 h-4 w-4 text-blue-500" />
+                <span>KPI Box</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <Target className="mr-2 h-4 w-4 text-emerald-500" />
+                <span>Target Meter</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <BarChart2 className="mr-2 h-4 w-4 text-purple-500" />
+                <span>Chart</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <CheckCircle2 className="mr-2 h-4 w-4 text-amber-500" />
+                <span>List Widget</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

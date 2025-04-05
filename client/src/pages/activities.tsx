@@ -569,16 +569,37 @@ const ActivitiesPage: React.FC = () => {
                 
                 {/* Calendar grid */}
                 <div className="grid grid-cols-7 gap-px">
-                  {calendarDays.map((day, i) => (
-                    <CalendarDay
-                      key={i}
-                      day={day}
-                      activities={sampleActivities}
-                      isCurrentMonth={day.getMonth() === currentDate.getMonth()}
-                      isToday={day.toDateString() === today.toDateString()}
-                      onClick={() => setSelectedDate(day)}
-                    />
-                  ))}
+                  {calendarDays.map((day, i) => {
+                    // Filter activities for this calendar day based on active filters
+                    const filteredActivitiesForDay = sampleActivities.filter(activity => {
+                      // Match day
+                      const activityDate = new Date(activity.dueDate);
+                      if (activityDate.toDateString() !== day.toDateString()) return false;
+                      
+                      // Apply type filters
+                      if (!filterTypes[activity.type]) return false;
+                      
+                      // Apply ownership filter (assumption: current user is Alex Davis)
+                      if (filterOwnership === "my" && activity.assignedTo !== "Alex Davis") return false;
+                      
+                      // Apply status filter
+                      if (filterStatus === "open" && activity.status === "completed") return false;
+                      if (filterStatus === "closed" && activity.status !== "completed") return false;
+                      
+                      return true;
+                    });
+                    
+                    return (
+                      <CalendarDay
+                        key={i}
+                        day={day}
+                        activities={filteredActivitiesForDay}
+                        isCurrentMonth={day.getMonth() === currentDate.getMonth()}
+                        isToday={day.toDateString() === today.toDateString()}
+                        onClick={() => setSelectedDate(day)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>

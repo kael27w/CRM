@@ -165,56 +165,56 @@ const StageColumn: React.FC<{
 };
 
 const PipelinesPage: React.FC = () => {
-  const [activePipeline, setActivePipeline] = useState("sales");
+  const [activePipeline, setActivePipeline] = useState("life-insurance");
   
   // Sample data - this will be replaced with actual API data
   const samplePipelines: Pipeline[] = [
     {
-      id: "sales",
-      name: "Sales Pipeline",
+      id: "life-insurance",
+      name: "Life Insurance",
       stages: [
         {
-          id: "lead",
-          name: "Lead",
+          id: "lead-qualification",
+          name: "Lead Qualification",
           order: 1,
           deals: [
             {
               id: 1,
-              name: "Office equipment upgrade",
+              name: "Term Life 20 - Barnes Family",
               amount: 5000,
               company: "Acme Corp",
               contact: "Sarah Johnson",
               closingDate: "2025-05-15",
-              stageId: "lead",
+              stageId: "lead-qualification",
               probability: 20,
               status: 'open'
             },
             {
               id: 2,
-              name: "Software license renewal",
-              amount: 2500,
+              name: "Whole Life Plan - Robert T.",
+              amount: 8500,
               company: "TechStart Inc",
               contact: "Robert Thompson",
               closingDate: "2025-04-30",
-              stageId: "lead",
+              stageId: "lead-qualification",
               probability: 30,
               status: 'open'
             }
           ]
         },
         {
-          id: "discovery",
-          name: "Discovery",
+          id: "needs-analysis",
+          name: "Needs Analysis",
           order: 2,
           deals: [
             {
               id: 3,
-              name: "New policy package",
+              name: "Family Protection Plan",
               amount: 8000,
               company: "Global Innovations",
               contact: "Jennifer Williams",
               closingDate: "2025-05-10",
-              stageId: "discovery",
+              stageId: "needs-analysis",
               probability: 40,
               status: 'open'
             }
@@ -227,7 +227,7 @@ const PipelinesPage: React.FC = () => {
           deals: [
             {
               id: 4,
-              name: "Group health plan",
+              name: "Executive Life Coverage",
               amount: 25000,
               company: "Brown Enterprises",
               contact: "Michael Brown",
@@ -239,25 +239,85 @@ const PipelinesPage: React.FC = () => {
           ]
         },
         {
-          id: "negotiation",
-          name: "Negotiation",
+          id: "underwriting",
+          name: "Underwriting",
           order: 4,
           deals: [
             {
               id: 5,
-              name: "Executive insurance program",
+              name: "Premium Life Plan",
               amount: 12000,
               company: "Medical Solutions",
               contact: "Lisa Davis",
               closingDate: "2025-04-20",
-              stageId: "negotiation",
+              stageId: "underwriting",
               probability: 80,
               status: 'open'
             }
           ]
         },
         {
-          id: "closed",
+          id: "policy-delivery",
+          name: "Policy Delivery",
+          order: 5,
+          deals: []
+        }
+      ]
+    },
+    {
+      id: "health-insurance",
+      name: "Health Insurance",
+      stages: [
+        {
+          id: "initial-contact",
+          name: "Initial Contact",
+          order: 1,
+          deals: [
+            {
+              id: 6,
+              name: "Family Health Plan",
+              amount: 4200,
+              company: "Smith Family",
+              contact: "John Smith",
+              closingDate: "2025-05-05",
+              stageId: "initial-contact",
+              probability: 25,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "coverage-review",
+          name: "Coverage Review",
+          order: 2,
+          deals: []
+        },
+        {
+          id: "quote-preparation",
+          name: "Quote Preparation",
+          order: 3,
+          deals: [
+            {
+              id: 7,
+              name: "Small Business Health Plan",
+              amount: 15000,
+              company: "Corner Cafe",
+              contact: "Mary Wilson",
+              closingDate: "2025-06-10",
+              stageId: "quote-preparation",
+              probability: 55,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "application",
+          name: "Application",
+          order: 4,
+          deals: []
+        },
+        {
+          id: "closed-won",
           name: "Closed Won",
           order: 5,
           deals: []
@@ -265,31 +325,181 @@ const PipelinesPage: React.FC = () => {
       ]
     },
     {
-      id: "partner",
-      name: "Partner Pipeline",
+      id: "property-insurance",
+      name: "Property Insurance",
       stages: [
         {
-          id: "identification",
-          name: "Identification",
+          id: "lead-in",
+          name: "Lead In",
           order: 1,
-          deals: []
+          deals: [
+            {
+              id: 8,
+              name: "Home Insurance Bundle",
+              amount: 3000,
+              company: "Johnson Residence",
+              contact: "Peter Johnson",
+              closingDate: "2025-05-20",
+              stageId: "lead-in",
+              probability: 30,
+              status: 'open'
+            }
+          ]
         },
         {
-          id: "qualification",
-          name: "Qualification",
+          id: "property-assessment",
+          name: "Property Assessment",
           order: 2,
           deals: []
         },
         {
-          id: "engagement",
-          name: "Engagement",
+          id: "risk-evaluation",
+          name: "Risk Evaluation",
           order: 3,
+          deals: [
+            {
+              id: 9,
+              name: "Commercial Property Coverage",
+              amount: 18000,
+              company: "Downtown Retail",
+              contact: "James Anderson",
+              closingDate: "2025-06-15",
+              stageId: "risk-evaluation",
+              probability: 50,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "quote-presentation",
+          name: "Quote Presentation",
+          order: 4,
           deals: []
         },
         {
-          id: "partnership",
-          name: "Partnership",
+          id: "binding-coverage",
+          name: "Binding Coverage",
+          order: 5,
+          deals: []
+        }
+      ]
+    },
+    {
+      id: "auto-insurance",
+      name: "Auto Insurance",
+      stages: [
+        {
+          id: "prospect-identified",
+          name: "Prospect Identified",
+          order: 1,
+          deals: [
+            {
+              id: 10,
+              name: "Family Auto Coverage",
+              amount: 2500,
+              company: "Miller Family",
+              contact: "Susan Miller",
+              closingDate: "2025-05-12",
+              stageId: "prospect-identified",
+              probability: 20,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "driver-review",
+          name: "Driver Review",
+          order: 2,
+          deals: []
+        },
+        {
+          id: "coverage-options",
+          name: "Coverage Options",
+          order: 3,
+          deals: [
+            {
+              id: 11,
+              name: "Fleet Insurance",
+              amount: 22000,
+              company: "City Delivery",
+              contact: "David Clark",
+              closingDate: "2025-06-20",
+              stageId: "coverage-options",
+              probability: 65,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "policy-issuance",
+          name: "Policy Issuance",
           order: 4,
+          deals: []
+        },
+        {
+          id: "completed",
+          name: "Completed",
+          order: 5,
+          deals: []
+        }
+      ]
+    },
+    {
+      id: "business-insurance",
+      name: "Business Insurance",
+      stages: [
+        {
+          id: "discovery",
+          name: "Discovery",
+          order: 1,
+          deals: [
+            {
+              id: 12,
+              name: "Liability Coverage",
+              amount: 6500,
+              company: "Tech Solutions",
+              contact: "Mark Davis",
+              closingDate: "2025-05-25",
+              stageId: "discovery",
+              probability: 35,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "risk-assessment",
+          name: "Risk Assessment",
+          order: 2,
+          deals: []
+        },
+        {
+          id: "solution-design",
+          name: "Solution Design",
+          order: 3,
+          deals: [
+            {
+              id: 13,
+              name: "Business Continuity Plan",
+              amount: 35000,
+              company: "Manufacturing Inc",
+              contact: "Patricia Wong",
+              closingDate: "2025-07-10",
+              stageId: "solution-design",
+              probability: 70,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "negotiation",
+          name: "Negotiation",
+          order: 4,
+          deals: []
+        },
+        {
+          id: "implementation",
+          name: "Implementation",
+          order: 5,
           deals: []
         }
       ]

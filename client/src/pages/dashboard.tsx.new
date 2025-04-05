@@ -722,51 +722,51 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <div className="mb-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-            <div className="flex items-center mt-2">
-              <p className="hidden md:block text-sm text-slate-500 dark:text-slate-400 mr-3">
-                {dashboardType === 'overview' ? 'Overview of your business performance' : 
-                 `View your ${dashboardType} performance metrics`}
-              </p>
-              
-              {/* Dashboard Selector Dropdown (moved inline with header) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="min-w-[150px] justify-between">
-                    {dashboardNames[dashboardType]}
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
-                    Overview
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('pipelines')}>
-                    Pipelines Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('tasks')}>
-                    Tasks Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('events')}>
-                    Events Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('calls')}>
-                    Call Analytics
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('emails')}>
-                    Email Analytics
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-blue-600 flex items-center">
-                    <Plus className="mr-2 h-4 w-4" /> New Dashboard
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
+          <p className="hidden md:block mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {dashboardType === 'overview' ? 'Overview of your business performance' : 
+             `View your ${dashboardType} performance metrics`}
+          </p>
+        </div>
+        
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center space-x-2">
+            {/* Dashboard Selector Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="min-w-[150px] justify-between">
+                  {dashboardNames[dashboardType]}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
+                  Overview
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('pipelines')}>
+                  Pipelines Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('tasks')}>
+                  Tasks Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('events')}>
+                  Events Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('calls')}>
+                  Call Analytics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('emails')}>
+                  Email Analytics
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-blue-600 flex items-center">
+                  <Plus className="mr-2 h-4 w-4" /> New Dashboard
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <div className="flex items-center space-x-2">

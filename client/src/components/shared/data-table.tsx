@@ -128,13 +128,9 @@ export function DataTable<TData, TValue>({
           )}
         </div>
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="sm" onClick={onAddField} className="flex items-center">
-            <Filter className="w-4 h-4 mr-2" />
-            Add Field
-          </Button>
           <Button variant="default" size="sm" className="flex items-center">
             <div className="w-4 h-4 mr-2">+</div>
-            Create {title.slice(0, -1)} {/* Remove 's' from the end */}
+            Create {title === "Companies" ? "Company" : title.slice(0, -1)} {/* Custom handling for Companies */}
           </Button>
         </div>
       </div>
