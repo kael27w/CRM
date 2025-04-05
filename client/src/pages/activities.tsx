@@ -1,22 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/shared/data-table';
-import { Badge } from '@/components/ui/badge';
-import { apiRequest } from '@/lib/queryClient';
+import { DataTable } from '../components/shared/data-table';
+import { Badge } from '../components/ui/badge';
+import { apiRequest } from '../lib/queryClient';
 import { 
   Tabs, 
   TabsContent, 
   TabsList, 
   TabsTrigger 
-} from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
+} from "../components/ui/tabs";
+import { Card, CardContent } from "../components/ui/card";
 import { 
   Checkbox
-} from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+} from "../components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
+import { Label } from "../components/ui/label";
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, Phone, Mail, CheckSquare, Filter } from 'lucide-react';
+import CalendarEventDialog, { CalendarEvent } from '../components/calendar/calendar-event-dialog';
+import { Button } from "../components/ui/button";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "../lib/queryClient";
+import { useTasks } from '../lib/hooks/useTasks';
+import { useLocation } from 'wouter';
+import TaskDialog from '../components/dashboard/task-dialog';
+import { Task } from '../types';
 
 // This will be replaced with the actual Activity types from schema.ts
 // when we update the backend
@@ -39,9 +47,10 @@ interface CalendarDayProps {
   isCurrentMonth: boolean;
   isToday: boolean;
   onClick: () => void;
+  onDoubleClick: () => void;
 }
 
-const CalendarDay: React.FC<CalendarDayProps> = ({ day, activities, isCurrentMonth, isToday, onClick }) => {
+const CalendarDay: React.FC<CalendarDayProps> = ({ day, activities, isCurrentMonth, isToday, onClick, onDoubleClick }) => {
   // Count activities by type for the day
   const activityCounts = {
     task: 0,
@@ -62,6 +71,7 @@ const CalendarDay: React.FC<CalendarDayProps> = ({ day, activities, isCurrentMon
   return (
     <div 
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       className={`
         min-h-[90px] p-1 border border-slate-200 dark:border-slate-700 
         ${isCurrentMonth ? 'bg-white dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-900'}
@@ -169,7 +179,15 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange })
 };
 
 const ActivitiesPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>("calendar");
+  // Parse URL params to get initial tab
+  const [location] = useLocation();
+  const getInitialTab = () => {
+    const params = new URLSearchParams(location.split('?')[1] || '');
+    const tab = params.get('tab');
+    return tab === 'task' || tab === 'event' || tab === 'call' ? tab : 'calendar';
+  };
+
+  const [activeTab, setActiveTab] = useState<string>(getInitialTab());
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [filterTypes, setFilterTypes] = useState<Record<string, boolean>>({
@@ -180,6 +198,24 @@ const ActivitiesPage: React.FC = () => {
   });
   const [filterOwnership, setFilterOwnership] = useState<string>("my"); // my, all
   const [filterStatus, setFilterStatus] = useState<string>("open"); // open, closed, all
+  
+  // Add dialog state for event and task dialogs
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [currentEditEvent, setCurrentEditEvent] = useState<Activity | null>(null);
+  
+  // Use the tasks hook to access and manage tasks
+  const { tasks, toggleTask, refetch: refetchTasks } = useTasks();
+  
+  // Update URL when tab changes
+  useEffect(() => {
+    const [pathWithoutQuery] = location.split('?');
+    if (activeTab === 'calendar') {
+      window.history.replaceState(null, '', pathWithoutQuery);
+    } else {
+      window.history.replaceState(null, '', `${pathWithoutQuery}?tab=${activeTab}`);
+    }
+  }, [activeTab, location]);
   
   // Sample data - this will be replaced with actual API data
   const sampleActivities: Activity[] = [
@@ -470,6 +506,52 @@ const ActivitiesPage: React.FC = () => {
     });
   };
   
+  // Handle task dialog
+  const handleAddTask = () => {
+    setIsTaskDialogOpen(true);
+  };
+  
+  // Handle adding a new task
+  const handleTaskAdded = async (newTask: any) => {
+    console.log('New task created:', newTask);
+    // Add the newly created task to the displayed tasks list for immediate UI update
+    setDisplayedTasks(prev => [newTask, ...prev]);
+    
+    // Refresh tasks data from the server or mock
+    await refetchTasks();
+    setIsTaskDialogOpen(false);
+  };
+  
+  // Add function to handle opening the dialog for new events
+  const handleAddEvent = (date?: Date) => {
+    setCurrentEditEvent(null);
+    setSelectedDate(date || selectedDate);
+    setIsEventDialogOpen(true);
+  };
+  
+  // Add function to handle opening the dialog for editing events
+  const handleEditEvent = (activity: Activity) => {
+    setCurrentEditEvent(activity);
+    setIsEventDialogOpen(true);
+  };
+  
+  // Add function to save new/edited events
+  const handleSaveEvent = (eventData: CalendarEvent) => {
+    // For now, just log the data. In a real app, this would send data to an API
+    console.log('Event saved:', eventData);
+    
+    if (currentEditEvent) {
+      // Update existing event logic would go here
+      console.log('Updating existing event:', currentEditEvent.id);
+    } else {
+      // Create new event logic would go here
+      console.log('Creating new event');
+    }
+    
+    // Close the dialog
+    setIsEventDialogOpen(false);
+  };
+  
   // Update activity status
   const handleActivityStatusChange = (id: number, completed: boolean) => {
     console.log(`Activity ${id} status changed to ${completed ? 'completed' : 'pending'}`);
@@ -485,6 +567,105 @@ const ActivitiesPage: React.FC = () => {
   const calendarDays = generateCalendarDays();
   const today = new Date();
   const activitiesForSelectedDate = getActivitiesForSelectedDate();
+  
+  // For the Tasks tab: manage state for displayed tasks
+  const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
+  
+  // Initialize the displayed tasks based on filter whenever tasks or filter changes
+  useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      // Apply the filter but keep tasks that are completed during this session
+      if (filterStatus === 'all') {
+        setDisplayedTasks(tasks);
+      } else {
+        setDisplayedTasks(tasks.filter(task => 
+          filterStatus === 'completed' ? task.completed : !task.completed
+        ));
+      }
+    }
+  }, [tasks, filterStatus]);
+  
+  // Handler for toggling task completion in the Tasks tab
+  const handleTaskStatusToggle = (id: number, completed: boolean) => {
+    // Call the hook function to update the backend
+    toggleTask(id, completed);
+    
+    // Update the task's visual state in our local state without removing it
+    setDisplayedTasks(prevTasks => 
+      prevTasks.map(task => 
+        task.id === id ? { ...task, completed } : task
+      )
+    );
+  };
+
+  const renderTasks = () => {
+    if (!tasks || tasks.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-slate-500 dark:text-slate-400 mb-4">No tasks found</p>
+          <Button onClick={handleAddTask}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add your first task
+          </Button>
+        </div>
+      );
+    }
+    
+    if (displayedTasks.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-slate-500 dark:text-slate-400 mb-4">
+            No {filterStatus === 'completed' ? 'completed' : 'open'} tasks found
+          </p>
+          <Button onClick={handleAddTask}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Task
+          </Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-4">
+        {displayedTasks.map(task => (
+          <Card key={task.id} className={`mb-4 ${task.completed ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
+            <CardContent className="p-4">
+              <div className="flex items-start">
+                <Checkbox
+                  id={`task-${task.id}`}
+                  checked={task.completed}
+                  onCheckedChange={(checked) => handleTaskStatusToggle(task.id, checked as boolean)}
+                  className="mt-1 mr-3"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className={`text-base font-medium ${task.completed ? 'line-through text-slate-400 dark:text-slate-500' : ''}`}>
+                      {task.title}
+                    </h3>
+                    {task.dueDate && (
+                      <Badge variant={task.completed ? "outline" : "destructive"}>
+                        {new Date(task.dueDate).toLocaleDateString()}
+                      </Badge>
+                    )}
+                  </div>
+                  {task.description && (
+                    <p className={`text-sm text-slate-500 dark:text-slate-400 mt-1 ${task.completed ? 'line-through' : ''}`}>
+                      {task.description}
+                    </p>
+                  )}
+                  {task.client && (
+                    <p className={`text-sm text-blue-600 dark:text-blue-400 mt-1 ${task.completed ? 'line-through' : ''}`}>
+                      {task.client.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
   
   return (
     <div className="space-y-6">
@@ -544,6 +725,14 @@ const ActivitiesPage: React.FC = () => {
                   <h2 className="text-lg font-medium">{monthYearStr}</h2>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={() => handleAddEvent()} 
+                    className="flex items-center gap-1"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Event
+                  </Button>
                   <button className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium">
                     Month
                   </button>
@@ -596,7 +785,11 @@ const ActivitiesPage: React.FC = () => {
                         activities={filteredActivitiesForDay}
                         isCurrentMonth={day.getMonth() === currentDate.getMonth()}
                         isToday={day.toDateString() === today.toDateString()}
-                        onClick={() => setSelectedDate(day)}
+                        onClick={() => {
+                          setSelectedDate(day);
+                          // Double-click detection could be added here
+                        }}
+                        onDoubleClick={() => handleAddEvent(day)}
                       />
                     );
                   })}
@@ -607,24 +800,40 @@ const ActivitiesPage: React.FC = () => {
             {/* Right Panel */}
             <div className="w-full md:w-80 shrink-0">
               <Card className="overflow-hidden">
-                <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-                  <h3 className="font-semibold text-lg">
-                    {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {activitiesForSelectedDate.length} activities
-                  </p>
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-semibold text-lg">
+                      {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    </h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {activitiesForSelectedDate.length} activities
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => handleAddEvent(selectedDate)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="sr-only">Add activity</span>
+                  </Button>
                 </div>
                 
                 {/* Activities for selected date */}
                 <div className="max-h-80 overflow-y-auto">
                   {activitiesForSelectedDate.length > 0 ? (
                     activitiesForSelectedDate.map(activity => (
-                      <ActivityItem 
-                        key={activity.id}
-                        activity={activity}
-                        onStatusChange={handleActivityStatusChange}
-                      />
+                      <div 
+                        key={activity.id} 
+                        onClick={() => handleEditEvent(activity)} 
+                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      >
+                        <ActivityItem 
+                          activity={activity}
+                          onStatusChange={handleActivityStatusChange}
+                        />
+                      </div>
                     ))
                   ) : (
                     <div className="p-4 text-center text-slate-500 dark:text-slate-400">
@@ -724,40 +933,86 @@ const ActivitiesPage: React.FC = () => {
           </div>
         </TabsContent>
         
-        {/* Other Tabs */}
-        <TabsContent value="task">
-          <DataTable
-            columns={columns}
-            data={sampleActivities.filter(a => a.type === "task")}
-            title=""
-            searchPlaceholder="Search tasks..."
-            onRowClick={handleRowClick}
-            onAddField={handleAddField}
-          />
+        {/* Tasks Tab Content */}
+        <TabsContent value="task" className="mt-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Tasks</h2>
+              <p className="text-slate-500 dark:text-slate-400">Manage your tasks and to-dos</p>
+            </div>
+            <Button onClick={handleAddTask}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Task
+            </Button>
+          </div>
+          
+          {renderTasks()}
         </TabsContent>
         
-        <TabsContent value="event">
-          <DataTable
-            columns={columns}
-            data={sampleActivities.filter(a => a.type === "event")}
-            title=""
-            searchPlaceholder="Search events..."
-            onRowClick={handleRowClick}
-            onAddField={handleAddField}
-          />
+        {/* Events Tab Content */}
+        <TabsContent value="event" className="mt-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Events</h2>
+              <p className="text-slate-500 dark:text-slate-400">Manage your events and meetings</p>
+            </div>
+            <Button onClick={() => handleAddEvent()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Event
+            </Button>
+          </div>
+          
+          <div className="text-center py-8">
+            <p className="text-slate-500 dark:text-slate-400 mb-4">Events feature coming soon</p>
+          </div>
         </TabsContent>
         
-        <TabsContent value="call">
-          <DataTable
-            columns={columns}
-            data={sampleActivities.filter(a => a.type === "call")}
-            title=""
-            searchPlaceholder="Search calls..."
-            onRowClick={handleRowClick}
-            onAddField={handleAddField}
-          />
+        {/* Calls Tab Content */}
+        <TabsContent value="call" className="mt-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Calls</h2>
+              <p className="text-slate-500 dark:text-slate-400">Manage your call records</p>
+            </div>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Log Call
+            </Button>
+          </div>
+          
+          <div className="text-center py-8">
+            <p className="text-slate-500 dark:text-slate-400 mb-4">Calls feature coming soon</p>
+          </div>
         </TabsContent>
       </Tabs>
+      
+      {/* Calendar Event Dialog */}
+      <CalendarEventDialog
+        open={isEventDialogOpen}
+        onOpenChange={setIsEventDialogOpen}
+        onSave={handleSaveEvent}
+        defaultDate={selectedDate}
+        event={currentEditEvent ? {
+          id: currentEditEvent.id.toString(),
+          title: currentEditEvent.title,
+          description: '',
+          type: currentEditEvent.type,
+          status: currentEditEvent.status,
+          date: new Date(currentEditEvent.dueDate),
+          allDay: false,
+          startTime: new Date(currentEditEvent.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          endTime: new Date(new Date(currentEditEvent.dueDate).getTime() + 60 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          relatedEntityType: currentEditEvent.relatedType,
+          relatedEntityId: 0,
+        } : undefined}
+      />
+      
+      {/* Task Dialog */}
+      <TaskDialog
+        open={isTaskDialogOpen}
+        onOpenChange={setIsTaskDialogOpen}
+        onTaskAdded={handleTaskAdded}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   flexRender,
   getCoreRowModel,
@@ -19,10 +19,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+} from '../ui/table';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Checkbox } from '../ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
+} from '../ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -39,7 +39,7 @@ import {
   DialogTitle,
   DialogFooter,
   DialogDescription,
-} from '@/components/ui/dialog';
+} from '../ui/dialog';
 import {
   ChevronLeft, 
   ChevronRight,
@@ -48,7 +48,15 @@ import {
   Settings,
   Filter,
   Plus,
+  Tags,
+  User,
+  Pencil,
+  Trash2,
+  Mail,
+  MoreHorizontal,
 } from 'lucide-react';
+import AddFieldDialog, { CustomField } from './add-field-dialog';
+import { Badge } from '../ui/badge';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -59,6 +67,7 @@ interface DataTableProps<TData, TValue> {
   searchColumn?: string;
   onRowClick?: (row: Row<TData>) => void;
   onAddField?: () => void;
+  pageType?: 'contacts' | 'companies' | 'products'; // To determine which bulk actions to show
 }
 
 export function DataTable<TData, TValue>({
@@ -70,6 +79,7 @@ export function DataTable<TData, TValue>({
   searchColumn = "name",
   onRowClick,
   onAddField,
+  pageType = 'contacts',
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -79,22 +89,78 @@ export function DataTable<TData, TValue>({
 
   // State for adding new field
   const [isAddingField, setIsAddingField] = useState(false);
-  const [newFieldName, setNewFieldName] = useState('');
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   
-  // Function to handle adding a new field
-  const handleAddField = () => {
-    if (newFieldName.trim() && onAddField) {
-      console.log("Add field clicked");
-      // This would normally add a new column to the table
-      // For now we'll just log it as the implementation depends on backend support
-      onAddField();
-      setNewFieldName('');
-      setIsAddingField(false);
-    }
+  // Define additional columns based on custom fields
+  const customColumns = useMemo(() => {
+    return customFields.map((field): ColumnDef<TData, TValue> => ({
+      accessorKey: field.id,
+      header: field.name,
+      cell: ({ row }) => {
+        const value = row.getValue(field.id);
+        
+        // Format value based on field type
+        if (field.type === 'boolean' && typeof value === 'boolean') {
+          return value ? 'Yes' : 'No';
+        }
+        
+        if (field.type === 'select' && typeof value === 'string' && field.options) {
+          return <Badge variant="outline">{value}</Badge>;
+        }
+        
+        return value || '-';
+      },
+    }));
+  }, [customFields]);
+  
+  // Function to handle adding a new custom field
+  const handleAddCustomField = (field: CustomField) => {
+    setCustomFields(prev => [...prev, field]);
+    
+    // Add the field to all existing data rows with a default value
+    // This would normally be handled by a backend update
+    console.log(`Added new field: ${field.name} (${field.type})`);
+  };
+
+  // Handle bulk actions
+  const handleChangeOwner = () => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    alert(`Change owner for ${selectedRows.length} items`);
+    // This would connect to API in real implementation
+  };
+  
+  const handleAddTags = () => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    alert(`Add tags to ${selectedRows.length} items`);
+    // This would connect to API in real implementation
+  };
+  
+  const handleRemoveTags = () => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    alert(`Remove tags from ${selectedRows.length} items`);
+    // This would connect to API in real implementation
+  };
+  
+  const handleUpdateField = () => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    alert(`Update field for ${selectedRows.length} items`);
+    // This would connect to API in real implementation
+  };
+  
+  const handleDelete = () => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    alert(`Delete ${selectedRows.length} items`);
+    // This would connect to API in real implementation
+  };
+  
+  const handleSendEmail = () => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    alert(`Send email to ${selectedRows.length} contacts`);
+    // This would connect to API in real implementation
   };
 
   // Add selection column to start of columns and create field at the end
-  const columnsWithExtras = useMemo(() => {
+  const allColumns = useMemo(() => {
     const baseColumns = [
       {
         id: "select",
@@ -119,34 +185,33 @@ export function DataTable<TData, TValue>({
         enableSorting: false,
         enableHiding: false,
       },
-      ...columns
+      ...columns,
+      ...customColumns,
     ];
     
     // Add "Create Field" column
-    if (onAddField) {
-      baseColumns.push({
-        id: "createField",
-        header: () => (
-          <div 
-            className="cursor-pointer text-blue-600 hover:text-blue-800 flex items-center justify-center"
-            onClick={() => setIsAddingField(true)}
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Create Field
-          </div>
-        ),
-        cell: () => null,
-        enableSorting: false,
-        enableHiding: false,
-      } as ColumnDef<TData, TValue>);
-    }
+    baseColumns.push({
+      id: "createField",
+      header: () => (
+        <div 
+          className="cursor-pointer text-blue-600 hover:text-blue-800 flex items-center justify-center"
+          onClick={() => setIsAddingField(true)}
+        >
+          <Plus className="w-4 h-4 mr-1" />
+          Create Field
+        </div>
+      ),
+      cell: () => null,
+      enableSorting: false,
+      enableHiding: false,
+    } as ColumnDef<TData, TValue>);
     
     return baseColumns as ColumnDef<TData, TValue>[];
-  }, [columns, onAddField, isAddingField]);
+  }, [columns, customColumns]);
 
   const table = useReactTable({
     data,
-    columns: columnsWithExtras,
+    columns: allColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -164,6 +229,29 @@ export function DataTable<TData, TValue>({
       globalFilter,
     },
   });
+
+  const hasRowsSelected = table.getFilteredSelectedRowModel().rows.length > 0;
+  
+  // List of bulk actions based on page type
+  const getBulkActions = () => {
+    const commonActions = [
+      { label: 'Change Owner', icon: <User className="mr-2 h-4 w-4" />, onClick: handleChangeOwner },
+      { label: 'Add Tags', icon: <Tags className="mr-2 h-4 w-4" />, onClick: handleAddTags },
+      { label: 'Remove Tags', icon: <Tags className="mr-2 h-4 w-4" />, onClick: handleRemoveTags },
+      { label: 'Update Field', icon: <Pencil className="mr-2 h-4 w-4" />, onClick: handleUpdateField },
+      { label: 'Delete', icon: <Trash2 className="mr-2 h-4 w-4 text-red-500" />, onClick: handleDelete },
+    ];
+    
+    // Add Send Email option only for contacts
+    if (pageType === 'contacts') {
+      return [
+        ...commonActions,
+        { label: 'Send Email', icon: <Mail className="mr-2 h-4 w-4" />, onClick: handleSendEmail },
+      ];
+    }
+    
+    return commonActions;
+  };
 
   return (
     <div className="space-y-6">
@@ -189,12 +277,36 @@ export function DataTable<TData, TValue>({
       </div>
 
       <div className="flex items-center justify-between py-4 gap-4">
-        <Input
-          placeholder={searchPlaceholder}
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="max-w-sm"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder={searchPlaceholder}
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="w-64"
+          />
+          
+          {hasRowsSelected && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="ml-2">
+                  <MoreHorizontal className="h-4 w-4 mr-2" />
+                  Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Bulk Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {getBulkActions().map((action, i) => (
+                  <DropdownMenuItem key={i} onClick={action.onClick} className="cursor-pointer">
+                    {action.icon}
+                    <span>{action.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+        
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="ml-auto flex items-center">
@@ -276,35 +388,11 @@ export function DataTable<TData, TValue>({
       </div>
       
       {/* Dialog for adding a new field */}
-      <Dialog open={isAddingField} onOpenChange={setIsAddingField}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Field</DialogTitle>
-            <DialogDescription>
-              Enter a name for the new field to add to the table.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <Input
-              placeholder="Field name"
-              value={newFieldName}
-              onChange={(e) => setNewFieldName(e.target.value)}
-              className="col-span-3"
-            />
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsAddingField(false)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleAddField}>
-              Add Field
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AddFieldDialog
+        open={isAddingField}
+        onOpenChange={setIsAddingField}
+        onAddField={handleAddCustomField}
+      />
 
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">

@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { StatCard as StatCardType } from '@/types';
+import { Card, CardContent } from '../ui/card';
+import { StatCard as StatCardType } from '../../types';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 
 interface StatCardProps {
@@ -19,7 +19,7 @@ const StatCard: React.FC<StatCardProps> = ({ stat }) => {
           </div>
           <div className="ml-5 w-0 flex-1">
             <dl>
-              <dt className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">{title}</dt>
+              <dt className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate" title={title}>{title}</dt>
               <dd>
                 <div className="text-lg font-semibold text-slate-900 dark:text-white">{value}</div>
                 <div className={`flex items-center text-xs font-medium ${

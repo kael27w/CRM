@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useRoute } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { queryClient } from '@/lib/queryClient';
-import { DashboardStats, Task } from '@/types';
+import { apiRequest } from '../lib/queryClient';
+import { queryClient } from '../lib/queryClient';
+import { DashboardStats, Task, UpcomingRenewal } from '../types';
 import { 
   CircleDollarSign, 
   ShieldCheck, 
@@ -17,7 +17,11 @@ import {
   ChevronDown,
   BarChart2,
   Plus,
-  RefreshCw
+  RefreshCw,
+  LayoutGrid,
+  LineChart,
+  Gauge,
+  AlertCircle
 } from 'lucide-react';
 import { 
   DropdownMenu,
@@ -25,89 +29,133 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { formatCurrency } from '@/lib/utils/format-currency';
-import StatCard from '@/components/dashboard/stat-card';
-import PremiumRevenueChart from '@/components/dashboard/premium-revenue-chart';
-import PolicyStatusChart from '@/components/dashboard/policy-status-chart';
-import UpcomingRenewals from '@/components/dashboard/upcoming-renewals';
-import TasksWidget from '@/components/dashboard/tasks-widget';
-import AgentPerformance from '@/components/dashboard/agent-performance';
+  DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem
+} from "../components/ui/dropdown-menu";
+import { Button } from "../components/ui/button";
+import { formatCurrency } from '../lib/utils/format-currency';
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import TasksWidget from '../components/dashboard/tasks-widget';
+import SimpleCounter from '../components/dashboard/simple-counter';
+import TargetMeter from '../components/dashboard/target-meter';
+import StatCard from '../components/dashboard/stat-card';
+import AddComponentDialog, { ComponentConfig, DashboardType } from '../components/dashboard/add-component-dialog';
+import ComponentOptionsMenu from '../components/dashboard/component-options-menu';
+import { useTasks } from '../lib/hooks/useTasks';
 
-// Types for dashboard views
-type DashboardType = 'overview' | 'pipelines' | 'tasks' | 'events' | 'calls' | 'emails';
-
-// Type for target meter component
-interface TargetMeterProps {
-  current: number;
-  target: number;
-  title: string;
-  unit?: string;
-}
-
-// Simple Number Counter Component (to replace Target Meter for Call Analytics)
-const SimpleCounter: React.FC<{ value: number; title: string }> = ({ value, title }) => {
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5 h-[168px]">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <PhoneCall className="h-5 w-5 text-slate-400" />
-      </div>
-      <div className="text-center py-10">
-        <div className="text-5xl font-bold text-slate-900 dark:text-white">{value}</div>
-        <div className="text-sm text-slate-500 mt-1">Total calls this month</div>
-      </div>
-    </div>
-  );
+// Define default components for each dashboard type
+const DEFAULT_DASHBOARD_COMPONENTS: Record<DashboardType, ComponentConfig[]> = {
+  overview: [
+    { type: 'stat', title: 'Contacts Created', dashboardType: 'overview', metric: 'contacts_created_this_month' },
+    { type: 'stat', title: 'Pipelines Won - This Month', dashboardType: 'overview', metric: 'pipelines_won_this_month' },
+    { type: 'stat', title: 'Pipelines Lost - This Month', dashboardType: 'overview', metric: 'pipelines_lost_this_month' },
+    { type: 'stat', title: 'Tasks Closed - This Month', dashboardType: 'overview', metric: 'tasks_closed_this_month' },
+    { type: 'chart', title: 'Open Pipelines by Stage', dashboardType: 'overview', metric: 'open_pipelines_by_stage_this_month' },
+    { type: 'chart', title: 'Revenue Won by Month', dashboardType: 'overview', metric: 'revenue_won_by_month' },
+    { type: 'targetMeter', title: 'Number of Calls', dashboardType: 'overview', metric: 'calls_completed_count_this_month' }
+  ],
+  pipelines: [
+    { type: 'stat', title: 'Open Pipelines - This Month', dashboardType: 'pipelines', metric: 'pipelines_open_this_month' },
+    { type: 'stat', title: 'Pipelines Won - This Month', dashboardType: 'pipelines', metric: 'pipelines_won_this_month' },
+    { type: 'stat', title: 'Pipelines Lost - This Month', dashboardType: 'pipelines', metric: 'pipelines_lost_this_month' },
+    { type: 'stat', title: 'Revenue Won - This Month', dashboardType: 'pipelines', metric: 'revenue_won_this_month' },
+    { type: 'chart', title: 'Open Pipelines Amount by Stage', dashboardType: 'pipelines', metric: 'open_pipelines_amount_by_stage' },
+    { type: 'chart', title: 'Monthly Revenue by Users', dashboardType: 'pipelines', metric: 'monthly_revenue_by_user' }
+  ],
+  events: [
+    { type: 'stat', title: 'Events Created - This Month', dashboardType: 'events', metric: 'events_created_this_month' },
+    { type: 'stat', title: 'Events Completed - This Month', dashboardType: 'events', metric: 'events_completed_this_month' },
+    { type: 'stat', title: 'Upcoming Events - This Month', dashboardType: 'events', metric: 'events_upcoming_this_month' },
+    { type: 'chart', title: 'Completed Events by Month', dashboardType: 'events', metric: 'events_completed_by_month' }
+  ],
+  tasks: [
+    { type: 'stat', title: 'Tasks Created - This Month', dashboardType: 'tasks', metric: 'tasks_created_this_month' },
+    { type: 'stat', title: 'Open Tasks - This Month', dashboardType: 'tasks', metric: 'tasks_open_this_month' },
+    { type: 'stat', title: 'Completed Tasks - This Month', dashboardType: 'tasks', metric: 'tasks_completed_this_month' },
+    { type: 'stat', title: 'Overdue Tasks - This Month', dashboardType: 'tasks', metric: 'tasks_overdue_this_month' },
+    { type: 'chart', title: 'Tasks by Priority', dashboardType: 'tasks', metric: 'tasks_by_priority' }
+  ],
+  calls: [
+    { type: 'stat', title: 'Calls Completed - This Month', dashboardType: 'calls', metric: 'calls_completed_this_month' },
+    { type: 'stat', title: 'Upcoming Calls - This Month', dashboardType: 'calls', metric: 'calls_upcoming_this_month' },
+    { type: 'stat', title: 'Inbound Calls - This Month', dashboardType: 'calls', metric: 'calls_inbound_this_month' },
+    { type: 'stat', title: 'Outbound Calls - This Month', dashboardType: 'calls', metric: 'calls_outbound_this_month' },
+    { type: 'stat', title: 'Average Call Duration', dashboardType: 'calls', metric: 'calls_average_duration_this_month' }
+  ],
+  emails: [
+    { type: 'stat', title: 'Emails Sent - This Month', dashboardType: 'emails', metric: 'emails_sent_this_month' },
+    { type: 'stat', title: 'Emails Opened - This Month', dashboardType: 'emails', metric: 'emails_opened_this_month' },
+    { type: 'stat', title: 'Emails Clicked - This Month', dashboardType: 'emails', metric: 'emails_clicked_this_month' },
+    { type: 'chart', title: 'Users vs Emails Sent', dashboardType: 'emails', metric: 'users_vs_emails_sent' }
+  ]
 };
 
-// Target Meter Component
-const TargetMeter: React.FC<TargetMeterProps> = ({ current, target, title, unit = '' }) => {
-  const percentage = Math.min(Math.round((current / target) * 100), 100);
-  const remaining = target - current;
-  
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <Target className="h-5 w-5 text-slate-400" />
-      </div>
-      
-      <div className="relative h-28 w-full flex justify-center items-center">
-        {/* The semi-circular gauge oriented upwards */}
-        <div className="absolute w-40 h-40 -top-20 overflow-hidden">
-          {/* Background arc */}
-          <div 
-            className="absolute w-40 h-40 rounded-full border-[16px] border-slate-100 dark:border-slate-700"
-            style={{ 
-              clipPath: 'polygon(0 50%, 100% 50%, 100% 0, 0 0)',
-              transform: 'rotate(180deg)'
-            }}
-          ></div>
-          {/* Progress arc */}
-          <div 
-            className="absolute w-40 h-40 rounded-full border-[16px] border-blue-500 dark:border-blue-600"
-            style={{ 
-              clipPath: `polygon(0 50%, 100% 50%, 100% ${50 - percentage/2}%, 0% ${50 - percentage/2}%)`,
-              transform: 'rotate(180deg)'
-            }}
-          ></div>
-        </div>
-        
-        {/* Central text display */}
-        <div className="text-center mt-2">
-          <div className="text-3xl font-bold text-slate-900 dark:text-white">{current}</div>
-          <div className="text-sm text-slate-500">/ {target} Target</div>
-          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            <span className="font-medium text-blue-600 dark:text-blue-400">{remaining}</span> remaining to target
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+// --- Mock Data Generation ---
+// Helper function to create mock DashboardStats
+const createMockDashboardStats = (): DashboardStats => ({
+  revenueMTD: 55200.75,
+  revenueChange: 12.5,
+  activePolicies: 1240,
+  activePoliciesChange: 5.2,
+  pendingClaims: 35,
+  pendingClaimsChange: -2,
+  activeClients: 850,
+  activeClientsChange: 18,
+  premiumRevenue: [
+    { month: 'Jan', revenue: 45000 },
+    { month: 'Feb', revenue: 48000 },
+    { month: 'Mar', revenue: 52000 },
+    { month: 'Apr', revenue: 50000 },
+    { month: 'May', revenue: 55200 },
+    { month: 'Jun', revenue: 58000 },
+  ],
+  policyStatus: [
+    { status: 'Active', count: 1240, percentage: 80, color: '#3b82f6' }, // blue
+    { status: 'Pending', count: 155, percentage: 10, color: '#f59e0b' }, // amber
+    { status: 'Expired', count: 77, percentage: 5, color: '#ef4444' }, // red
+    { status: 'Cancelled', count: 78, percentage: 5, color: '#6b7280' }, // gray
+  ],
+  upcomingRenewals: [
+    { 
+      id: 1, 
+      client: { id: 101, name: 'Client A', status: 'Active', createdAt: '' }, 
+      policy: { id: 201, policyNumber: 'POL-001', type: 'Auto', status: 'Active', coverageAmount: 50000, premium: 500, startDate: '', renewalDate: '2024-08-15', stage: '', createdAt: '' , clientId: 101}
+    },
+    { 
+      id: 2, 
+      client: { id: 102, name: 'Client B', status: 'Active', createdAt: '' }, 
+      policy: { id: 202, policyNumber: 'POL-002', type: 'Home', status: 'Active', coverageAmount: 250000, premium: 1200, startDate: '', renewalDate: '2024-08-20', stage: '', createdAt: '' , clientId: 102}
+    },
+    // Add more mock renewals if needed
+  ],
+  agentPerformance: [
+    { 
+      id: 1, 
+      agent: { id: 1, username: 'agent1', name: 'Agent Smith', email: '', role: '', createdAt: '' }, 
+      policiesSold: 25, 
+      premiumVolume: 75000, 
+      conversionRate: 60, 
+      clientRetention: 85, 
+      trend: 'up'
+    },
+    // Add more mock agents if needed
+  ],
+  // Add other potential fields with default mock values if needed by other views
+  // callsCompleted: 42, // Example if needed later, but not in current type
+});
+
+// Placeholder for future component
+const PlaceholderComponent: React.FC<{ title: string }> = ({ title }) => (
+  <Card>
+    <CardHeader>
+      <CardTitle title={title}>{title}</CardTitle>
+    </CardHeader>
+    <CardContent>
+      <p className="text-muted-foreground">Component data will load here.</p>
+    </CardContent>
+  </Card>
+);
 
 const Dashboard: React.FC = () => {
   // Get current dashboard type from route or default to overview
@@ -117,43 +165,112 @@ const Dashboard: React.FC = () => {
     (params?.type as DashboardType) || 'overview'
   );
   
+  // State for the Add Component dialog
+  const [isAddingComponent, setIsAddingComponent] = useState(false);
+  
+  // State for custom components added by the user
+  const [customComponents, setCustomComponents] = useState<ComponentConfig[]>([]);
+  
+  // Load saved components from localStorage on initial render
+  useEffect(() => {
+    const savedComponents = localStorage.getItem(`dashboard_components_${dashboardType}`);
+    if (savedComponents) {
+      try {
+        setCustomComponents(JSON.parse(savedComponents));
+      } catch (error) {
+        console.error('Failed to parse saved components:', error);
+      }
+    }
+  }, [dashboardType]);
+
+  // Save components to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(`dashboard_components_${dashboardType}`, JSON.stringify(
+      customComponents.filter(component => component.dashboardType === dashboardType)
+    ));
+  }, [customComponents, dashboardType]);
+  
   // Update URL when dashboard type changes
   useEffect(() => {
-    setLocation(`/dashboard/${dashboardType}`);
-  }, [dashboardType, setLocation]);
+    // Only update URL if it doesn't match the current state
+    if (params?.type !== dashboardType) {
+       setLocation(`/dashboard/${dashboardType}`, { replace: true });
+    }
+  }, [dashboardType, setLocation, params?.type]);
   
   // Handle dashboard type change from dropdown
-  const handleDashboardChange = (type: DashboardType) => {
-    setDashboardType(type);
+  const handleDashboardChange = (type: string) => {
+    // Type assertion needed as DropdownMenuRadioItem value is string
+    setDashboardType(type as DashboardType);
   };
   
-  const { data: dashboardData, isLoading } = useQuery<DashboardStats>({
-    queryKey: ['/api/stats/dashboard'],
-  });
-
-  const completeTaskMutation = useMutation({
-    mutationFn: async ({ id, completed }: { id: number, completed: boolean }) => {
-      if (completed) {
-        const response = await apiRequest('PATCH', `/api/tasks/${id}/complete`, {});
-        return response.json();
+  const { data: dashboardData, isLoading, isError, error, refetch } = useQuery<DashboardStats, Error>({
+    queryKey: ['dashboardStats', dashboardType],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest('GET', `/api/stats/${dashboardType}`);
+        if (!response.ok) {
+          console.error(`API error for ${dashboardType}: ${response.status} ${response.statusText}`);
+          // Return mock data on HTTP error
+          return createMockDashboardStats();
+        }
+        // Check content type before parsing
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return response.json() as Promise<DashboardStats>;
+        } else {
+          console.error(`Unexpected content type for ${dashboardType}: ${contentType}`);
+          // Return mock data on non-JSON response (like HTML error pages)
+          return createMockDashboardStats();
+        }
+      } catch (err) {
+        console.error(`Fetch error for ${dashboardType}:`, err);
+        // Return mock data on network/fetch error
+        return createMockDashboardStats();
       }
-      return null;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/stats/dashboard'] });
-    }
+    // Prevent automatic retries on error for now, as endpoints might be broken
+    retry: false,
+    // Keep data from previous successful fetch while loading new view?
+    // placeholderData: keepPreviousData, // Or use a stale mock
   });
 
+  // Use the tasks hook to share task data between dashboard and activities page
+  const { toggleTask } = useTasks();
+  
+  // Replace the existing completeTaskMutation and handleToggleTask with the shared version
   const handleToggleTask = (id: number, completed: boolean) => {
-    completeTaskMutation.mutate({ id, completed });
+    toggleTask(id, completed);
   };
   
+  // Handle adding a new component to the dashboard
+  const handleAddComponent = (component: ComponentConfig) => {
+    // Generate a unique ID for the component
+    const newComponent = {
+      ...component,
+      id: `component-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    };
+    setCustomComponents(prev => [...prev, newComponent]);
+  };
+
+  // Handle deleting a component from the dashboard
+  const handleDeleteComponent = (componentId: string) => {
+    setCustomComponents(prev => prev.filter(component => component.id !== componentId));
+  };
+
+  // Load default components for a new dashboard type
+  const loadDefaultComponents = () => {
+    // This function could be used to initialize dashboards with default components
+    // For now, we'll just return the appropriate default components based on dashboard type
+    return DEFAULT_DASHBOARD_COMPONENTS[dashboardType] || [];
+  };
+
   // Dashboard Type to Display Name mapping
   const dashboardNames: Record<DashboardType, string> = {
     'overview': 'Overview',
-    'pipelines': 'Pipelines Dashboard',
-    'tasks': 'Tasks Dashboard',
-    'events': 'Events Dashboard',
+    'pipelines': 'Pipelines',
+    'tasks': 'Tasks',
+    'events': 'Events',
     'calls': 'Call Analytics',
     'emails': 'Email Analytics'
   };
@@ -181,634 +298,462 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (!dashboardData) {
-    return <div>Error loading dashboard data</div>;
+  if (isError || !dashboardData) {
+    return (
+      <Card className="col-span-full">
+        <CardHeader>
+          <CardTitle className="flex items-center text-destructive">
+            <AlertCircle className="mr-2 h-5 w-5"/>
+            Error Loading Dashboard Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground mb-4">
+            There was an issue fetching the data for the {dashboardNames[dashboardType]} dashboard. Please try again later.
+          </p>
+          <pre className="text-xs bg-muted p-2 rounded overflow-x-auto mb-4">
+            {error instanceof Error ? error.message : 'An unknown error occurred.'}
+          </pre>
+          <Button onClick={() => refetch()} variant="outline" size="sm">
+            <RefreshCw className="mr-2 h-4 w-4"/>
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
-  const statCards = [
-    {
-      title: "Revenue MTD",
-      value: formatCurrency(dashboardData.revenueMTD),
-      icon: <CircleDollarSign className="h-6 w-6 text-blue-600" />,
-      change: dashboardData.revenueChange,
-      changeLabel: "vs last month",
-      changeType: dashboardData.revenueChange >= 0 ? 'positive' as const : 'negative' as const,
-      bgColor: "bg-blue-50 dark:bg-blue-900/20",
-      iconColor: "text-blue-600 dark:text-blue-400"
-    },
-    {
-      title: "Active Policies",
-      value: dashboardData.activePolicies,
-      icon: <ShieldCheck className="h-6 w-6 text-emerald-600" />,
-      change: dashboardData.activePoliciesChange,
-      changeLabel: "vs last month",
-      changeType: dashboardData.activePoliciesChange >= 0 ? 'positive' as const : 'negative' as const,
-      bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-      iconColor: "text-emerald-600 dark:text-emerald-400"
-    },
-    {
-      title: "Pending Claims",
-      value: dashboardData.pendingClaims,
-      icon: <Wallet className="h-6 w-6 text-amber-600" />,
-      change: Math.abs(dashboardData.pendingClaimsChange),
-      changeLabel: "vs last month",
-      changeType: dashboardData.pendingClaimsChange <= 0 ? 'positive' as const : 'negative' as const,
-      bgColor: "bg-amber-50 dark:bg-amber-900/20",
-      iconColor: "text-amber-600 dark:text-amber-400"
-    },
-    {
-      title: "Active Clients",
-      value: dashboardData.activeClients,
-      icon: <Users className="h-6 w-6 text-indigo-600" />,
-      change: dashboardData.activeClientsChange,
-      changeLabel: "vs last month",
-      changeType: dashboardData.activeClientsChange >= 0 ? 'positive' as const : 'negative' as const,
-      bgColor: "bg-indigo-50 dark:bg-indigo-900/20",
-      iconColor: "text-indigo-600 dark:text-indigo-400"
-    }
+  // --- Reusable Stat Card Data Generation ---
+  // Moved this logic here to be reused across views
+  const overviewStats = [
+      { 
+        title: "Revenue MTD", 
+        value: formatCurrency(dashboardData.revenueMTD), 
+        icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+        change: dashboardData.revenueChange, changeLabel: "vs last month", 
+        changeType: dashboardData.revenueChange >= 0 ? 'positive' as const : 'negative' as const,
+        bgColor: "bg-blue-50 dark:bg-blue-900/20",
+        iconColor: "text-blue-600 dark:text-blue-400"
+      },
+      { 
+        title: "Active Policies", 
+        value: dashboardData.activePolicies, 
+        icon: <ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+        change: dashboardData.activePoliciesChange, changeLabel: "vs last month", 
+        changeType: dashboardData.activePoliciesChange >= 0 ? 'positive' as const : 'negative' as const,
+        bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
+        iconColor: "text-emerald-600 dark:text-emerald-400"
+      },
+      { 
+        title: "Pending Claims", 
+        value: dashboardData.pendingClaims, 
+        icon: <Wallet className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+        change: Math.abs(dashboardData.pendingClaimsChange), changeLabel: "vs last month", 
+        changeType: dashboardData.pendingClaimsChange <= 0 ? 'positive' as const : 'negative' as const,
+        bgColor: "bg-amber-50 dark:bg-amber-900/20",
+        iconColor: "text-amber-600 dark:text-amber-400"
+      },
+      { 
+        title: "Active Clients", 
+        value: dashboardData.activeClients, 
+        icon: <Users className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />,
+        change: dashboardData.activeClientsChange, changeLabel: "vs last month", 
+        changeType: dashboardData.activeClientsChange >= 0 ? 'positive' as const : 'negative' as const,
+        bgColor: "bg-indigo-50 dark:bg-indigo-900/20",
+        iconColor: "text-indigo-600 dark:text-indigo-400"
+      }
+    ];
+
+  const pipelineStats = [
+      { 
+        title: "Open Deals Value", 
+        value: formatCurrency(485000), // Using mock value 
+        icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+        change: 12, changeLabel: "vs last month", changeType: 'positive' as const,
+        bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
+      },
+      { 
+        title: "Avg Deal Size", 
+        value: formatCurrency(48500), // Using mock value
+        icon: <BarChart2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+        change: 8, changeLabel: "vs last month", changeType: 'positive' as const,
+        bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
+      },
+      { 
+        title: "Win Rate", value: "32%", // Using mock value
+        icon: <Target className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+        change: -2, changeLabel: "vs last month", changeType: 'negative' as const,
+        bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
+      },
+      { 
+        title: "Deals Won MTD", value: 15, // Mock value
+        icon: <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />,
+        change: 3, changeLabel: "vs last month", changeType: 'positive' as const,
+        bgColor: "bg-green-50 dark:bg-green-900/20", iconColor: "text-green-600"
+      },
+    ];
+    
+  const taskStats = [
+      { 
+        title: "Open Tasks", value: 24, // Mock value
+        icon: <CheckCircle2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+        change: -5, changeLabel: "vs last month", changeType: 'negative' as const,
+        bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
+      },
+      { 
+        title: "Overdue Tasks", value: 8, // Mock value
+        icon: <CheckCircle2 className="h-6 w-6 text-red-600 dark:text-red-400" />,
+        change: 2, changeLabel: "vs last month", changeType: 'negative' as const,
+        bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
+      },
+      { 
+        title: "Completed Today", value: 7, // Mock value
+        icon: <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+        change: 3, changeLabel: "vs yesterday", changeType: 'positive' as const,
+        bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
+      },
+      { 
+        title: "Due This Week", value: 12, // Mock value
+        icon: <Calendar className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+        change: 1, changeLabel: "vs last week", changeType: 'positive' as const,
+        bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
+      },
   ];
 
-  // Mock data for different dashboard types
-  const contactsCreated = 28;
-  const pipelinesWon = 12;
-  const pipelinesLost = 5;
-  const tasksCompleted = 34;
-  const eventsCompleted = 16;
-  const callsCompleted = 42;
-  
-  // Define dashboard components based on current dashboard type
-  const renderDashboardContent = () => {
-    // Define stat cards for each dashboard type
-    const getStatCards = () => {
-      switch(dashboardType) {
-        case 'overview':
-          return [
-            {
-              title: "Contacts Created",
-              value: contactsCreated,
-              icon: <Users className="h-6 w-6 text-blue-600" />,
-              change: 15,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-blue-50 dark:bg-blue-900/20",
-              iconColor: "text-blue-600 dark:text-blue-400"
-            },
-            {
-              title: "Pipelines Won/Lost",
-              value: `${pipelinesWon}/${pipelinesLost}`,
-              icon: <BarChart2 className="h-6 w-6 text-emerald-600" />,
-              change: 8,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-              iconColor: "text-emerald-600 dark:text-emerald-400"
-            },
-            {
-              title: "Tasks Closed",
-              value: tasksCompleted,
-              icon: <CheckCircle2 className="h-6 w-6 text-amber-600" />,
-              change: 5,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-amber-50 dark:bg-amber-900/20",
-              iconColor: "text-amber-600 dark:text-amber-400"
-            },
-            {
-              title: "Events Completed",
-              value: eventsCompleted,
-              icon: <Calendar className="h-6 w-6 text-indigo-600" />,
-              change: -3,
-              changeLabel: "vs last month",
-              changeType: 'negative' as const,
-              bgColor: "bg-indigo-50 dark:bg-indigo-900/20",
-              iconColor: "text-indigo-600 dark:text-indigo-400"
-            }
-          ];
-          
-        case 'pipelines':
-          return [
-            {
-              title: "Open Deals Value",
-              value: formatCurrency(485000),
-              icon: <CircleDollarSign className="h-6 w-6 text-blue-600" />,
-              change: 12,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-blue-50 dark:bg-blue-900/20",
-              iconColor: "text-blue-600 dark:text-blue-400"
-            },
-            {
-              title: "Avg Deal Size",
-              value: formatCurrency(48500),
-              icon: <BarChart2 className="h-6 w-6 text-emerald-600" />,
-              change: 8,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-              iconColor: "text-emerald-600 dark:text-emerald-400"
-            },
-            {
-              title: "Win Rate",
-              value: "32%",
-              icon: <Target className="h-6 w-6 text-amber-600" />,
-              change: -2,
-              changeLabel: "vs last month",
-              changeType: 'negative' as const,
-              bgColor: "bg-amber-50 dark:bg-amber-900/20",
-              iconColor: "text-amber-600 dark:text-amber-400"
-            }
-          ];
-          
-        case 'tasks':
-          return [
-            {
-              title: "Open Tasks",
-              value: 24,
-              icon: <CheckCircle2 className="h-6 w-6 text-blue-600" />,
-              change: -5,
-              changeLabel: "vs last month",
-              changeType: 'negative' as const,
-              bgColor: "bg-blue-50 dark:bg-blue-900/20",
-              iconColor: "text-blue-600 dark:text-blue-400"
-            },
-            {
-              title: "Overdue Tasks",
-              value: 8,
-              icon: <CheckCircle2 className="h-6 w-6 text-red-600" />,
-              change: 2,
-              changeLabel: "vs last month",
-              changeType: 'negative' as const,
-              bgColor: "bg-red-50 dark:bg-red-900/20",
-              iconColor: "text-red-600 dark:text-red-400"
-            },
-            {
-              title: "Completed Today",
-              value: 7,
-              icon: <CheckCircle2 className="h-6 w-6 text-emerald-600" />,
-              change: 3,
-              changeLabel: "vs yesterday",
-              changeType: 'positive' as const,
-              bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-              iconColor: "text-emerald-600 dark:text-emerald-400"
-            },
-            {
-              title: "Completed This Week",
-              value: 34,
-              icon: <CheckCircle2 className="h-6 w-6 text-amber-600" />,
-              change: 12,
-              changeLabel: "vs last week",
-              changeType: 'positive' as const,
-              bgColor: "bg-amber-50 dark:bg-amber-900/20",
-              iconColor: "text-amber-600 dark:text-amber-400"
-            }
-          ];
-          
-        case 'events':
-          return [
-            {
-              title: "Upcoming Events",
-              value: 15,
-              icon: <Calendar className="h-6 w-6 text-blue-600" />,
-              change: 5,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-blue-50 dark:bg-blue-900/20",
-              iconColor: "text-blue-600 dark:text-blue-400"
-            },
-            {
-              title: "Events This Week",
-              value: 8,
-              icon: <Calendar className="h-6 w-6 text-emerald-600" />,
-              change: 2,
-              changeLabel: "vs last week",
-              changeType: 'positive' as const,
-              bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-              iconColor: "text-emerald-600 dark:text-emerald-400"
-            },
-            {
-              title: "Completed Events",
-              value: 16,
-              icon: <Calendar className="h-6 w-6 text-amber-600" />,
-              change: 4,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-amber-50 dark:bg-amber-900/20",
-              iconColor: "text-amber-600 dark:text-amber-400"
-            }
-          ];
-          
-        case 'calls':
-          return [
-            {
-              title: "Calls Made Today",
-              value: 18,
-              icon: <PhoneCall className="h-6 w-6 text-blue-600" />,
-              change: 8,
-              changeLabel: "vs yesterday",
-              changeType: 'positive' as const,
-              bgColor: "bg-blue-50 dark:bg-blue-900/20",
-              iconColor: "text-blue-600 dark:text-blue-400"
-            },
-            {
-              title: "Calls Made This Week",
-              value: 78,
-              icon: <PhoneCall className="h-6 w-6 text-emerald-600" />,
-              change: 15,
-              changeLabel: "vs last week",
-              changeType: 'positive' as const,
-              bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-              iconColor: "text-emerald-600 dark:text-emerald-400"
-            },
-            {
-              title: "Avg Call Duration",
-              value: "12:24",
-              icon: <PhoneCall className="h-6 w-6 text-amber-600" />,
-              change: -2,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-amber-50 dark:bg-amber-900/20",
-              iconColor: "text-amber-600 dark:text-amber-400"
-            }
-          ];
-          
-        case 'emails':
-          return [
-            {
-              title: "Emails Sent",
-              value: 145,
-              icon: <Mail className="h-6 w-6 text-blue-600" />,
-              change: 18,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-blue-50 dark:bg-blue-900/20",
-              iconColor: "text-blue-600 dark:text-blue-400"
-            },
-            {
-              title: "Open Rate",
-              value: "28%",
-              icon: <Mail className="h-6 w-6 text-emerald-600" />,
-              change: 5,
-              changeLabel: "vs last month",
-              changeType: 'positive' as const,
-              bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-              iconColor: "text-emerald-600 dark:text-emerald-400"
-            },
-            {
-              title: "Click Rate",
-              value: "12%",
-              icon: <Mail className="h-6 w-6 text-amber-600" />,
-              change: -2,
-              changeLabel: "vs last month",
-              changeType: 'negative' as const,
-              bgColor: "bg-amber-50 dark:bg-amber-900/20",
-              iconColor: "text-amber-600 dark:text-amber-400"
-            }
-          ];
-          
-        default:
-          return [];
-      }
-    };
+  const eventStats = [
+    { 
+      title: "Upcoming Events", value: 15, // Mock value
+      icon: <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+      change: 5, changeLabel: "vs last month", changeType: 'positive' as const,
+      bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
+    },
+    { 
+      title: "Events This Week", value: 8, // Mock value
+      icon: <Calendar className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+      change: 2, changeLabel: "vs last week", changeType: 'positive' as const,
+      bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
+    },
+    { 
+      title: "Completed Events", value: 16, // Mock value
+      icon: <Calendar className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+      change: 4, changeLabel: "vs last month", changeType: 'positive' as const,
+      bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
+    },
+    { 
+      title: "No Shows", value: 3, // Mock value
+      icon: <Calendar className="h-6 w-6 text-red-600 dark:text-red-400" />,
+      change: 1, changeLabel: "vs last month", changeType: 'negative' as const,
+      bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
+    },
+  ];
+
+  const emailStats = [
+    { 
+      title: "Emails Sent", value: 145, // Mock value
+      icon: <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+      change: 18, changeLabel: "vs last month", changeType: 'positive' as const,
+      bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
+    },
+    { 
+      title: "Open Rate", value: "28%", // Mock value
+      icon: <Mail className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+      change: 5, changeLabel: "vs last month", changeType: 'positive' as const,
+      bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
+    },
+    { 
+      title: "Click Rate", value: "12%", // Mock value
+      icon: <Mail className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+      change: -2, changeLabel: "vs last month", changeType: 'negative' as const,
+      bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
+    },
+    { 
+      title: "Bounce Rate", value: "3%", // Mock value
+      icon: <Mail className="h-6 w-6 text-red-600 dark:text-red-400" />,
+      change: 1, changeLabel: "vs last month", changeType: 'negative' as const,
+      bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
+    },
+  ];
+
+  // Render a component based on its configuration
+  const renderCustomComponent = (component: ComponentConfig, index: number) => {
+    // Only render components associated with the current dashboard type
+    if (component.dashboardType !== dashboardType) {
+      return null;
+    }
+
+    // Need component ID to delete it
+    if (!component.id) {
+      console.warn('Component without ID detected', component);
+      return null;
+    }
+
+    // Decide what data to display based on the component's metric
+    const metricData = getMetricData(component.metric);
     
-    // Get charts and widgets for each dashboard type
-    switch(dashboardType) {
-      case 'overview':
+    // Helper function to handle deleting this specific component
+    const handleDelete = () => handleDeleteComponent(component.id!);
+    
+    // Wrapper div with relative positioning for the options menu
+    const ComponentWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+      <div className="relative group" key={`custom-component-${component.id}`}>
+        {children}
+        <ComponentOptionsMenu onDelete={handleDelete} />
+      </div>
+    );
+    
+    switch (component.type) {
+      case 'stat':
+        // For stats, create a stat card using the metric data
         return (
-          <>
-            <div className="col-span-1 lg:col-span-3 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {getStatCards().map((stat, index) => (
-                <StatCard key={index} stat={stat} />
-              ))}
-            </div>
-            
-            <div className="col-span-1 lg:col-span-2">
-              <PremiumRevenueChart data={dashboardData.premiumRevenue} />
-            </div>
-            
-            <div className="col-span-1">
-              <PolicyStatusChart 
-                data={dashboardData.policyStatus} 
-                totalPolicies={dashboardData.activePolicies} 
-              />
-            </div>
-            
-            <div className="col-span-1 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <TasksWidget 
-                tasks={dashboardData.upcomingRenewals.map(renewal => ({
-                  id: renewal.id,
-                  title: `Call ${renewal.client.name} about policy renewal`,
-                  description: `${renewal.policy.type} Policy #${renewal.policy.policyNumber}`,
-                  dueDate: renewal.policy.renewalDate!,
-                  completed: false,
-                  assignedToId: 1, // Current user
-                  clientId: renewal.client.id,
-                  policyId: renewal.policy.id,
-                  createdAt: new Date().toISOString(),
-                } as Task))}
-                onToggleTask={handleToggleTask}
-              />
-              <SimpleCounter 
-                value={callsCompleted} 
-                title="Number of Calls" 
-              />
-            </div>
-          </>
+          <ComponentWrapper>
+            <StatCard 
+              stat={{
+                title: component.title,
+                value: typeof metricData === 'number' ? metricData.toString() : metricData || '0',
+                icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+                change: 0,
+                changeLabel: 'vs last period',
+                changeType: 'neutral' as const,
+                bgColor: "bg-blue-50 dark:bg-blue-900/20",
+                iconColor: "text-blue-600 dark:text-blue-400"
+              }} 
+            />
+          </ComponentWrapper>
         );
         
-      case 'pipelines':
+      case 'chart':
+        // For charts, show a chart component with the appropriate data
         return (
-          <>
-            <div className="col-span-1 lg:col-span-3 grid grid-cols-1 gap-6 sm:grid-cols-3 lg:grid-cols-3">
-              {getStatCards().map((stat, index) => (
-                <StatCard key={index} stat={stat} />
-              ))}
-            </div>
-            
-            <div className="col-span-1 lg:col-span-2">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Deals Won vs Lost</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Deals Won vs Lost visualization
-                  </div>
+          <ComponentWrapper>
+            <Card>
+              <CardHeader>
+                <CardTitle>{component.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[200px] flex items-center justify-center">
+                  <LineChart className="h-16 w-16 text-slate-300" />
+                  <span className="ml-2 text-slate-500">Chart data from {component.metric}</span>
                 </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Pipeline Conversion</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Pipeline Conversion visualization
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1 lg:col-span-3">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Pipeline Overview</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Pipeline stages by deal count and value
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+              </CardContent>
+            </Card>
+          </ComponentWrapper>
         );
         
-      case 'tasks':
+      case 'targetMeter':
+        // For target meters, show a target meter with appropriate data
+        const current = typeof metricData === 'number' ? metricData : 0;
         return (
-          <>
-            <div className="col-span-1 lg:col-span-3 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {getStatCards().map((stat, index) => (
-                <StatCard key={index} stat={stat} />
-              ))}
-            </div>
-            
-            <div className="col-span-1 lg:col-span-2">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Task Status</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Tasks by Status visualization
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Task Due Dates</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Task Due Date Distribution
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1 lg:col-span-3">
-              <TasksWidget 
-                tasks={dashboardData.upcomingRenewals.map(renewal => ({
-                  id: renewal.id,
-                  title: `Call ${renewal.client.name} about policy renewal`,
-                  description: `${renewal.policy.type} Policy #${renewal.policy.policyNumber}`,
-                  dueDate: renewal.policy.renewalDate!,
-                  completed: false,
-                  assignedToId: 1, // Current user
-                  clientId: renewal.client.id,
-                  policyId: renewal.policy.id,
-                  createdAt: new Date().toISOString(),
-                } as Task))}
-                onToggleTask={handleToggleTask}
-              />
-            </div>
-          </>
-        );
-        
-      case 'events':
-        return (
-          <>
-            <div className="col-span-1 lg:col-span-3 grid grid-cols-1 gap-6 sm:grid-cols-3 lg:grid-cols-3">
-              {getStatCards().map((stat, index) => (
-                <StatCard key={index} stat={stat} />
-              ))}
-            </div>
-            
-            <div className="col-span-1 lg:col-span-2">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Upcoming Events</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Calendar: Upcoming Events visualization
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Events by Type</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Events by Type visualization
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        );
-        
-      case 'calls':
-        return (
-          <>
-            <div className="col-span-1 lg:col-span-3 grid grid-cols-1 gap-6 sm:grid-cols-3 lg:grid-cols-3">
-              {getStatCards().map((stat, index) => (
-                <StatCard key={index} stat={stat} />
-              ))}
-            </div>
-            
-            <div className="col-span-1">
-              <SimpleCounter 
-                value={42} 
-                title="Number of Calls" 
-              />
-            </div>
-            
-            <div className="col-span-1 lg:col-span-2">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Call Volume</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Call Volume Over Time
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1 lg:col-span-3">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Calls by Outcome</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Calls by Outcome (Successful, Voicemail, No Answer, etc.)
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        );
-        
-      case 'emails':
-        return (
-          <>
-            <div className="col-span-1 lg:col-span-3 grid grid-cols-1 gap-6 sm:grid-cols-3 lg:grid-cols-3">
-              {getStatCards().map((stat, index) => (
-                <StatCard key={index} stat={stat} />
-              ))}
-            </div>
-            
-            <div className="col-span-1 lg:col-span-2">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Email Performance</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    Chart: Email Open and Click Rates
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-span-1">
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
-                <h3 className="text-lg font-semibold mb-4">Top Performing Templates</h3>
-                <div className="h-60 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    List: Top Performing Email Templates
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+          <ComponentWrapper>
+            <TargetMeter 
+              current={current} 
+              target={100} // This could be customizable in the future
+              title={component.title} 
+            />
+          </ComponentWrapper>
         );
         
       default:
         return null;
     }
   };
+
+  // Helper function to get data for a specific metric
+  const getMetricData = (metricKey: string): any => {
+    // This would typically fetch actual data from dashboardData or an API
+    // For now, return a mock value based on the metric key
+    if (metricKey.includes('this_month')) {
+      return Math.floor(Math.random() * 100);
+    }
+    return '0';
+  };
+
+  const renderDashboardContent = () => {
+    // Ensure data exists (mock or real)
+    if (!dashboardData) return null; // Should be handled by loading/error states
+
+    // Define standard dashboard components first
+    let standardComponents;
+    
+    switch(dashboardType) {
+      case 'overview':
+        standardComponents = (
+          <>
+            {overviewStats.map((stat, index) => (
+              <StatCard key={`overview-stat-${index}`} stat={stat} />
+            ))}
+            {/* Placeholder Charts - Replace with actual chart components when ready */}
+            <PlaceholderComponent title="Premium Revenue" />
+            <PlaceholderComponent title="Policy Status" />
+            {/* Tasks Widget */}
+            <Card className="col-span-1 lg:col-span-2">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Upcoming Renewals / Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TasksWidget
+                    tasks={dashboardData?.upcomingRenewals?.map((renewal: UpcomingRenewal): Task => ({
+                        id: renewal.policy.id, // Use policy ID for task linkage? Adjust as needed.
+                        title: `Call ${renewal.client.name} about policy renewal`,
+                        description: `${renewal.policy.type} Policy #${renewal.policy.policyNumber}`,
+                        dueDate: renewal.policy.renewalDate!,
+                        completed: false,
+                        assignedToId: 1, // Placeholder: Get current user ID
+                        clientId: renewal.client.id,
+                        policyId: renewal.policy.id,
+                        createdAt: new Date().toISOString(), // Placeholder
+                        client: renewal.client,
+                        policy: renewal.policy,
+                    })) || []}
+                    onToggleTask={handleToggleTask}
+                    showViewAllLink={true}
+                />
+              </CardContent>
+            </Card>
+            {/* Placeholder Agent Performance Widget */}
+            <PlaceholderComponent title="Agent Performance" />
+          </>
+        );
+        break;
+      
+      case 'pipelines':
+        standardComponents = (
+          <>
+            {pipelineStats.map((stat, index) => (
+              <StatCard key={`pipeline-stat-${index}`} stat={stat} />
+            ))}
+            {/* Placeholder charts and widgets for Pipelines */}
+            <PlaceholderComponent title="Deals Won vs Lost" />
+            <PlaceholderComponent title="Pipeline Conversion" />
+            <PlaceholderComponent title="Pipeline Overview Table" />
+            <PlaceholderComponent title="Sales Cycle Length" />
+          </>
+        );
+        break;
+      
+      case 'tasks':
+        standardComponents = (
+          <>
+            {taskStats.map((stat, index) => (
+              <StatCard key={`task-stat-${index}`} stat={stat} />
+            ))}
+             {/* Placeholder charts and widgets for Tasks */}
+            <PlaceholderComponent title="Task Status Distribution" />
+            <PlaceholderComponent title="Task Due Date Distribution" />
+            <Card className="col-span-1 md:col-span-2 lg:col-span-2"> 
+              <CardHeader><CardTitle>My Open Tasks</CardTitle></CardHeader>
+              <CardContent>
+                 {/* Assuming TasksWidget can be used here too, maybe filter data? */}
+                <TasksWidget tasks={[]} onToggleTask={handleToggleTask} /> 
+              </CardContent>
+            </Card>
+          </>
+        );
+        break;
+      
+      case 'events':
+        standardComponents = (
+          <>
+            {eventStats.map((stat, index) => (
+              <StatCard key={`event-stat-${index}`} stat={stat} />
+            ))}
+            {/* Placeholder calendar and charts for Events */}
+            <PlaceholderComponent title="Upcoming Events Calendar" />
+            <PlaceholderComponent title="Events By Type Chart" />
+            <PlaceholderComponent title="Event Attendance Rate" />
+            <PlaceholderComponent title="Event Feedback Summary" />
+          </>
+        );
+        break;
+      
+      case 'calls':
+        const mockCallsCompleted = 42; // Mock value
+        const mockCallTarget = 100;  // Mock value
+         standardComponents = (
+            <>
+             <SimpleCounter value={mockCallsCompleted} title="Total Calls" />
+             <TargetMeter current={mockCallsCompleted} target={mockCallTarget} title="Call Target" />
+             {/* Placeholder stats/charts for Calls */}
+             <PlaceholderComponent title="Avg Call Duration" />
+             <PlaceholderComponent title="Calls By Outcome" />
+             <PlaceholderComponent title="Call Volume Over Time" />
+             <PlaceholderComponent title="Busiest Call Times" />
+            </>
+         );
+         break;
+      
+      case 'emails':
+        standardComponents = (
+          <>
+            {emailStats.map((stat, index) => (
+              <StatCard key={`email-stat-${index}`} stat={stat} />
+            ))}
+            {/* Placeholder charts and lists for Emails */}
+            <PlaceholderComponent title="Email Performance (Open/Click)" />
+            <PlaceholderComponent title="Top Performing Templates" />
+            <PlaceholderComponent title="Unsubscribe Rate" />
+            <PlaceholderComponent title="Reply Rate" />
+          </>
+        );
+        break;
+      
+      default:
+        standardComponents = <PlaceholderComponent title={`Content for ${dashboardNames[dashboardType]}`} />;
+    }
+    
+    // Get only components associated with the current dashboard
+    const currentDashboardComponents = customComponents.filter(
+      component => component.dashboardType === dashboardType
+    );
+    
+    // Return both standard and custom components
+    return (
+      <>
+        {standardComponents}
+        {currentDashboardComponents.map(renderCustomComponent)}
+      </>
+    );
+  };
   
   return (
-    <div>
-      <div className="mb-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-            <p className="block text-sm text-slate-500 dark:text-slate-400 mt-1 mb-2">
-              {dashboardType === 'overview' ? 'Overview of your business performance' : 
-                `View your ${dashboardType} performance metrics`}
-            </p>
-            
-            {/* Dashboard Selector Dropdown (moved below text) */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="min-w-[150px] justify-between">
-                  {dashboardNames[dashboardType]}
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
-                  Overview
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDashboardChange('pipelines')}>
-                  Pipelines Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDashboardChange('tasks')}>
-                  Tasks Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDashboardChange('events')}>
-                  Events Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDashboardChange('calls')}>
-                  Call Analytics
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDashboardChange('emails')}>
-                  Email Analytics
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-blue-600 flex items-center">
-                  <Plus className="mr-2 h-4 w-4" /> New Dashboard
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            {/* Reload Button */}
-            <Button variant="outline" size="icon">
-              <RefreshCw className="h-4 w-4" />
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-6">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="text-2xl font-bold p-0 h-auto">
+              {dashboardNames[dashboardType]}
+              <ChevronDown className="ml-2 h-5 w-5" />
             </Button>
-            
-            {/* Add Component Button with Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Plus className="mr-2 h-4 w-4" /> Component
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Add Component</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <BarChart2 className="mr-2 h-4 w-4 text-blue-500" />
-                  <span>KPI Box</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <Target className="mr-2 h-4 w-4 text-emerald-500" />
-                  <span>Target Meter</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <BarChart2 className="mr-2 h-4 w-4 text-purple-500" />
-                  <span>Chart</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex items-center cursor-pointer">
-                  <CheckCircle2 className="mr-2 h-4 w-4 text-amber-500" />
-                  <span>List Widget</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Select Dashboard View</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup value={dashboardType} onValueChange={handleDashboardChange}>
+               {Object.entries(dashboardNames).map(([key, name]) => (
+                <DropdownMenuRadioItem key={key} value={key}>
+                  {name}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="flex items-center space-x-2">
+          <Button onClick={() => setIsAddingComponent(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Component
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 flex-grow">
         {renderDashboardContent()}
       </div>
+      
+      <AddComponentDialog
+        open={isAddingComponent}
+        onOpenChange={setIsAddingComponent}
+        onAddComponent={handleAddComponent}
+        currentDashboard={dashboardType}
+      />
     </div>
   );
 };
