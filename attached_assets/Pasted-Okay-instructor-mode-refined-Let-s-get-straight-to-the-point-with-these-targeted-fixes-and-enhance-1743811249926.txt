@@ -1,0 +1,63 @@
+Okay, instructor mode refined! Let's get straight to the point with these targeted fixes and enhancements for the Replit developer.
+
+Subject: CRM Refinement Instructions (Dashboard, Tables, Activities)
+
+Objective: Implement the following specific fixes and feature updates based on the latest review and provided images. Focus on correcting visual elements, implementing missing functionality, and ensuring interactions work as intended.
+
+I. Dashboard Refinements:
+
+"+ Components" Button:
+
+Functionality: Make this button functional. Clicking it must open a modal or panel allowing the user to select and add new widgets (KPI Box, Chart, Target Meter) to the currently displayed dashboard view.
+
+"Number of Calls" Component (Call Analytics Dashboard):
+
+Visual Correction: Fix this component to match the new reference image provided ("Number of Calls" with 42/50).
+
+Orientation: Ensure the semi-circular gauge is oriented correctly (opening upwards).
+
+Progress Indicator: Use the style shown: display the current value (e.g., 42) prominently in the center. Show the target value (e.g., / 50 Target) below it. Show the remaining value (e.g., 8 remaining to target) below that. The progress on the arc should be indicated by the blue end caps expanding along the arc path, representing the percentage towards the target.
+
+Icon: Include the small target icon in the top-right corner of the component box.
+
+Dashboard Selector Position:
+
+Move: Relocate the dashboard selector dropdown (e.g., "Overview") from its current position. Place it in the main page header area, to the left, likely next to the main "Dashboard" page title, ensuring it aligns cleanly on the same line as other header buttons (like "+ Component", reload) without overlapping.
+
+II. Contacts, Companies, & Products Pages:
+
+"+ Add Field" Implementation:
+
+Location: Implement the "+ Add Field" functionality trigger as if it were the last column header in the table itself. It should look like a placeholder column header (potentially just a "+" icon or "+ Add Field" text) that, when clicked, opens the modal for defining a new custom field.
+
+Consistency: Apply this implementation consistently across Contacts, Companies, and Products tables.
+
+Bulk Action Toolbar (On Row Selection):
+
+Trigger: When one or more rows are selected using the checkboxes.
+
+UI Change: Replace the standard page header (e.g., "Contacts" title and "+ Create Contact" button) with a contextual action toolbar.
+
+Toolbar Content:
+
+Display the count of selected items (e.g., "2 Selected").
+
+Contacts Page Only: Show a "Send Mail" button.
+
+All Three Pages (Contacts, Companies, Products): Show a "More" dropdown button.
+
+"More" Dropdown Actions: The dropdown must contain these options: Add Tags, Remove Tags, Update Field, Change Owner, Delete, Export. (Implement the UI; button functionality can be stubbed initially).
+
+III. Activities Page:
+
+Filter Functionality:
+
+Connect Filters: Make the filter controls in the right-side panel (Activity Types checkboxes, Ownership/Status radios) functional. Changes selected here must immediately filter the activities displayed on the main calendar. For example, unchecking "Calls" must hide all call indicators/events from the calendar view.
+
+Date Selection & Panel Update:
+
+Highlight Clicked Date: When a user clicks on a date cell in the main calendar, that specific cell must be visually highlighted (e.g., shaded background color) to indicate selection.
+
+Populate Right Panel: When a date is clicked (and highlighted), the To-Do list section at the top of the right-side panel must be populated with the activities scheduled for that specific selected date. If no activities exist for that day, display a "No activities for this date" message.
+
+Final Check: Please ensure these specific UI elements are corrected (Target Meter), interactions are implemented (Filters, Date Click -> Panel Update, Add Field as Column, Bulk Toolbar), and functionality is added (+ Components). Refer closely to the latest images provided for visual guidance.

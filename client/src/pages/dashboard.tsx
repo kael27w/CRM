@@ -59,30 +59,34 @@ const TargetMeter: React.FC<TargetMeterProps> = ({ current, target, title, unit 
         <Target className="h-5 w-5 text-slate-400" />
       </div>
       
-      <div className="relative h-28 w-full flex justify-center items-end">
-        <div className="absolute w-40 h-40 -top-14 overflow-hidden">
+      <div className="relative h-28 w-full flex justify-center items-center">
+        {/* The semi-circular gauge oriented upwards */}
+        <div className="absolute w-40 h-40 -top-20 overflow-hidden">
+          {/* Background arc */}
           <div 
             className="absolute w-40 h-40 rounded-full border-[16px] border-slate-100 dark:border-slate-700"
-            style={{ clipPath: 'polygon(0 50%, 100% 50%, 100% 100%, 0% 100%)' }}
+            style={{ 
+              clipPath: 'polygon(0 50%, 100% 50%, 100% 0, 0 0)',
+              transform: 'rotate(180deg)'
+            }}
           ></div>
+          {/* Progress arc */}
           <div 
             className="absolute w-40 h-40 rounded-full border-[16px] border-blue-500 dark:border-blue-600"
             style={{ 
-              clipPath: `polygon(0 50%, 100% 50%, 100% ${100 - percentage/2}%, 0% ${100 - percentage/2}%)`,
+              clipPath: `polygon(0 50%, 100% 50%, 100% ${50 - percentage/2}%, 0% ${50 - percentage/2}%)`,
               transform: 'rotate(180deg)'
             }}
           ></div>
         </div>
         
-        <div className="text-center mt-12">
-          <div className="text-3xl font-bold text-slate-900 dark:text-white">{current}<span className="text-lg">{unit}</span></div>
-          <div className="text-sm text-slate-500">/ {target}{unit} target</div>
-        </div>
-      </div>
-      
-      <div className="mt-4 text-center">
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          <span className="font-medium text-blue-600 dark:text-blue-400">{remaining}{unit}</span> remaining to target
+        {/* Central text display */}
+        <div className="text-center mt-2">
+          <div className="text-3xl font-bold text-slate-900 dark:text-white">{current}</div>
+          <div className="text-sm text-slate-500">/ {target} Target</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <span className="font-medium text-blue-600 dark:text-blue-400">{remaining}</span> remaining to target
+          </div>
         </div>
       </div>
     </div>
@@ -623,7 +627,7 @@ const Dashboard: React.FC = () => {
             
             <div className="col-span-1">
               <TargetMeter 
-                current={callsCompleted} 
+                current={42} 
                 target={50} 
                 title="Number of Calls" 
               />
@@ -694,16 +698,10 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <div className="mb-6 flex flex-wrap justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{dashboardNames[dashboardType]}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {dashboardType === 'overview' ? 'Overview of your business performance' : 
-             `View your ${dashboardType} performance metrics`}
-          </p>
-        </div>
-        
-        <div className="flex items-center space-x-2 mt-4 sm:mt-0">
-          {/* Dashboard Selector Dropdown */}
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
+          
+          {/* Dashboard Selector Dropdown - Moved to header */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="min-w-[150px] justify-between">
@@ -711,7 +709,7 @@ const Dashboard: React.FC = () => {
                 <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="start" className="w-56">
               <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
@@ -739,15 +737,46 @@ const Dashboard: React.FC = () => {
             </DropdownMenuContent>
           </DropdownMenu>
           
+          <p className="hidden md:block mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {dashboardType === 'overview' ? 'Overview of your business performance' : 
+             `View your ${dashboardType} performance metrics`}
+          </p>
+        </div>
+        
+        <div className="flex items-center space-x-2 mt-4 sm:mt-0">
           {/* Reload Button */}
           <Button variant="outline" size="icon">
             <RefreshCw className="h-4 w-4" />
           </Button>
           
-          {/* Add Component Button */}
-          <Button variant="outline">
-            <Plus className="mr-2 h-4 w-4" /> Component
-          </Button>
+          {/* Add Component Button with Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Plus className="mr-2 h-4 w-4" /> Component
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Add Component</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <BarChart2 className="mr-2 h-4 w-4 text-blue-500" />
+                <span>KPI Box</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <Target className="mr-2 h-4 w-4 text-emerald-500" />
+                <span>Target Meter</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <BarChart2 className="mr-2 h-4 w-4 text-purple-500" />
+                <span>Chart</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="flex items-center cursor-pointer">
+                <CheckCircle2 className="mr-2 h-4 w-4 text-amber-500" />
+                <span>List Widget</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
