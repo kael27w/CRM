@@ -28,7 +28,18 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   ChevronLeft, 
   ChevronRight,
@@ -36,6 +47,7 @@ import {
   ChevronsRight,
   Settings,
   Filter,
+  Plus,
 } from 'lucide-react';
 
 interface DataTableProps<TData, TValue> {
@@ -65,12 +77,28 @@ export function DataTable<TData, TValue>({
   const [rowSelection, setRowSelection] = useState({});
   const [globalFilter, setGlobalFilter] = useState('');
 
-  // Add selection column to start of columns
-  const columnsWithSelection = useMemo(() => {
-    return [
+  // State for adding new field
+  const [isAddingField, setIsAddingField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  
+  // Function to handle adding a new field
+  const handleAddField = () => {
+    if (newFieldName.trim() && onAddField) {
+      console.log("Add field clicked");
+      // This would normally add a new column to the table
+      // For now we'll just log it as the implementation depends on backend support
+      onAddField();
+      setNewFieldName('');
+      setIsAddingField(false);
+    }
+  };
+
+  // Add selection column to start of columns and create field at the end
+  const columnsWithExtras = useMemo(() => {
+    const baseColumns = [
       {
         id: "select",
-        header: ({ table }) => (
+        header: ({ table }: { table: any }) => (
           <Checkbox
             checked={
               table.getIsAllPageRowsSelected() ||
@@ -80,7 +108,7 @@ export function DataTable<TData, TValue>({
             aria-label="Select all"
           />
         ),
-        cell: ({ row }) => (
+        cell: ({ row }: { row: any }) => (
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -92,12 +120,33 @@ export function DataTable<TData, TValue>({
         enableHiding: false,
       },
       ...columns
-    ] as ColumnDef<TData, TValue>[];
-  }, [columns]);
+    ];
+    
+    // Add "Create Field" column
+    if (onAddField) {
+      baseColumns.push({
+        id: "createField",
+        header: () => (
+          <div 
+            className="cursor-pointer text-blue-600 hover:text-blue-800 flex items-center justify-center"
+            onClick={() => setIsAddingField(true)}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Create Field
+          </div>
+        ),
+        cell: () => null,
+        enableSorting: false,
+        enableHiding: false,
+      } as ColumnDef<TData, TValue>);
+    }
+    
+    return baseColumns as ColumnDef<TData, TValue>[];
+  }, [columns, onAddField, isAddingField]);
 
   const table = useReactTable({
     data,
-    columns: columnsWithSelection,
+    columns: columnsWithExtras,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -128,9 +177,13 @@ export function DataTable<TData, TValue>({
           )}
         </div>
         <div className="flex items-center space-x-4">
-          <Button variant="default" size="sm" className="flex items-center">
-            <div className="w-4 h-4 mr-2">+</div>
-            Create {title === "Companies" ? "Company" : title.slice(0, -1)} {/* Custom handling for Companies */}
+          <Button 
+            variant="default" 
+            size="sm" 
+            className="flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            {title === "Companies" ? "New Company" : `New ${title.slice(0, -1)}`}
           </Button>
         </div>
       </div>
@@ -211,7 +264,7 @@ export function DataTable<TData, TValue>({
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + 1}
+                  colSpan={table.getAllColumns().length}
                   className="h-24 text-center"
                 >
                   No results.
@@ -221,6 +274,37 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
+      
+      {/* Dialog for adding a new field */}
+      <Dialog open={isAddingField} onOpenChange={setIsAddingField}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Field</DialogTitle>
+            <DialogDescription>
+              Enter a name for the new field to add to the table.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Input
+              placeholder="Field name"
+              value={newFieldName}
+              onChange={(e) => setNewFieldName(e.target.value)}
+              className="col-span-3"
+            />
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsAddingField(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddField}>
+              Add Field
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">

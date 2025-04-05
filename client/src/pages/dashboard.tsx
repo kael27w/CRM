@@ -50,13 +50,14 @@ interface TargetMeterProps {
 // Simple Number Counter Component (to replace Target Meter for Call Analytics)
 const SimpleCounter: React.FC<{ value: number; title: string }> = ({ value, title }) => {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5">
+    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-5 h-[168px]">
       <div className="flex justify-between items-center mb-3">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h3>
         <PhoneCall className="h-5 w-5 text-slate-400" />
       </div>
-      <div className="text-center py-6">
-        <div className="text-4xl font-bold text-slate-900 dark:text-white">{value}</div>
+      <div className="text-center py-10">
+        <div className="text-5xl font-bold text-slate-900 dark:text-white">{value}</div>
+        <div className="text-sm text-slate-500 mt-1">Total calls this month</div>
       </div>
     </div>
   );
@@ -725,48 +726,46 @@ const Dashboard: React.FC = () => {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-            <div className="flex items-center mt-2">
-              <p className="hidden md:block text-sm text-slate-500 dark:text-slate-400 mr-3">
-                {dashboardType === 'overview' ? 'Overview of your business performance' : 
-                 `View your ${dashboardType} performance metrics`}
-              </p>
-              
-              {/* Dashboard Selector Dropdown (moved inline with header) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="min-w-[150px] justify-between">
-                    {dashboardNames[dashboardType]}
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
-                    Overview
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('pipelines')}>
-                    Pipelines Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('tasks')}>
-                    Tasks Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('events')}>
-                    Events Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('calls')}>
-                    Call Analytics
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleDashboardChange('emails')}>
-                    Email Analytics
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-blue-600 flex items-center">
-                    <Plus className="mr-2 h-4 w-4" /> New Dashboard
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <p className="block text-sm text-slate-500 dark:text-slate-400 mt-1 mb-2">
+              {dashboardType === 'overview' ? 'Overview of your business performance' : 
+                `View your ${dashboardType} performance metrics`}
+            </p>
+            
+            {/* Dashboard Selector Dropdown (moved below text) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="min-w-[150px] justify-between">
+                  {dashboardNames[dashboardType]}
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Dashboard Views</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleDashboardChange('overview')}>
+                  Overview
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('pipelines')}>
+                  Pipelines Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('tasks')}>
+                  Tasks Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('events')}>
+                  Events Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('calls')}>
+                  Call Analytics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDashboardChange('emails')}>
+                  Email Analytics
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-blue-600 flex items-center">
+                  <Plus className="mr-2 h-4 w-4" /> New Dashboard
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           
           <div className="flex items-center space-x-2">

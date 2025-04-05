@@ -112,18 +112,6 @@ const ContactsPage: React.FC = () => {
       accessorKey: "owner",
       header: "Contact Owner",
     },
-    {
-      id: "createField",
-      header: () => (
-        <div className="text-blue-600 cursor-pointer text-right" onClick={(e) => {
-          e.stopPropagation();
-          handleAddField();
-        }}>
-          +Create Field
-        </div>
-      ),
-      cell: () => null,
-    },
   ];
 
   // For now we'll use the sample data. Later this will be replaced with actual API data
