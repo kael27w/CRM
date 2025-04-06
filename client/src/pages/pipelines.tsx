@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -7,15 +7,20 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  useSortable,
 } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest } from '../lib/queryClient';
 import { 
   Card, 
   CardContent, 
@@ -23,22 +28,26 @@ import {
   CardFooter, 
   CardHeader, 
   CardTitle 
-} from "@/components/ui/card";
+} from "../components/ui/card";
 import { 
   Tabs, 
   TabsContent, 
   TabsList, 
   TabsTrigger 
-} from "@/components/ui/tabs";
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+} from "../components/ui/tabs";
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
 import { 
   Plus, 
   MoreHorizontal,
   Users,
   Building,
   DollarSign,
-  Calendar
+  Calendar,
+  BarChart3,
+  HeartPulse,
+  Home,
+  Landmark
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -47,7 +56,25 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "../components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
 
 // Define types for deals and pipeline
 interface Deal {
@@ -75,6 +102,39 @@ interface Pipeline {
   stages: PipelineStage[];
 }
 
+// Add a type for the Add Deal dialog form
+interface AddDealFormData {
+  name: string;
+  amount: number;
+  company: string;
+  contact: string;
+  closingDate: string;
+  probability: number;
+  stageId: string;
+}
+
+// Sortable deal card component
+const SortableDealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: deal.id.toString() });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <DealCard deal={deal} />
+    </div>
+  );
+};
+
 // Component to display each card in the board
 const DealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
   const formattedAmount = new Intl.NumberFormat('en-US', {
@@ -100,11 +160,9 @@ const DealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Edit</DropdownMenuItem>
-              <DropdownMenuItem>View Details</DropdownMenuItem>
+              <DropdownMenuItem className="edit-deal" data-id={deal.id}>Edit</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Mark as Won</DropdownMenuItem>
-              <DropdownMenuItem>Mark as Lost</DropdownMenuItem>
+              <DropdownMenuItem className="delete-deal" data-id={deal.id}>Delete</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -139,25 +197,33 @@ const DealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
 // Component for a pipeline stage column
 const StageColumn: React.FC<{ 
   stage: PipelineStage, 
-  stageTotal: number
-}> = ({ stage, stageTotal }) => {
+  stageTotal: number,
+  deals: Deal[],
+}> = ({ stage, stageTotal, deals }) => {
+  // Make the column droppable, even when empty
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage.id,
+    data: { type: 'column', stageId: stage.id }
+  });
+
   return (
-    <div className="w-72 shrink-0 rounded-md bg-slate-100 dark:bg-slate-800 p-3">
-      <div className="mb-3 flex justify-between items-center">
+    <div 
+      ref={setNodeRef}
+      className={`w-72 shrink-0 rounded-md ${isOver ? 'bg-slate-200 dark:bg-slate-700' : 'bg-slate-100 dark:bg-slate-800'} p-3 min-h-[12rem]`} 
+      id={stage.id}
+    >
+      <div className="mb-3">
         <div>
           <h3 className="font-medium">{stage.name}</h3>
           <p className="text-sm text-muted-foreground">
-            {stage.deals.length} deals · ${stageTotal.toLocaleString()}
+            {deals.length} deals · ${stageTotal.toLocaleString()}
           </p>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <Plus className="h-4 w-4" />
-        </Button>
       </div>
       
       <div className="space-y-3">
-        {stage.deals.map(deal => (
-          <DealCard key={deal.id} deal={deal} />
+        {deals.map(deal => (
+          <SortableDealCard key={deal.id} deal={deal} />
         ))}
       </div>
     </div>
@@ -165,38 +231,49 @@ const StageColumn: React.FC<{
 };
 
 const PipelinesPage: React.FC = () => {
-  const [activePipeline, setActivePipeline] = useState("life-insurance");
-  
-  // Sample data - this will be replaced with actual API data
-  const samplePipelines: Pipeline[] = [
+  const [activePipeline, setActivePipeline] = useState("sales-pipeline");
+  const [activeItem, setActiveItem] = useState<Deal | null>(null);
+  const [isAddDealOpen, setIsAddDealOpen] = useState(false);
+  const [isEditDealOpen, setIsEditDealOpen] = useState(false);
+  const [currentDealId, setCurrentDealId] = useState<number | null>(null);
+  const [addDealForm, setAddDealForm] = useState<AddDealFormData>({
+    name: '',
+    amount: 0,
+    company: '',
+    contact: '',
+    closingDate: new Date().toISOString().split('T')[0],
+    probability: 20,
+    stageId: ''
+  });
+  const [pipelines, setPipelines] = useState<Pipeline[]>([
     {
-      id: "life-insurance",
-      name: "Life Insurance",
+      id: "sales-pipeline",
+      name: "Sales Pipeline",
       stages: [
         {
-          id: "lead-qualification",
-          name: "Lead Qualification",
+          id: "qualification",
+          name: "Qualification",
           order: 1,
           deals: [
             {
               id: 1,
-              name: "Term Life 20 - Barnes Family",
+              name: "New Business Opportunity",
               amount: 5000,
               company: "Acme Corp",
               contact: "Sarah Johnson",
               closingDate: "2025-05-15",
-              stageId: "lead-qualification",
+              stageId: "qualification",
               probability: 20,
               status: 'open'
             },
             {
               id: 2,
-              name: "Whole Life Plan - Robert T.",
+              name: "Small Business Package",
               amount: 8500,
               company: "TechStart Inc",
               contact: "Robert Thompson",
               closingDate: "2025-04-30",
-              stageId: "lead-qualification",
+              stageId: "qualification",
               probability: 30,
               status: 'open'
             }
@@ -209,8 +286,8 @@ const PipelinesPage: React.FC = () => {
           deals: [
             {
               id: 3,
-              name: "Family Protection Plan",
-              amount: 8000,
+              name: "Enterprise Solution",
+              amount: 15000,
               company: "Global Innovations",
               contact: "Jennifer Williams",
               closingDate: "2025-05-10",
@@ -222,12 +299,12 @@ const PipelinesPage: React.FC = () => {
         },
         {
           id: "proposal",
-          name: "Proposal",
+          name: "Proposal/Price Quote",
           order: 3,
           deals: [
             {
               id: 4,
-              name: "Executive Life Coverage",
+              name: "Executive Package",
               amount: 25000,
               company: "Brown Enterprises",
               contact: "Michael Brown",
@@ -239,80 +316,8 @@ const PipelinesPage: React.FC = () => {
           ]
         },
         {
-          id: "underwriting",
-          name: "Underwriting",
-          order: 4,
-          deals: [
-            {
-              id: 5,
-              name: "Premium Life Plan",
-              amount: 12000,
-              company: "Medical Solutions",
-              contact: "Lisa Davis",
-              closingDate: "2025-04-20",
-              stageId: "underwriting",
-              probability: 80,
-              status: 'open'
-            }
-          ]
-        },
-        {
-          id: "policy-delivery",
-          name: "Policy Delivery",
-          order: 5,
-          deals: []
-        }
-      ]
-    },
-    {
-      id: "health-insurance",
-      name: "Health Insurance",
-      stages: [
-        {
-          id: "initial-contact",
-          name: "Initial Contact",
-          order: 1,
-          deals: [
-            {
-              id: 6,
-              name: "Family Health Plan",
-              amount: 4200,
-              company: "Smith Family",
-              contact: "John Smith",
-              closingDate: "2025-05-05",
-              stageId: "initial-contact",
-              probability: 25,
-              status: 'open'
-            }
-          ]
-        },
-        {
-          id: "coverage-review",
-          name: "Coverage Review",
-          order: 2,
-          deals: []
-        },
-        {
-          id: "quote-preparation",
-          name: "Quote Preparation",
-          order: 3,
-          deals: [
-            {
-              id: 7,
-              name: "Small Business Health Plan",
-              amount: 15000,
-              company: "Corner Cafe",
-              contact: "Mary Wilson",
-              closingDate: "2025-06-10",
-              stageId: "quote-preparation",
-              probability: 55,
-              status: 'open'
-            }
-          ]
-        },
-        {
-          id: "application",
-          name: "Application",
+          id: "negotiation",
+          name: "Negotiation/Review",
           order: 4,
           deals: []
         },
@@ -321,258 +326,898 @@ const PipelinesPage: React.FC = () => {
           name: "Closed Won",
           order: 5,
           deals: []
+        },
+        {
+          id: "closed-lost",
+          name: "Closed Lost",
+          order: 6,
+          deals: []
         }
       ]
     },
     {
-      id: "property-insurance",
-      name: "Property Insurance",
+      id: "customer-support",
+      name: "Customer Support",
       stages: [
         {
-          id: "lead-in",
-          name: "Lead In",
+          id: "new-ticket",
+          name: "New Ticket",
           order: 1,
           deals: [
             {
-              id: 8,
-              name: "Home Insurance Bundle",
-              amount: 3000,
-              company: "Johnson Residence",
-              contact: "Peter Johnson",
-              closingDate: "2025-05-20",
-              stageId: "lead-in",
-              probability: 30,
+              id: 101,
+              name: "Billing Inquiry",
+              amount: 0,
+              company: "Smith Family",
+              contact: "John Smith",
+              closingDate: "2025-05-15",
+              stageId: "new-ticket",
+              probability: 100,
               status: 'open'
             }
           ]
         },
         {
-          id: "property-assessment",
-          name: "Property Assessment",
+          id: "in-progress",
+          name: "In Progress",
           order: 2,
+          deals: [
+            {
+              id: 102,
+              name: "Coverage Question",
+              amount: 0,
+              company: "Johnson LLC",
+              contact: "Amy Johnson",
+              closingDate: "2025-04-20",
+              stageId: "in-progress",
+              probability: 100,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "on-hold",
+          name: "On Hold",
+          order: 3,
           deals: []
         },
         {
-          id: "risk-evaluation",
-          name: "Risk Evaluation",
-          order: 3,
-          deals: [
-            {
-              id: 9,
-              name: "Commercial Property Coverage",
-              amount: 18000,
-              company: "Downtown Retail",
-              contact: "James Anderson",
-              closingDate: "2025-06-15",
-              stageId: "risk-evaluation",
-              probability: 50,
-              status: 'open'
-            }
-          ]
-        },
-        {
-          id: "quote-presentation",
-          name: "Quote Presentation",
+          id: "closed",
+          name: "Closed",
           order: 4,
           deals: []
         },
         {
-          id: "binding-coverage",
-          name: "Binding Coverage",
+          id: "deferred",
+          name: "Deferred",
           order: 5,
+          deals: []
+        },
+        {
+          id: "not-an-issue",
+          name: "Not an Issue",
+          order: 6,
           deals: []
         }
       ]
     },
     {
-      id: "auto-insurance",
-      name: "Auto Insurance",
+      id: "living-trust-flow",
+      name: "Living Trust Flow",
       stages: [
         {
-          id: "prospect-identified",
-          name: "Prospect Identified",
+          id: "living-trust-presentation",
+          name: "Living Trust Presentation",
           order: 1,
           deals: [
             {
-              id: 10,
-              name: "Family Auto Coverage",
-              amount: 2500,
-              company: "Miller Family",
-              contact: "Susan Miller",
-              closingDate: "2025-05-12",
-              stageId: "prospect-identified",
+              id: 201,
+              name: "Family Trust Planning",
+              amount: 3000,
+              company: "Wilson Family",
+              contact: "David Wilson",
+              closingDate: "2025-06-10",
+              stageId: "living-trust-presentation",
               probability: 20,
               status: 'open'
             }
           ]
         },
         {
-          id: "driver-review",
-          name: "Driver Review",
+          id: "estate-funded",
+          name: "Estate Funded",
           order: 2,
           deals: []
         },
         {
-          id: "coverage-options",
-          name: "Coverage Options",
+          id: "notarizing-documents",
+          name: "Notarizing Documents",
           order: 3,
           deals: [
             {
-              id: 11,
-              name: "Fleet Insurance",
-              amount: 22000,
-              company: "City Delivery",
-              contact: "David Clark",
-              closingDate: "2025-06-20",
-              stageId: "coverage-options",
-              probability: 65,
+              id: 202,
+              name: "Estate Planning Package",
+              amount: 5000,
+              company: "Davis Family",
+              contact: "Richard Davis",
+              closingDate: "2025-05-20",
+              stageId: "notarizing-documents",
+              probability: 80,
               status: 'open'
             }
           ]
         },
         {
-          id: "policy-issuance",
-          name: "Policy Issuance",
+          id: "preparation",
+          name: "Preparation",
           order: 4,
           deals: []
         },
         {
-          id: "completed",
-          name: "Completed",
+          id: "needs-customer-application",
+          name: "Needs Customer Application",
           order: 5,
+          deals: []
+        },
+        {
+          id: "packaging",
+          name: "Packaging",
+          order: 6,
+          deals: []
+        },
+        {
+          id: "cancelled",
+          name: "Cancelled",
+          order: 7,
           deals: []
         }
       ]
     },
     {
-      id: "business-insurance",
-      name: "Business Insurance",
+      id: "index-universal-life",
+      name: "Index Universal Life",
       stages: [
         {
-          id: "discovery",
-          name: "Discovery",
+          id: "new-inquiry",
+          name: "New Inquiry",
           order: 1,
           deals: [
             {
-              id: 12,
-              name: "Liability Coverage",
-              amount: 6500,
-              company: "Tech Solutions",
-              contact: "Mark Davis",
-              closingDate: "2025-05-25",
-              stageId: "discovery",
-              probability: 35,
+              id: 301,
+              name: "IUL Premium Plan",
+              amount: 12000,
+              company: "Anderson Family",
+              contact: "Mark Anderson",
+              closingDate: "2025-07-15",
+              stageId: "new-inquiry",
+              probability: 20,
               status: 'open'
             }
           ]
         },
         {
-          id: "risk-assessment",
-          name: "Risk Assessment",
+          id: "follow-up-done",
+          name: "Follow Up Done",
           order: 2,
+          deals: [
+            {
+              id: 302,
+              name: "Retirement Solution",
+              amount: 8500,
+              company: "Taylor Inc",
+              contact: "Susan Taylor",
+              closingDate: "2025-06-20",
+              stageId: "follow-up-done",
+              probability: 40,
+              status: 'open'
+            }
+          ]
+        },
+        {
+          id: "brochure-sent",
+          name: "Brochure Sent",
+          order: 3,
           deals: []
         },
         {
-          id: "solution-design",
-          name: "Solution Design",
-          order: 3,
-          deals: [
-            {
-              id: 13,
-              name: "Business Continuity Plan",
-              amount: 35000,
-              company: "Manufacturing Inc",
-              contact: "Patricia Wong",
-              closingDate: "2025-07-10",
-              stageId: "solution-design",
-              probability: 70,
-              status: 'open'
-            }
-          ]
-        },
-        {
-          id: "negotiation",
-          name: "Negotiation",
+          id: "plan-selected",
+          name: "Plan Selected",
           order: 4,
           deals: []
         },
         {
-          id: "implementation",
-          name: "Implementation",
+          id: "payment-done",
+          name: "Payment Done",
           order: 5,
+          deals: []
+        },
+        {
+          id: "policy-sold",
+          name: "Policy Sold",
+          order: 6,
+          deals: []
+        },
+        {
+          id: "lost",
+          name: "Lost",
+          order: 7,
           deals: []
         }
       ]
     }
-  ];
-
-  // Calculate totals for each pipeline
-  const getPipelineSummary = (pipeline: Pipeline) => {
-    const totalDeals = pipeline.stages.reduce((sum, stage) => sum + stage.deals.length, 0);
-    const totalValue = pipeline.stages.reduce(
-      (sum, stage) => sum + stage.deals.reduce((stageSum, deal) => stageSum + deal.amount, 0), 
-      0
-    );
-    
-    return { totalDeals, totalValue };
-  };
-
-  // Get currently viewed pipeline
-  const currentPipeline = samplePipelines.find(p => p.id === activePipeline) || samplePipelines[0];
+  ]);
   
-  // Calculate total amount for each stage
+  // Configure drag sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // 5px of movement required before activation
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+  
+  // Create a map of pipeline icons
+  const pipelineIcons = {
+    "sales-pipeline": <BarChart3 className="h-4 w-4 mr-2" />,
+    "customer-support": <HeartPulse className="h-4 w-4 mr-2" />,
+    "living-trust-flow": <Landmark className="h-4 w-4 mr-2" />,
+    "index-universal-life": <Home className="h-4 w-4 mr-2" />
+  };
+  
+  // Handle drag start
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const activePipelineData = pipelines.find(p => p.id === activePipeline);
+    
+    if (!activePipelineData) return;
+    
+    // Find the deal across all stages
+    let foundDeal: Deal | undefined;
+    
+    for (const stage of activePipelineData.stages) {
+      const deal = stage.deals.find(d => d.id.toString() === active.id);
+      if (deal) {
+        foundDeal = deal;
+        break;
+      }
+    }
+    
+    if (foundDeal) {
+      setActiveItem(foundDeal);
+    }
+  };
+  
+  // Handle drag end
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over) return;
+    
+    setPipelines(currentPipelines => {
+      // Create a deep copy of the current pipelines
+      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
+      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
+      
+      if (!currentPipeline) return currentPipelines;
+      
+      // Find the deal and its current stage
+      let draggedDeal: Deal | undefined;
+      let sourceStageId: string | undefined;
+      
+      // Find the deal in any stage
+      for (const stage of currentPipeline.stages) {
+        const dealIndex = stage.deals.findIndex(d => d.id.toString() === active.id);
+        if (dealIndex !== -1) {
+          draggedDeal = { ...stage.deals[dealIndex] };
+          sourceStageId = stage.id;
+          stage.deals.splice(dealIndex, 1); // Remove from source
+          break;
+        }
+      }
+      
+      if (!draggedDeal) return currentPipelines;
+      
+      // Get the destination stage id from the over.id directly
+      // This works because we've set up each stage column as a droppable with its stage.id
+      let targetStageId = over.id.toString();
+      
+      // Find the destination stage
+      const destinationStage = currentPipeline.stages.find(s => s.id === targetStageId);
+      
+      if (destinationStage) {
+        // Update the deal's stageId to match the destination
+        draggedDeal.stageId = destinationStage.id;
+        
+        // Add the deal to the destination stage
+        destinationStage.deals.push(draggedDeal);
+      } else if (sourceStageId) {
+        // If destination not found, put back in source stage
+        const sourceStage = currentPipeline.stages.find(s => s.id === sourceStageId);
+        if (sourceStage) {
+          sourceStage.deals.push(draggedDeal);
+        }
+      }
+      
+      return newPipelines;
+    });
+    
+    setActiveItem(null);
+  };
+  
+  const getActivePipeline = () => {
+    return pipelines.find(p => p.id === activePipeline);
+  };
+  
+  const getPipelineSummary = (pipeline: Pipeline) => {
+    let totalDeals = 0;
+    let totalAmount = 0;
+    
+    pipeline.stages.forEach(stage => {
+      totalDeals += stage.deals.length;
+      stage.deals.forEach(deal => {
+        totalAmount += deal.amount;
+      });
+    });
+    
+    return { totalDeals, totalAmount };
+  };
+  
   const getStageTotalAmount = (stage: PipelineStage) => {
     return stage.deals.reduce((sum, deal) => sum + deal.amount, 0);
   };
-
+  
+  // Handle clicking the edit option in the deal dropdown
+  const handleEditDeal = (dealId: number) => {
+    const currentPipelineData = getActivePipeline();
+    if (!currentPipelineData) return;
+    
+    // Find the deal to edit
+    let dealToEdit: Deal | undefined;
+    
+    for (const stage of currentPipelineData.stages) {
+      const deal = stage.deals.find(d => d.id === dealId);
+      if (deal) {
+        dealToEdit = deal;
+        break;
+      }
+    }
+    
+    if (dealToEdit) {
+      // Set up the form with the deal's current data
+      setAddDealForm({
+        name: dealToEdit.name,
+        amount: dealToEdit.amount,
+        company: dealToEdit.company,
+        contact: dealToEdit.contact,
+        closingDate: dealToEdit.closingDate,
+        probability: dealToEdit.probability,
+        stageId: dealToEdit.stageId
+      });
+      
+      setCurrentDealId(dealId);
+      setIsEditDealOpen(true);
+    }
+  };
+  
+  // Handle saving edited deal data
+  const handleSaveEdit = () => {
+    if (!currentDealId || !addDealForm.name || !addDealForm.stageId) return;
+    
+    setPipelines(currentPipelines => {
+      // Create a deep copy of the current pipelines
+      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
+      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
+      
+      if (!currentPipeline) return currentPipelines;
+      
+      // Find the deal to update
+      for (const stage of currentPipeline.stages) {
+        const dealIndex = stage.deals.findIndex(d => d.id === currentDealId);
+        if (dealIndex !== -1) {
+          // If deal needs to move stages
+          if (stage.id !== addDealForm.stageId) {
+            // Remove from current stage
+            const dealToMove = { ...stage.deals[dealIndex] };
+            stage.deals.splice(dealIndex, 1);
+            
+            // Update deal properties
+            dealToMove.name = addDealForm.name;
+            dealToMove.amount = addDealForm.amount;
+            dealToMove.company = addDealForm.company;
+            dealToMove.contact = addDealForm.contact;
+            dealToMove.closingDate = addDealForm.closingDate;
+            dealToMove.probability = addDealForm.probability;
+            dealToMove.stageId = addDealForm.stageId;
+            
+            // Add to new stage
+            const newStage = currentPipeline.stages.find(s => s.id === addDealForm.stageId);
+            if (newStage) {
+              newStage.deals.push(dealToMove);
+            } else {
+              // If target stage not found, add back to original
+              stage.deals.push(dealToMove);
+            }
+          } else {
+            // Just update in place
+            stage.deals[dealIndex] = {
+              ...stage.deals[dealIndex],
+              name: addDealForm.name,
+              amount: addDealForm.amount,
+              company: addDealForm.company,
+              contact: addDealForm.contact,
+              closingDate: addDealForm.closingDate,
+              probability: addDealForm.probability
+            };
+          }
+          break;
+        }
+      }
+      
+      return newPipelines;
+    });
+    
+    // Reset form and close dialog
+    setAddDealForm({
+      name: '',
+      amount: 0,
+      company: '',
+      contact: '',
+      closingDate: new Date().toISOString().split('T')[0],
+      probability: 20,
+      stageId: ''
+    });
+    setCurrentDealId(null);
+    setIsEditDealOpen(false);
+  };
+  
+  // Handle delete deal
+  const handleDeleteDeal = (dealId: number) => {
+    setPipelines(currentPipelines => {
+      // Create a deep copy of the current pipelines
+      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
+      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
+      
+      if (!currentPipeline) return currentPipelines;
+      
+      // Find and remove the deal
+      for (const stage of currentPipeline.stages) {
+        const dealIndex = stage.deals.findIndex(d => d.id === dealId);
+        if (dealIndex !== -1) {
+          stage.deals.splice(dealIndex, 1);
+          break;
+        }
+      }
+      
+      return newPipelines;
+    });
+  };
+  
+  // Handle opening the add deal dialog
+  const handleAddDealOpen = () => {
+    const currentPipelineData = getActivePipeline();
+    if (currentPipelineData && currentPipelineData.stages.length > 0) {
+      // Set the default stage to the first stage in the pipeline
+      setAddDealForm(prev => ({
+        ...prev,
+        stageId: currentPipelineData.stages[0].id
+      }));
+    }
+    setIsAddDealOpen(true);
+  };
+  
+  // Handle form field changes
+  const handleFormChange = (field: keyof AddDealFormData, value: string | number) => {
+    setAddDealForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  // Handle adding a new deal
+  const handleAddDeal = () => {
+    if (!addDealForm.name || !addDealForm.stageId) return;
+    
+    setPipelines(currentPipelines => {
+      // Create a deep copy of the current pipelines
+      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
+      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
+      
+      if (!currentPipeline) return currentPipelines;
+      
+      // Find the destination stage by ID
+      const destinationStage = currentPipeline.stages.find(s => s.id === addDealForm.stageId);
+      
+      if (destinationStage) {
+        // Create a new deal
+        const newDeal: Deal = {
+          id: Date.now(), // Use timestamp as a unique ID
+          name: addDealForm.name,
+          amount: addDealForm.amount,
+          company: addDealForm.company,
+          contact: addDealForm.contact,
+          closingDate: addDealForm.closingDate,
+          stageId: addDealForm.stageId,
+          probability: addDealForm.probability,
+          status: 'open'
+        };
+        
+        // Add the deal to the stage
+        destinationStage.deals.push(newDeal);
+      }
+      
+      return newPipelines;
+    });
+    
+    // Reset the form and close the dialog
+    setAddDealForm({
+      name: '',
+      amount: 0,
+      company: '',
+      contact: '',
+      closingDate: new Date().toISOString().split('T')[0],
+      probability: 20,
+      stageId: ''
+    });
+    setIsAddDealOpen(false);
+  };
+  
+  const currentPipeline = getActivePipeline();
+  const summary = currentPipeline ? getPipelineSummary(currentPipeline) : { totalDeals: 0, totalAmount: 0 };
+  
+  // Add event listener for dropdown actions
+  React.useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Check for edit button click
+      if (target.classList.contains('edit-deal') || target.closest('.edit-deal')) {
+        const element = target.classList.contains('edit-deal') ? target : target.closest('.edit-deal');
+        const dealId = element?.getAttribute('data-id');
+        if (dealId) {
+          handleEditDeal(parseInt(dealId));
+        }
+      }
+      
+      // Check for delete button click
+      if (target.classList.contains('delete-deal') || target.closest('.delete-deal')) {
+        const element = target.classList.contains('delete-deal') ? target : target.closest('.delete-deal');
+        const dealId = element?.getAttribute('data-id');
+        if (dealId) {
+          handleDeleteDeal(parseInt(dealId));
+        }
+      }
+    };
+    
+    document.addEventListener('click', handleClick);
+    
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, [activePipeline, pipelines]);
+  
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Pipelines</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">
-            Manage your sales and partner pipelines
-          </p>
-        </div>
-        <Button className="flex items-center">
-          <Plus className="mr-2 h-4 w-4" /> New Deal
-        </Button>
+    <div className="flex flex-col h-full">
+      <div className="py-4 px-5 border-b">
+        <h1 className="text-2xl font-bold tracking-tight">Pipelines</h1>
+        <p className="text-muted-foreground">
+          Manage your deal pipelines and track opportunities.
+        </p>
       </div>
       
-      <Tabs value={activePipeline} onValueChange={setActivePipeline} className="w-full">
-        <div className="flex justify-between items-center mb-4">
-          <TabsList>
-            {samplePipelines.map(pipeline => {
-              const { totalDeals, totalValue } = getPipelineSummary(pipeline);
-              return (
-                <TabsTrigger key={pipeline.id} value={pipeline.id} className="px-4 py-2">
-                  <span className="mr-2">{pipeline.name}</span>
-                  <Badge variant="secondary" className="ml-1">
-                    {totalDeals} · ${totalValue.toLocaleString()}
-                  </Badge>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-          <Button variant="outline" size="sm">
-            <Plus className="mr-2 h-4 w-4" /> Add Pipeline
-          </Button>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Vertical side tabs */}
+        <div className="w-64 bg-slate-50 dark:bg-slate-900 p-4 border-r border-gray-200 dark:border-gray-800 min-h-0">
+          <h2 className="font-medium text-sm text-muted-foreground mb-3">PIPELINE VIEWS</h2>
+          <div className="space-y-1">
+            {pipelines.map(pipeline => (
+              <Button
+                key={pipeline.id}
+                variant={activePipeline === pipeline.id ? "secondary" : "ghost"}
+                className="w-full justify-start text-sm font-normal"
+                onClick={() => setActivePipeline(pipeline.id)}
+              >
+                {pipelineIcons[pipeline.id as keyof typeof pipelineIcons]}
+                {pipeline.name}
+              </Button>
+            ))}
+          </div>
         </div>
         
-        {samplePipelines.map(pipeline => (
-          <TabsContent key={pipeline.id} value={pipeline.id} className="m-0">
-            <div className="flex space-x-4 overflow-x-auto pb-4">
-              {pipeline.stages.map(stage => (
-                <StageColumn 
-                  key={stage.id} 
-                  stage={stage} 
-                  stageTotal={getStageTotalAmount(stage)} 
-                />
-              ))}
+        {/* Main content area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {currentPipeline && (
+            <>
+              <div className="p-4 bg-background border-b">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-lg font-semibold">{currentPipeline.name}</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {summary.totalDeals} deals · ${summary.totalAmount.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleAddDealOpen}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Deal
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-x-auto p-4">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="flex gap-4">
+                    {currentPipeline.stages.map(stage => {
+                      const stageDeals = stage.deals.filter(deal => deal.stageId === stage.id);
+                      return (
+                        <StageColumn
+                          key={stage.id}
+                          stage={stage}
+                          stageTotal={getStageTotalAmount(stage)}
+                          deals={stageDeals}
+                        />
+                      );
+                    })}
+                  </div>
+                  <DragOverlay>
+                    {activeItem && <DealCard deal={activeItem} />}
+                  </DragOverlay>
+                </DndContext>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      
+      {/* Add Deal Dialog */}
+      <Dialog open={isAddDealOpen} onOpenChange={setIsAddDealOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Deal</DialogTitle>
+            <DialogDescription>
+              Create a new deal for the {currentPipeline?.name} pipeline.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Deal Name
+              </Label>
+              <Input
+                id="name"
+                className="col-span-3"
+                value={addDealForm.name}
+                onChange={(e) => handleFormChange('name', e.target.value)}
+              />
             </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">
+                Amount
+              </Label>
+              <Input
+                id="amount"
+                type="number"
+                className="col-span-3"
+                value={addDealForm.amount}
+                onChange={(e) => handleFormChange('amount', parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="company" className="text-right">
+                Company
+              </Label>
+              <Input
+                id="company"
+                className="col-span-3"
+                value={addDealForm.company}
+                onChange={(e) => handleFormChange('company', e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="contact" className="text-right">
+                Contact
+              </Label>
+              <Input
+                id="contact"
+                className="col-span-3"
+                value={addDealForm.contact}
+                onChange={(e) => handleFormChange('contact', e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="closingDate" className="text-right">
+                Closing Date
+              </Label>
+              <Input
+                id="closingDate"
+                type="date"
+                className="col-span-3"
+                value={addDealForm.closingDate}
+                onChange={(e) => handleFormChange('closingDate', e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="probability" className="text-right">
+                Probability (%)
+              </Label>
+              <Input
+                id="probability"
+                type="number"
+                min="0"
+                max="100"
+                className="col-span-3"
+                value={addDealForm.probability}
+                onChange={(e) => handleFormChange('probability', parseInt(e.target.value) || 0)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="stage" className="text-right">
+                Stage
+              </Label>
+              <Select 
+                value={addDealForm.stageId} 
+                onValueChange={(value) => handleFormChange('stageId', value)}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentPipeline?.stages.map(stage => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDealOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddDeal}>
+              Add Deal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Deal Dialog */}
+      <Dialog open={isEditDealOpen} onOpenChange={setIsEditDealOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Deal</DialogTitle>
+            <DialogDescription>
+              Edit deal information in the {currentPipeline?.name} pipeline.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-name" className="text-right">
+                Deal Name
+              </Label>
+              <Input
+                id="edit-name"
+                className="col-span-3"
+                value={addDealForm.name}
+                onChange={(e) => handleFormChange('name', e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-amount" className="text-right">
+                Amount
+              </Label>
+              <Input
+                id="edit-amount"
+                type="number"
+                className="col-span-3"
+                value={addDealForm.amount}
+                onChange={(e) => handleFormChange('amount', parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-company" className="text-right">
+                Company
+              </Label>
+              <Input
+                id="edit-company"
+                className="col-span-3"
+                value={addDealForm.company}
+                onChange={(e) => handleFormChange('company', e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-contact" className="text-right">
+                Contact
+              </Label>
+              <Input
+                id="edit-contact"
+                className="col-span-3"
+                value={addDealForm.contact}
+                onChange={(e) => handleFormChange('contact', e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-closingDate" className="text-right">
+                Closing Date
+              </Label>
+              <Input
+                id="edit-closingDate"
+                type="date"
+                className="col-span-3"
+                value={addDealForm.closingDate}
+                onChange={(e) => handleFormChange('closingDate', e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-probability" className="text-right">
+                Probability (%)
+              </Label>
+              <Input
+                id="edit-probability"
+                type="number"
+                min="0"
+                max="100"
+                className="col-span-3"
+                value={addDealForm.probability}
+                onChange={(e) => handleFormChange('probability', parseInt(e.target.value) || 0)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-stage" className="text-right">
+                Stage
+              </Label>
+              <Select 
+                value={addDealForm.stageId} 
+                onValueChange={(value) => handleFormChange('stageId', value)}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentPipeline?.stages.map(stage => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDealOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

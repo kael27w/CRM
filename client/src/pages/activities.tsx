@@ -207,6 +207,46 @@ const ActivitiesPage: React.FC = () => {
   // Use the tasks hook to access and manage tasks
   const { tasks, toggleTask, refetch: refetchTasks } = useTasks();
   
+  // State for tasks displayed in the Tasks tab
+  const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
+  
+  // Initialize the displayed tasks based on filter whenever tasks or filter changes
+  useEffect(() => {
+    if (tasks && tasks.length > 0) {
+      // Apply the filter and exclude completed tasks unless we're viewing completed tasks
+      if (filterStatus === 'completed') {
+        setDisplayedTasks(tasks.filter(task => task.completed));
+      } else if (filterStatus === 'open') {
+        setDisplayedTasks(tasks.filter(task => !task.completed));
+      } else {
+        setDisplayedTasks(tasks);
+      }
+    } else {
+      setDisplayedTasks([]);
+    }
+  }, [tasks, filterStatus]);
+  
+  // Handler for toggling task completion in the Tasks tab
+  const handleTaskStatusToggle = (id: number, completed: boolean) => {
+    // Call the hook function to update the backend
+    toggleTask(id, completed);
+    
+    // If marking as completed, remove from the display list unless we're showing completed tasks
+    if (completed && filterStatus !== 'completed') {
+      setDisplayedTasks(prevTasks => prevTasks.filter(task => task.id !== id));
+    } else if (!completed && filterStatus === 'completed') {
+      // If un-checking a completed task while viewing completed tasks, remove it
+      setDisplayedTasks(prevTasks => prevTasks.filter(task => task.id !== id));
+    } else {
+      // Otherwise just update the task's state
+      setDisplayedTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === id ? { ...task, completed } : task
+        )
+      );
+    }
+  };
+  
   // Update URL when tab changes
   useEffect(() => {
     const [pathWithoutQuery] = location.split('?');
@@ -568,36 +608,6 @@ const ActivitiesPage: React.FC = () => {
   const today = new Date();
   const activitiesForSelectedDate = getActivitiesForSelectedDate();
   
-  // For the Tasks tab: manage state for displayed tasks
-  const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
-  
-  // Initialize the displayed tasks based on filter whenever tasks or filter changes
-  useEffect(() => {
-    if (tasks && tasks.length > 0) {
-      // Apply the filter but keep tasks that are completed during this session
-      if (filterStatus === 'all') {
-        setDisplayedTasks(tasks);
-      } else {
-        setDisplayedTasks(tasks.filter(task => 
-          filterStatus === 'completed' ? task.completed : !task.completed
-        ));
-      }
-    }
-  }, [tasks, filterStatus]);
-  
-  // Handler for toggling task completion in the Tasks tab
-  const handleTaskStatusToggle = (id: number, completed: boolean) => {
-    // Call the hook function to update the backend
-    toggleTask(id, completed);
-    
-    // Update the task's visual state in our local state without removing it
-    setDisplayedTasks(prevTasks => 
-      prevTasks.map(task => 
-        task.id === id ? { ...task, completed } : task
-      )
-    );
-  };
-
   const renderTasks = () => {
     if (!tasks || tasks.length === 0) {
       return (
@@ -617,10 +627,6 @@ const ActivitiesPage: React.FC = () => {
           <p className="text-slate-500 dark:text-slate-400 mb-4">
             No {filterStatus === 'completed' ? 'completed' : 'open'} tasks found
           </p>
-          <Button onClick={handleAddTask}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Task
-          </Button>
         </div>
       );
     }
@@ -628,7 +634,7 @@ const ActivitiesPage: React.FC = () => {
     return (
       <div className="space-y-4">
         {displayedTasks.map(task => (
-          <Card key={task.id} className={`mb-4 ${task.completed ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
+          <Card key={task.id} className="mb-4">
             <CardContent className="p-4">
               <div className="flex items-start">
                 <Checkbox
@@ -639,7 +645,7 @@ const ActivitiesPage: React.FC = () => {
                 />
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <h3 className={`text-base font-medium ${task.completed ? 'line-through text-slate-400 dark:text-slate-500' : ''}`}>
+                    <h3 className="text-base font-medium">
                       {task.title}
                     </h3>
                     {task.dueDate && (
@@ -649,12 +655,12 @@ const ActivitiesPage: React.FC = () => {
                     )}
                   </div>
                   {task.description && (
-                    <p className={`text-sm text-slate-500 dark:text-slate-400 mt-1 ${task.completed ? 'line-through' : ''}`}>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                       {task.description}
                     </p>
                   )}
                   {task.client && (
-                    <p className={`text-sm text-blue-600 dark:text-blue-400 mt-1 ${task.completed ? 'line-through' : ''}`}>
+                    <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
                       {task.client.name}
                     </p>
                   )}
@@ -678,19 +684,19 @@ const ActivitiesPage: React.FC = () => {
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-4 w-full max-w-2xl">
-          <TabsTrigger value="calendar" className="flex items-center">
+          <TabsTrigger value="calendar">
             <CalendarIcon className="h-4 w-4 mr-2" />
             Calendar
           </TabsTrigger>
-          <TabsTrigger value="task" className="flex items-center">
+          <TabsTrigger value="task">
             <CheckSquare className="h-4 w-4 mr-2" />
             Tasks
           </TabsTrigger>
-          <TabsTrigger value="event" className="flex items-center">
+          <TabsTrigger value="event">
             <CalendarIcon className="h-4 w-4 mr-2" />
             Events
           </TabsTrigger>
-          <TabsTrigger value="call" className="flex items-center">
+          <TabsTrigger value="call">
             <Phone className="h-4 w-4 mr-2" />
             Calls
           </TabsTrigger>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useRoute } from 'wouter';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../lib/queryClient';
 import { queryClient } from '../lib/queryClient';
 import { DashboardStats, Task, UpcomingRenewal } from '../types';
@@ -43,6 +43,7 @@ import StatCard from '../components/dashboard/stat-card';
 import AddComponentDialog, { ComponentConfig, DashboardType } from '../components/dashboard/add-component-dialog';
 import ComponentOptionsMenu from '../components/dashboard/component-options-menu';
 import { useTasks } from '../lib/hooks/useTasks';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 
 // Define default components for each dashboard type
 const DEFAULT_DASHBOARD_COMPONENTS: Record<DashboardType, ComponentConfig[]> = {
@@ -235,10 +236,10 @@ const Dashboard: React.FC = () => {
     // placeholderData: keepPreviousData, // Or use a stale mock
   });
 
-  // Use the tasks hook to share task data between dashboard and activities page
-  const { toggleTask } = useTasks();
+  // Get tasks from the useTasks hook
+  const { tasks, toggleTask } = useTasks();
   
-  // Replace the existing completeTaskMutation and handleToggleTask with the shared version
+  // Update the handleToggleTask function to use the toggleTask from useTasks hook
   const handleToggleTask = (id: number, completed: boolean) => {
     toggleTask(id, completed);
   };
@@ -264,7 +265,7 @@ const Dashboard: React.FC = () => {
     // For now, we'll just return the appropriate default components based on dashboard type
     return DEFAULT_DASHBOARD_COMPONENTS[dashboardType] || [];
   };
-
+  
   // Dashboard Type to Display Name mapping
   const dashboardNames: Record<DashboardType, string> = {
     'overview': 'Overview',
@@ -323,156 +324,156 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // --- Reusable Stat Card Data Generation ---
-  // Moved this logic here to be reused across views
-  const overviewStats = [
-      { 
-        title: "Revenue MTD", 
-        value: formatCurrency(dashboardData.revenueMTD), 
-        icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
-        change: dashboardData.revenueChange, changeLabel: "vs last month", 
-        changeType: dashboardData.revenueChange >= 0 ? 'positive' as const : 'negative' as const,
-        bgColor: "bg-blue-50 dark:bg-blue-900/20",
-        iconColor: "text-blue-600 dark:text-blue-400"
-      },
-      { 
-        title: "Active Policies", 
-        value: dashboardData.activePolicies, 
-        icon: <ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
-        change: dashboardData.activePoliciesChange, changeLabel: "vs last month", 
-        changeType: dashboardData.activePoliciesChange >= 0 ? 'positive' as const : 'negative' as const,
-        bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-        iconColor: "text-emerald-600 dark:text-emerald-400"
-      },
-      { 
-        title: "Pending Claims", 
-        value: dashboardData.pendingClaims, 
-        icon: <Wallet className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
-        change: Math.abs(dashboardData.pendingClaimsChange), changeLabel: "vs last month", 
-        changeType: dashboardData.pendingClaimsChange <= 0 ? 'positive' as const : 'negative' as const,
-        bgColor: "bg-amber-50 dark:bg-amber-900/20",
-        iconColor: "text-amber-600 dark:text-amber-400"
-      },
-      { 
-        title: "Active Clients", 
-        value: dashboardData.activeClients, 
-        icon: <Users className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />,
-        change: dashboardData.activeClientsChange, changeLabel: "vs last month", 
-        changeType: dashboardData.activeClientsChange >= 0 ? 'positive' as const : 'negative' as const,
-        bgColor: "bg-indigo-50 dark:bg-indigo-900/20",
-        iconColor: "text-indigo-600 dark:text-indigo-400"
-      }
+    // --- Reusable Stat Card Data Generation ---
+    // Moved this logic here to be reused across views
+    const overviewStats = [
+        { 
+          title: "Revenue MTD", 
+          value: formatCurrency(dashboardData.revenueMTD), 
+          icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+          change: dashboardData.revenueChange, changeLabel: "vs last month", 
+          changeType: dashboardData.revenueChange >= 0 ? 'positive' as const : 'negative' as const,
+          bgColor: "bg-blue-50 dark:bg-blue-900/20",
+          iconColor: "text-blue-600 dark:text-blue-400"
+        },
+        { 
+          title: "Active Policies", 
+          value: dashboardData.activePolicies, 
+          icon: <ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+          change: dashboardData.activePoliciesChange, changeLabel: "vs last month", 
+          changeType: dashboardData.activePoliciesChange >= 0 ? 'positive' as const : 'negative' as const,
+          bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
+          iconColor: "text-emerald-600 dark:text-emerald-400"
+        },
+        { 
+          title: "Pending Claims", 
+          value: dashboardData.pendingClaims, 
+          icon: <Wallet className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+          change: Math.abs(dashboardData.pendingClaimsChange), changeLabel: "vs last month", 
+          changeType: dashboardData.pendingClaimsChange <= 0 ? 'positive' as const : 'negative' as const,
+          bgColor: "bg-amber-50 dark:bg-amber-900/20",
+          iconColor: "text-amber-600 dark:text-amber-400"
+        },
+        { 
+          title: "Active Clients", 
+          value: dashboardData.activeClients, 
+          icon: <Users className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />,
+          change: dashboardData.activeClientsChange, changeLabel: "vs last month", 
+          changeType: dashboardData.activeClientsChange >= 0 ? 'positive' as const : 'negative' as const,
+          bgColor: "bg-indigo-50 dark:bg-indigo-900/20",
+          iconColor: "text-indigo-600 dark:text-indigo-400"
+        }
+      ];
+
+    const pipelineStats = [
+        { 
+          title: "Open Deals Value", 
+          value: formatCurrency(485000), // Using mock value 
+          icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+          change: 12, changeLabel: "vs last month", changeType: 'positive' as const,
+          bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
+        },
+        { 
+          title: "Avg Deal Size", 
+          value: formatCurrency(48500), // Using mock value
+          icon: <BarChart2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+          change: 8, changeLabel: "vs last month", changeType: 'positive' as const,
+          bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
+        },
+        { 
+          title: "Win Rate", value: "32%", // Using mock value
+          icon: <Target className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+          change: -2, changeLabel: "vs last month", changeType: 'negative' as const,
+          bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
+        },
+        { 
+          title: "Deals Won MTD", value: 15, // Mock value
+          icon: <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />,
+          change: 3, changeLabel: "vs last month", changeType: 'positive' as const,
+          bgColor: "bg-green-50 dark:bg-green-900/20", iconColor: "text-green-600"
+        },
+      ];
+      
+    const taskStats = [
+        { 
+          title: "Open Tasks", value: 24, // Mock value
+          icon: <CheckCircle2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+          change: -5, changeLabel: "vs last month", changeType: 'negative' as const,
+          bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
+        },
+        { 
+          title: "Overdue Tasks", value: 8, // Mock value
+          icon: <CheckCircle2 className="h-6 w-6 text-red-600 dark:text-red-400" />,
+          change: 2, changeLabel: "vs last month", changeType: 'negative' as const,
+          bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
+        },
+        { 
+          title: "Completed Today", value: 7, // Mock value
+          icon: <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+          change: 3, changeLabel: "vs yesterday", changeType: 'positive' as const,
+          bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
+        },
+        { 
+          title: "Due This Week", value: 12, // Mock value
+          icon: <Calendar className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+          change: 1, changeLabel: "vs last week", changeType: 'positive' as const,
+          bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
+        },
     ];
 
-  const pipelineStats = [
+    const eventStats = [
       { 
-        title: "Open Deals Value", 
-        value: formatCurrency(485000), // Using mock value 
-        icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
-        change: 12, changeLabel: "vs last month", changeType: 'positive' as const,
+        title: "Upcoming Events", value: 15, // Mock value
+        icon: <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+        change: 5, changeLabel: "vs last month", changeType: 'positive' as const,
         bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
       },
       { 
-        title: "Avg Deal Size", 
-        value: formatCurrency(48500), // Using mock value
-        icon: <BarChart2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
-        change: 8, changeLabel: "vs last month", changeType: 'positive' as const,
+        title: "Events This Week", value: 8, // Mock value
+        icon: <Calendar className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+        change: 2, changeLabel: "vs last week", changeType: 'positive' as const,
         bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
       },
       { 
-        title: "Win Rate", value: "32%", // Using mock value
-        icon: <Target className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+        title: "Completed Events", value: 16, // Mock value
+        icon: <Calendar className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
+        change: 4, changeLabel: "vs last month", changeType: 'positive' as const,
+        bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
+      },
+      { 
+        title: "No Shows", value: 3, // Mock value
+        icon: <Calendar className="h-6 w-6 text-red-600 dark:text-red-400" />,
+        change: 1, changeLabel: "vs last month", changeType: 'negative' as const,
+        bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
+      },
+    ];
+
+    const emailStats = [
+      { 
+        title: "Emails Sent", value: 145, // Mock value
+        icon: <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
+        change: 18, changeLabel: "vs last month", changeType: 'positive' as const,
+        bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
+      },
+      { 
+        title: "Open Rate", value: "28%", // Mock value
+        icon: <Mail className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
+        change: 5, changeLabel: "vs last month", changeType: 'positive' as const,
+        bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
+      },
+      { 
+        title: "Click Rate", value: "12%", // Mock value
+        icon: <Mail className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
         change: -2, changeLabel: "vs last month", changeType: 'negative' as const,
         bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
       },
       { 
-        title: "Deals Won MTD", value: 15, // Mock value
-        icon: <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />,
-        change: 3, changeLabel: "vs last month", changeType: 'positive' as const,
-        bgColor: "bg-green-50 dark:bg-green-900/20", iconColor: "text-green-600"
-      },
-    ];
-    
-  const taskStats = [
-      { 
-        title: "Open Tasks", value: 24, // Mock value
-        icon: <CheckCircle2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
-        change: -5, changeLabel: "vs last month", changeType: 'negative' as const,
-        bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
-      },
-      { 
-        title: "Overdue Tasks", value: 8, // Mock value
-        icon: <CheckCircle2 className="h-6 w-6 text-red-600 dark:text-red-400" />,
-        change: 2, changeLabel: "vs last month", changeType: 'negative' as const,
+        title: "Bounce Rate", value: "3%", // Mock value
+        icon: <Mail className="h-6 w-6 text-red-600 dark:text-red-400" />,
+        change: 1, changeLabel: "vs last month", changeType: 'negative' as const,
         bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
       },
-      { 
-        title: "Completed Today", value: 7, // Mock value
-        icon: <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
-        change: 3, changeLabel: "vs yesterday", changeType: 'positive' as const,
-        bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
-      },
-      { 
-        title: "Due This Week", value: 12, // Mock value
-        icon: <Calendar className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
-        change: 1, changeLabel: "vs last week", changeType: 'positive' as const,
-        bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
-      },
-  ];
-
-  const eventStats = [
-    { 
-      title: "Upcoming Events", value: 15, // Mock value
-      icon: <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
-      change: 5, changeLabel: "vs last month", changeType: 'positive' as const,
-      bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
-    },
-    { 
-      title: "Events This Week", value: 8, // Mock value
-      icon: <Calendar className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
-      change: 2, changeLabel: "vs last week", changeType: 'positive' as const,
-      bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
-    },
-    { 
-      title: "Completed Events", value: 16, // Mock value
-      icon: <Calendar className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
-      change: 4, changeLabel: "vs last month", changeType: 'positive' as const,
-      bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
-    },
-    { 
-      title: "No Shows", value: 3, // Mock value
-      icon: <Calendar className="h-6 w-6 text-red-600 dark:text-red-400" />,
-      change: 1, changeLabel: "vs last month", changeType: 'negative' as const,
-      bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
-    },
-  ];
-
-  const emailStats = [
-    { 
-      title: "Emails Sent", value: 145, // Mock value
-      icon: <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
-      change: 18, changeLabel: "vs last month", changeType: 'positive' as const,
-      bgColor: "bg-blue-50 dark:bg-blue-900/20", iconColor: "text-blue-600"
-    },
-    { 
-      title: "Open Rate", value: "28%", // Mock value
-      icon: <Mail className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
-      change: 5, changeLabel: "vs last month", changeType: 'positive' as const,
-      bgColor: "bg-emerald-50 dark:bg-emerald-900/20", iconColor: "text-emerald-600"
-    },
-    { 
-      title: "Click Rate", value: "12%", // Mock value
-      icon: <Mail className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
-      change: -2, changeLabel: "vs last month", changeType: 'negative' as const,
-      bgColor: "bg-amber-50 dark:bg-amber-900/20", iconColor: "text-amber-600"
-    },
-    { 
-      title: "Bounce Rate", value: "3%", // Mock value
-      icon: <Mail className="h-6 w-6 text-red-600 dark:text-red-400" />,
-      change: 1, changeLabel: "vs last month", changeType: 'negative' as const,
-      bgColor: "bg-red-50 dark:bg-red-900/20", iconColor: "text-red-600"
-    },
-  ];
+    ];
 
   // Render a component based on its configuration
   const renderCustomComponent = (component: ComponentConfig, index: number) => {
@@ -513,7 +514,7 @@ const Dashboard: React.FC = () => {
                 icon: <CircleDollarSign className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
                 change: 0,
                 changeLabel: 'vs last period',
-                changeType: 'neutral' as const,
+                changeType: 'positive' as const,
                 bgColor: "bg-blue-50 dark:bg-blue-900/20",
                 iconColor: "text-blue-600 dark:text-blue-400"
               }} 
@@ -591,19 +592,7 @@ const Dashboard: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <TasksWidget
-                    tasks={dashboardData?.upcomingRenewals?.map((renewal: UpcomingRenewal): Task => ({
-                        id: renewal.policy.id, // Use policy ID for task linkage? Adjust as needed.
-                        title: `Call ${renewal.client.name} about policy renewal`,
-                        description: `${renewal.policy.type} Policy #${renewal.policy.policyNumber}`,
-                        dueDate: renewal.policy.renewalDate!,
-                        completed: false,
-                        assignedToId: 1, // Placeholder: Get current user ID
-                        clientId: renewal.client.id,
-                        policyId: renewal.policy.id,
-                        createdAt: new Date().toISOString(), // Placeholder
-                        client: renewal.client,
-                        policy: renewal.policy,
-                    })) || []}
+                    tasks={tasks || []}
                     onToggleTask={handleToggleTask}
                     showViewAllLink={true}
                 />
@@ -614,7 +603,7 @@ const Dashboard: React.FC = () => {
           </>
         );
         break;
-      
+        
       case 'pipelines':
         standardComponents = (
           <>
@@ -629,7 +618,7 @@ const Dashboard: React.FC = () => {
           </>
         );
         break;
-      
+        
       case 'tasks':
         standardComponents = (
           <>
@@ -642,14 +631,14 @@ const Dashboard: React.FC = () => {
             <Card className="col-span-1 md:col-span-2 lg:col-span-2"> 
               <CardHeader><CardTitle>My Open Tasks</CardTitle></CardHeader>
               <CardContent>
-                 {/* Assuming TasksWidget can be used here too, maybe filter data? */}
-                <TasksWidget tasks={[]} onToggleTask={handleToggleTask} /> 
+                 {/* Use real tasks data from useTasks hook */}
+                <TasksWidget tasks={tasks || []} onToggleTask={handleToggleTask} /> 
               </CardContent>
             </Card>
           </>
         );
         break;
-      
+        
       case 'events':
         standardComponents = (
           <>
@@ -664,7 +653,7 @@ const Dashboard: React.FC = () => {
           </>
         );
         break;
-      
+        
       case 'calls':
         const mockCallsCompleted = 42; // Mock value
         const mockCallTarget = 100;  // Mock value
@@ -680,7 +669,7 @@ const Dashboard: React.FC = () => {
             </>
          );
          break;
-      
+        
       case 'emails':
         standardComponents = (
           <>
@@ -695,7 +684,7 @@ const Dashboard: React.FC = () => {
           </>
         );
         break;
-      
+        
       default:
         standardComponents = <PlaceholderComponent title={`Content for ${dashboardNames[dashboardType]}`} />;
     }

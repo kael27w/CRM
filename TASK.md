@@ -19,10 +19,14 @@
      - [ ] Add bulk actions when rows are selected (Change Owner, Add Tags, Remove Tags, Update Field, Delete)
 
 3. [x] **Task Management**
-   - [x] Fix task completion functionality to properly cross out completed tasks
-   - [x] Ensure completed tasks remain visible with strikethrough until page reload
+   - [x] Fix task completion functionality to make completed tasks disappear immediately
+   - [x] Restore original tab appearance in Activities page
    - [x] Ensure new tasks appear correctly when created from dashboard or activities page
    - [x] Fix navigation between dashboard and Activities page task list
+   - [x] Fix dashboard Tasks Widget to use real tasks data from useTasks hook
+   - [x] Remove redundant "Add Task" button when no tasks are displayed
+   - [x] Make all task completion checkboxes functional across the application
+   - [x] Implement localStorage persistence for tasks to maintain state between refreshes
 
 4. [ ] **Calendar Integration**
    - [ ] Complete calendar event functionality
@@ -30,10 +34,11 @@
    - [ ] Implement recurring events
    - [ ] Add notifications for upcoming events
 
-5. [ ] **Pipeline View Enhancements**
-   - [ ] Add card display for pipeline stages
-   - [ ] Enable drag-and-drop between stages
-   - [ ] Implement quick edit for deal cards
+5. [x] **Pipeline View Enhancements**
+   - [x] Redesign pipeline tabs to use vertical sidebar layout 
+   - [x] Change pipeline categories to: Sales Pipeline, Customer Support, Living Trust Flow, Index Universal Life
+   - [x] Give each pipeline its own category names and structure
+   - [x] Implement drag-and-drop functionality between stages
    - [ ] Add stage progress visualization
 
 6. [ ] **UI/UX Improvements**
@@ -49,6 +54,21 @@
    - [ ] Implement report export (CSV, PDF)
 
 ## Completed Tasks
+
+- [x] **Pipeline View Redesign** (08/12/2024)
+  - [x] Converted horizontal pipeline tabs to vertical sidebar layout
+  - [x] Renamed pipeline categories to match business workflows
+  - [x] Added custom categories and stages for each pipeline type
+  - [x] Implemented drag-and-drop functionality for moving deals between stages
+  - [x] Added visual icons for each pipeline type
+  - [x] Improved layout for better information hierarchy and usability
+
+- [x] **Task Persistence Improvements** (08/12/2024)
+  - [x] Implemented localStorage persistence for tasks to maintain state between page refreshes
+  - [x] Added proper task completion state management that persists across the application
+  - [x] Enhanced task creation to store new tasks in localStorage
+  - [x] Made task updates immediately visible across all components using the same data source
+  - [x] Updated Dashboard_Updates.md with documentation of all changes
 
 - [x] **Task Management and Navigation Improvements** (08/11/2024)
   - [x] Fixed task completion to properly mark tasks as completed without reloading the page
@@ -91,6 +111,7 @@
 - Dialog components need to be standardized to use open/onOpenChange pattern for consistency
 - Need to create a consistent task management system that works across all pages
 - URL parameters should be used to set initial tab state in Activities page
+- Consider implementing a full state management solution (Redux, Zustand) as the application grows
 
 ## Discovered During Work (April 7, 2024)
 - [ ] Handle errors gracefully in API requests with user-friendly error messages

@@ -2,6 +2,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Task } from '../../types';
 import { apiRequest } from '../queryClient';
 
+// Local storage key for tasks
+const TASKS_STORAGE_KEY = 'insurance-tracker-tasks';
+
+// Helper type for creating a new task
+export type CreateTaskInput = {
+  title: string;
+  description?: string;
+  dueDate: string;
+  clientId?: number;
+  policyId?: number;
+};
+
 /**
  * Custom hook for fetching and managing tasks
  * This provides a centralized way to access tasks data across different components
@@ -25,11 +37,27 @@ export function useTasks() {
           throw new Error(`Error fetching tasks: ${response.status} ${response.statusText}`);
         }
         const data = await response.json();
+        
+        // Save to localStorage
+        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(data));
+        
         return data as Task[];
       } catch (err) {
         console.error('Error fetching tasks:', err);
-        // Return mock data for development
-        return getMockTasks();
+        
+        // Try to get tasks from localStorage first
+        const storedTasks = localStorage.getItem(TASKS_STORAGE_KEY);
+        if (storedTasks) {
+          return JSON.parse(storedTasks) as Task[];
+        }
+        
+        // If no stored tasks, return mock data for development
+        const mockTasks = getMockTasks();
+        
+        // Save mock tasks to localStorage
+        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(mockTasks));
+        
+        return mockTasks;
       }
     },
     refetchOnWindowFocus: false, // Disable automatic refetch on window focus
@@ -51,14 +79,91 @@ export function useTasks() {
         return await response.json();
       } catch (err) {
         console.error('Error toggling task completion:', err);
-        // For development, just return a successful mock response
+        
+        // For development, update task in localStorage
+        if (tasks) {
+          const updatedTasks = tasks.map(task => 
+            task.id === id ? { ...task, completed } : task
+          );
+          localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+        }
+        
+        // Return a successful mock response
         return { id, completed };
       }
     },
-    onSuccess: () => {
-      // Invalidate tasks queries to refetch data
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      // Also invalidate dashboard data to keep it in sync
+    onSuccess: (data) => {
+      // Update local cache with the updated task
+      queryClient.setQueryData(['tasks'], (oldTasks: Task[] | undefined) => {
+        if (!oldTasks) return oldTasks;
+        const updatedTasks = oldTasks.map(task => 
+          task.id === data.id ? { ...task, completed: data.completed } : task
+        );
+        
+        // Update localStorage with the updated tasks
+        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+        
+        return updatedTasks;
+      });
+      
+      // Invalidate dashboard data to keep it in sync
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+    },
+  });
+
+  // Create a new task
+  const createTaskMutation = useMutation({
+    mutationFn: async (newTask: CreateTaskInput) => {
+      try {
+        const url = '/api/tasks';
+        const method = 'POST';
+        
+        const response = await apiRequest(method, url, newTask);
+        if (!response.ok) {
+          throw new Error(`Error creating task: ${response.status} ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (err) {
+        console.error('Error creating task:', err);
+        
+        // For development, create a mock task with a unique ID
+        const mockTask: Task = {
+          id: Date.now(), // Use timestamp as a unique ID
+          title: newTask.title,
+          description: newTask.description || '',
+          dueDate: newTask.dueDate,
+          completed: false,
+          assignedToId: 1, // Current user
+          clientId: newTask.clientId,
+          policyId: newTask.policyId,
+          createdAt: new Date().toISOString(),
+          client: newTask.clientId 
+            ? { 
+                id: newTask.clientId, 
+                name: 'Client Name', // This would be fetched in a real app
+                status: 'Active',
+                createdAt: new Date().toISOString() 
+              } 
+            : undefined,
+        };
+        
+        return mockTask;
+      }
+    },
+    onSuccess: (newTask) => {
+      // Update the tasks cache
+      queryClient.setQueryData(['tasks'], (oldTasks: Task[] | undefined) => {
+        if (!oldTasks) return [newTask];
+        const updatedTasks = [...oldTasks, newTask];
+        
+        // Update localStorage with the updated tasks
+        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+        
+        return updatedTasks;
+      });
+      
+      // Invalidate dashboard data to keep it in sync
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
     },
   });
@@ -68,6 +173,11 @@ export function useTasks() {
     toggleTaskMutation.mutate({ id, completed });
   };
 
+  // Helper function to create a new task
+  const createTask = (newTask: CreateTaskInput) => {
+    return createTaskMutation.mutateAsync(newTask);
+  };
+
   return {
     tasks,
     isLoading,
@@ -75,6 +185,7 @@ export function useTasks() {
     error,
     refetch,
     toggleTask,
+    createTask,
   };
 }
 

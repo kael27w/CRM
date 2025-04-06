@@ -24,10 +24,7 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask, showView
   // On initial load, show only incomplete tasks
   useEffect(() => {
     // Only filter out completed tasks on the initial load
-    // This preserves tasks that get completed during the current session
     if (tasks && tasks.length > 0) {
-      // On first load, filter out completed tasks
-      // On subsequent loads due to toggles, we'll add them separately
       setDisplayTasks(tasks.filter(task => !task.completed));
     } else {
       setDisplayTasks([]);
@@ -38,13 +35,17 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask, showView
     // Call the external handler to update the backend/global state
     onToggleTask(id, completed);
     
-    // Update the task in our local state to show it as completed
-    // but don't remove it immediately
-    setDisplayTasks(prevTasks => 
-      prevTasks.map(task => 
-        task.id === id ? { ...task, completed } : task
-      )
-    );
+    // If the task is marked as completed, remove it from the display list
+    if (completed) {
+      setDisplayTasks(prevTasks => prevTasks.filter(task => task.id !== id));
+    } else {
+      // Only update the local state if marking as incomplete
+      setDisplayTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === id ? { ...task, completed } : task
+        )
+      );
+    }
   };
 
   const handleTaskAdded = async (newTask: Task) => {
@@ -134,22 +135,18 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask, showView
                 <div className="flex items-center justify-between">
                   <label 
                     htmlFor={`task-${task.id}`} 
-                    className={`block text-sm font-medium ${
-                      task.completed 
-                        ? 'text-slate-400 dark:text-slate-500 line-through' 
-                        : 'text-slate-900 dark:text-white'
-                    }`}
+                    className={`block text-sm font-medium text-slate-900 dark:text-white`}
                   >
                     {task.title}
                   </label>
                   {task.dueDate && (
-                    <Badge variant={task.completed ? "outline" : getBadgeVariant(task.dueDate)}>
+                    <Badge variant={getBadgeVariant(task.dueDate)}>
                       {getBadgeText(task.dueDate)}
                     </Badge>
                   )}
                 </div>
                 {task.description && (
-                  <p className={`text-xs text-slate-500 dark:text-slate-400 mt-0.5 ${task.completed ? 'line-through' : ''}`}>
+                  <p className={`text-xs text-slate-500 dark:text-slate-400 mt-0.5`}>
                     {task.description}
                   </p>
                 )}

@@ -1,4 +1,3 @@
-
 ## Overview
 
 Welcome to the InsuranceTracker CRM frontend project! This application is being developed as a modern, web-based CRM specifically tailored for the life insurance industry. The goal is to create an intuitive and feature-rich interface for managing insurance policies, clients, sales pipelines, claims processing, and agent activities.
@@ -39,9 +38,11 @@ The project is currently **in active development**, undergoing significant UI/UX
         * Living Trust Flow (estate planning)
         * Index Universal Life (specialized insurance product)
     *   Configurable stages within each pipeline matching real insurance sales processes
-    *   Dynamic "+ Create" button that adapts to the selected pipeline (e.g., "+ New Deal", "+ New Inquiry")
-    *   Card-based interface showing deal name, name of person,price, and key dates(for example Yearly Subscription at the top, Ted Watson in the middle, and then 5000 side to side with Today(date) below the name) and have the ability to drag and drop to any other stage
-    *   Filtering on what cards we want to see 
+    *   Dynamic "+ Add Deal" button that creates new deals with detailed properties
+    *   Card-based interface showing deal name, company, amount, and key dates
+    *   Cross-category drag-and-drop functionality allowing deals to be moved between any stages
+    *   Deal management capabilities including editing deal properties and deletion
+    *   Visual feedback during drag operations with highlighted drop targets
     
 
 
@@ -76,6 +77,7 @@ The project is currently **in active development**, undergoing significant UI/UX
     *   **shadcn/ui:** Reusable UI components built using Radix UI and Tailwind CSS (found in `client/src/components/ui`). **This is the core UI library.**
     *   **React Query / TanStack Query:** Data fetching, caching, and state management.
     *   **React Router / Wouter:** For client-side routing between pages.
+    *   **dnd-kit:** Modern drag-and-drop toolkit for interactive UI elements.
 
 *   **Backend (Assumed):**
     *   **Node.js / Express:** JavaScript runtime and framework for the API server.
@@ -131,27 +133,51 @@ The application currently has a functioning structure with:
 1. **Completed Areas:**
    - Basic layout with sidebar navigation and header
    - Dashboard with multiple views and mock data fallbacks
-   - Pipelines page with multiple pipeline types and Kanban board view
+   - Pipelines page with multiple pipeline types, specialized stages, and Kanban board view
    - Initial implementations of tables for Contacts, Companies, Products
+   - Task management with localStorage persistence
+   - Activities page with calendar integration
 
-2. **Recently Fixed:**
-   - Dashboard TypeScript typing issues for `changeType` properties
-   - Mock data implementation for dashboard views with error fallbacks
-   - Pipeline navigation and initial card creation
+2. **Recently Completed:**
+   - **Pipelines Page:**
+     - Updated stage names to match specific insurance business processes
+     - Enhanced drag-and-drop functionality to move deals between any stages
+     - Implemented proper empty column support for drag operations
+     - Added edit and delete functionality for deals
+     - Streamlined UI by removing redundant buttons and options
+     - Improved visual feedback for drag-and-drop operations
+
+   - **Tasks Component:**
+     - Fixed task completion functionality
+     - Implemented task persistence across page refreshes
+     - Ensured proper display of completed vs. open tasks
+
+   - **General Fixes:**
+     - Dashboard TypeScript typing issues for `changeType` properties
+     - Mock data implementation for dashboard views with error fallbacks
+     - Fixed various UI inconsistencies and layout issues
 
 3. **Need to do:**
-   - Dashboard component button addition functionality(being able to add components based on selection)
-   - Contacts, Companies, Products pages all need the ability to have the "Create Filed" button working so that it can create a new field depending on what the user types in and be able to still do operations on that column like filtering
-   -Companies, Products when selecting any or all the rows in the table the user should have the ability to change owner, add tags, remove tags, update field, delete using a dropdown button that appears only if selecting a row
-   -The same for Contacts page except it should have the additional option to send email 
-   - Activities page figure out why not all mock tasks,events, or calls are showing up on calendar. Information should be consistent throughout Calendar, Tasks, Events, Calls tabs
-   
+   - Dashboard component button addition functionality (being able to add components based on selection)
+   - Records Management:
+     - Implement "Create Field" button functionality to add custom fields to tables
+     - Add row selection actions (change owner, tags, delete) for Companies and Products pages
+     - Implement email sending functionality for Contacts page
+   - Activities page improvements:
+     - Ensure consistent data display across Calendar, Tasks, Events, and Calls tabs
+     - Fix mock data integration issues
 
 ## Next Development Focus
 
 Based on the progress so far and what needs to be done, the immediate tasks involve:
 
-1.  **Dashboard:** 
-2.  **Contacts/Companies/Products Tables:** 
-3.  **Activities Page:** 
+1. **Dashboard:** Complete component addition functionality to allow users to customize their dashboard views.
+
+2. **Records Management:** Implement custom field creation, bulk actions, and row selection features for all record tables.
+
+3. **Activities Page:** Fix data consistency issues and ensure proper integration between calendar and list views.
+
+4. **Backend Integration Preparation:** Prepare components to transition from mock data to real API endpoints when backend is ready.
+
+A detailed breakdown of the recent Pipelines page improvements can be found in `Pipelines_Update.md`.
 
