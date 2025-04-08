@@ -3,14 +3,15 @@
 ## Current Tasks (April 5, 2024)
 
 1. [ ] **Dashboard Component Addition**
-   - [ ] Implement functionality to add new components via the "Component" button
-   - [ ] Enable adding different component types (KPI/Stat, Chart, Target Meter)
-   - [ ] Allow placement within the dashboard grid
+   - [ ] Implement functionality for adding new dashboard components based on selection
+   - [ ] Ensure components persist across sessions
+   - [ ] Add ability to remove or rearrange dashboard components
 
 2. [ ] **Records Management**
    - [ ] **Contacts Page**
-     - [ ] Implement "Create Field" button functionality for adding custom columns
-     - [ ] Add bulk actions when rows are selected (Change Owner, Add Tags, Remove Tags, Update Field, Delete, Send Email)
+     - [ ] Enhance Contacts page with "Create Field" button functionality
+     - [ ] Implement bulk actions for Contacts (change owner, add/remove tags, delete)
+     - [ ] Add email sending capabilities to Contacts page
    - [ ] **Companies Page**
      - [ ] Implement "Create Field" button functionality for adding custom columns
      - [ ] Add bulk actions when rows are selected (Change Owner, Add Tags, Remove Tags, Update Field, Delete)
@@ -19,9 +20,9 @@
      - [ ] Add bulk actions when rows are selected (Change Owner, Add Tags, Remove Tags, Update Field, Delete)
 
 3. [x] **Task Management**
-   - [x] Fix task completion functionality to make completed tasks disappear immediately
-   - [x] Restore original tab appearance in Activities page
-   - [x] Ensure new tasks appear correctly when created from dashboard or activities page
+   - [x] Fix task completion functionality (display crossed-out tasks before hiding)
+   - [x] Fix navigation between pages when viewing tasks
+   - [x] Ensure new tasks appear correctly in both task widget and activities page
    - [x] Fix navigation between dashboard and Activities page task list
    - [x] Fix dashboard Tasks Widget to use real tasks data from useTasks hook
    - [x] Remove redundant "Add Task" button when no tasks are displayed
@@ -29,83 +30,54 @@
    - [x] Implement localStorage persistence for tasks to maintain state between refreshes
 
 4. [ ] **Calendar Integration**
-   - [ ] Complete calendar event functionality
-   - [ ] Add drag-and-drop for calendar events
-   - [ ] Implement recurring events
-   - [ ] Add notifications for upcoming events
+   - [ ] Fix display consistency across Calendar, Tasks, Events, and Calls tabs
+   - [ ] Ensure all mock data appears correctly on calendar
 
 5. [x] **Pipeline View Enhancements**
-   - [x] Redesign pipeline tabs to use vertical sidebar layout 
-   - [x] Change pipeline categories to: Sales Pipeline, Customer Support, Living Trust Flow, Index Universal Life
-   - [x] Give each pipeline its own category names and structure
-   - [x] Implement drag-and-drop functionality between stages
-   - [ ] Add stage progress visualization
+   - [x] Redesign pipeline tabs to vertical sidebar layout
+   - [x] Update pipeline categories with new names (Sales Pipeline, Customer Support, Living Trust Flow, Index Universal Life)
+   - [x] Implement drag-and-drop functionality for deals between stages
+   - [x] Add deal editing and deletion capabilities
 
 6. [ ] **UI/UX Improvements**
-   - [ ] Make sidebar collapsible for more screen space
-   - [ ] Enhance dark mode with better color contrast
-   - [ ] Improve responsive design for mobile view
-   - [ ] Add help tooltips for complex features
+   - [ ] Fix inconsistent spacing and alignment across pages
+   - [ ] Improve form validation and error handling
+   - [ ] Enhance accessibility of interactive elements
 
-7. [ ] **Reporting**
-   - [ ] Create basic reports for sales, policies, and renewals
-   - [ ] Enable custom date ranges for reports
-   - [ ] Add charts and graphs for data visualization
-   - [ ] Implement report export (CSV, PDF)
+7. [ ] **API Endpoints Implementation**
+   - [x] Implement GET /api/contacts endpoint for contact lookup by phone number
+   - [x] Implement POST /api/contacts endpoint for creating new contacts
+   - [x] Implement POST /api/calls endpoint for call journaling
+   - [x] Create documentation for testing the new API endpoints
+
+8. [ ] **Reporting**
+   - [ ] Create basic reports for pipeline performance
+   - [ ] Implement data visualization for sales metrics
+   - [ ] Add export capabilities for report data
 
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)
-  - [x] Converted horizontal pipeline tabs to vertical sidebar layout
-  - [x] Renamed pipeline categories to match business workflows
-  - [x] Added custom categories and stages for each pipeline type
-  - [x] Implemented drag-and-drop functionality for moving deals between stages
-  - [x] Added visual icons for each pipeline type
-  - [x] Improved layout for better information hierarchy and usability
-
-- [x] **Task Persistence Improvements** (08/12/2024)
-  - [x] Implemented localStorage persistence for tasks to maintain state between page refreshes
-  - [x] Added proper task completion state management that persists across the application
-  - [x] Enhanced task creation to store new tasks in localStorage
-  - [x] Made task updates immediately visible across all components using the same data source
-  - [x] Updated Dashboard_Updates.md with documentation of all changes
+  - [x] Changed pipeline layout to vertical tabs for better category navigation
+  - [x] Updated stage names to match specific insurance business processes
+  - [x] Implemented cross-category drag and drop functionality
+  - [x] Added deal editing and deletion features
 
 - [x] **Task Management and Navigation Improvements** (08/11/2024)
-  - [x] Fixed task completion to properly mark tasks as completed without reloading the page
-  - [x] Implemented proper task creation from dashboard that updates both the dashboard and tasks list
-  - [x] Removed the separate /activities/tasks route and added a task tab within the Activities page
-  - [x] Added proper navigation to tasks tab using URL query parameters
-  - [x] Made dialog components consistent by standardizing on open/onOpenChange pattern
-  - [x] Added tasks list view to Activities page for better task management
-  - [x] Implemented immediate UI updates when completing tasks
+  - [x] Fixed task completion functionality
+  - [x] Restored original tab appearance in Activities page
+  - [x] Made all task completion checkboxes functional
 
-- [x] **Dashboard UI and Task Management Improvements** (08/10/2024)
-  - [x] Removed redundant refresh button from dashboard header
-  - [x] Added tooltips for truncated titles in dashboard components
-  - [x] Fixed "View all tasks" link routing by adding proper route in App.tsx
-  - [x] Implemented task completion directly within dashboard components
-  - [x] Added ability to hide completed tasks automatically from the tasks widget
-  - [x] Created TaskDialog component for quick task creation from dashboard
-  - [x] Connected dashboard task components with the tasks page
+- [x] **Dashboard UI Improvements** (08/10/2024)
+  - [x] Fixed TypeScript typing issues for `changeType` properties
+  - [x] Implemented mock data fallbacks for dashboard components
+  - [x] Corrected layout issues in dashboard views
 
-- [x] Fix scope issue with Dashboard components (08/09/2024)
-  - Updated ComponentConfig to include dashboardType
-  - Added metric selection to AddComponentDialog
-  - Components are now filtered by dashboard type
-  - Added predefined metrics for each dashboard type
-  - Updated unit tests to work with new properties
-
-- [x] Implement Dashboard Component Persistence (08/09/2024)
-  - Added localStorage persistence for dashboard components
-  - Components are now saved per dashboard type
-  - Components can be deleted with a dropdown menu
-  - Implemented component options menu with delete functionality
-
-- [x] Fix 'Upcoming Renewals/Tasks' Component (08/09/2024)
-  - Made the "View all tasks" link functional
-  - Connected dashboard tasks with the Activities/Tasks page
-  - Created a useTasks hook to share data and functionality between pages
-  - Created a dedicated TasksPage component
+- [x] **API Endpoints Implementation** (08/09/2024)
+  - [x] Added contact lookup endpoint with phone number matching
+  - [x] Created contact creation functionality for new caller information
+  - [x] Implemented call logging with detailed information storage
+  - [x] Documented all endpoints in API_ENDPOINTS.md
 
 ## Discovered During Work
 - Dialog components need to be standardized to use open/onOpenChange pattern for consistency

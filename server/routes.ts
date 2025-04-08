@@ -9,6 +9,7 @@ import {
   insertDealSchema,     // Renamed from insertPolicySchema  
   insertActivitySchema
 } from "@shared/schema";
+import { supabase, normalizePhone } from "./supabase";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // User routes
@@ -40,6 +41,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(clients);
     } catch (error) {
       res.status(500).json({ message: "Error fetching clients" });
+    }
+  });
+
+  // NEW ENDPOINT: Contact lookup by phone
+  app.get("/api/contacts", async (req, res) => {
+    try {
+      const { phone } = req.query;
+      
+      if (!phone || typeof phone !== 'string') {
+        return res.status(400).json({ message: "Phone parameter is required" });
+      }
+      
+      console.log(`Looking up contact with phone: ${phone}`);
+      
+      // Normalize the phone number for comparison
+      const normalizedPhone = normalizePhone(phone);
+      
+      // Query Supabase for contacts with matching phone number
+      const { data: contacts, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phone}%`);
+      
+      if (error) {
+        console.error("Supabase error:", error);
+        return res.status(500).json({ message: "Database error looking up contact" });
+      }
+      
+      if (!contacts || contacts.length === 0) {
+        console.log("No contacts found");
+        return res.status(200).json([]);  // Return empty array if no contact found
+      }
+      
+      console.log(`Found ${contacts.length} matching contacts`);
+      
+      // Return the first matching contact
+      const contact = contacts[0];
+      
+      // Construct the response with the required fields
+      const contactResponse = {
+        contact_id: contact.id.toString(),
+        first_name: contact.first_name,
+        last_name: contact.last_name,
+        phone: contact.phone,
+        email: contact.email || '',
+        company: contact.company || '',
+        contact_url: `${req.protocol}://${req.get('host')}/contacts/${contact.id}`
+      };
+      
+      res.status(200).json(contactResponse);
+    } catch (error) {
+      console.error("Error in contact lookup:", error);
+      res.status(500).json({ message: "Error looking up contact" });
+    }
+  });
+
+  // NEW ENDPOINT: Create contact from phone call
+  app.post("/api/contacts", async (req, res) => {
+    try {
+      console.log("POST /api/contacts requested with body:", req.body);
+      
+      const { first_name, last_name, phone } = req.body;
+      
+      if (!phone) {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+      
+      console.log(`Creating new contact: ${first_name} ${last_name}, ${phone}`);
+      
+      // Insert the new contact into Supabase
+      const { data: newContact, error } = await supabase
+        .from('contacts')
+        .insert([
+          { 
+            first_name: first_name || 'Unknown', 
+            last_name: last_name || 'Caller',
+            phone,
+            status: 'Lead'
+          }
+        ])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Supabase error:", error);
+        return res.status(500).json({ message: "Database error creating contact" });
+      }
+      
+      if (!newContact) {
+        return res.status(500).json({ message: "Failed to create contact" });
+      }
+      
+      console.log("Contact created successfully:", newContact);
+      
+      // Return the response with the required format
+      const contactResponse = {
+        contact_id: newContact.id.toString(),
+        first_name: newContact.first_name,
+        last_name: newContact.last_name,
+        phone: newContact.phone,
+        email: newContact.email || '',
+        company: newContact.company || '',
+        contact_url: `${req.protocol}://${req.get('host')}/contacts/${newContact.id}`
+      };
+      
+      res.status(201).json(contactResponse);
+    } catch (error) {
+      console.error("Error creating contact:", error);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      res.status(500).json({ message: "Error creating contact" });
+    }
+  });
+
+  // NEW ENDPOINT: Log call information
+  app.post("/api/calls", async (req, res) => {
+    try {
+      console.log("POST /api/calls requested with body:", req.body);
+      
+      const { 
+        contact_id, 
+        call_type, 
+        duration, 
+        notes, 
+        agent, 
+        phone 
+      } = req.body;
+      
+      console.log(`Logging call for contact ID: ${contact_id}, type: ${call_type}`);
+      
+      // Insert the call record into Supabase
+      const { data: newCall, error } = await supabase
+        .from('calls')
+        .insert([
+          {
+            contact_id: contact_id ? parseInt(contact_id, 10) : null,
+            call_type: call_type || 'unknown',
+            duration: duration || 0,
+            notes: notes || '',
+            agent: agent || '',
+            phone: phone || ''
+          }
+        ])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Supabase error:", error);
+        return res.status(500).json({ message: "Database error logging call" });
+      }
+      
+      if (!newCall) {
+        return res.status(500).json({ message: "Failed to log call" });
+      }
+      
+      console.log("Call logged successfully:", newCall);
+      
+      res.status(201).json({
+        status: "success",
+        message: "Call logged successfully.",
+        log_id: newCall.id.toString()
+      });
+    } catch (error) {
+      console.error("Error logging call:", error);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      res.status(500).json({ message: "Error logging call" });
     }
   });
 

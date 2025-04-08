@@ -23,7 +23,7 @@ export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
-    allowedHosts: true,
+    allowedHosts: true as const
   };
 
   const vite = await createViteServer({
@@ -33,16 +33,26 @@ export async function setupVite(app: Express, server: Server) {
       ...viteLogger,
       error: (msg, options) => {
         viteLogger.error(msg, options);
-        process.exit(1);
+        // Don't exit on error, just log it
+        console.error("Vite error:", msg);
       },
     },
     server: serverOptions,
     appType: "custom",
   });
 
+  // Move the catch-all route down here after registering API routes
   app.use(vite.middlewares);
+  
+  // This catch-all should only handle non-API routes
   app.use("*", async (req, res, next) => {
+    // Skip handling for API routes
+    if (req.originalUrl.startsWith('/api')) {
+      return next();
+    }
+    
     const url = req.originalUrl;
+    log(`Vite handling: ${url}`);
 
     try {
       const clientTemplate = path.resolve(
