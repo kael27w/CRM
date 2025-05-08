@@ -1,0 +1,26 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+      "outDir": "./dist",
+      "rootDir": ".",
+      "noEmit": false,
+      "sourceMap": true,
+      "module": "NodeNext",
+      "moduleResolution": "NodeNext",
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "resolveJsonModule": true,
+      "isolatedModules": false
+    },
+    "include": [
+      "server/**/*.ts",
+      "shared/**/*.ts"
+    ],
+    "exclude": [
+      "node_modules",
+      "dist",
+      "client",
+      "server/tests"
+    ]
+  }
