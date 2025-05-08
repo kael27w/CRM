@@ -127,10 +127,11 @@ app.get("/api/debug/supabase", async (req, res) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
+  if (process.env.NODE_ENV === "development") {
+    // ... vite dev setup ...
   } else {
-    serveStatic(app);
+    // serveStatic(app); // <--- Temporarily commented out
+    log("Static file serving disabled for API-only deployment."); // Optional: Add a log
   }
 
   // Use port 3002 for the API server
