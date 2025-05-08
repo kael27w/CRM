@@ -1,4 +1,4 @@
-// tsconfig.server.json
+
 {
   "compilerOptions": {
     "types": ["node"],
@@ -12,10 +12,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "strict": true, // Usually inherited, good to be explicit
-    "target": "ES2022", // Usually inherited, good to be explicit
-    "lib": ["ESNext"], // Usually inherited, good to be explicit
-    "isolatedModules": false, // Or true if needed, but false is often fine for server
+    "strict": true, 
+    "target": "ES2022", 
+    "lib": ["ESNext"], 
+    "isolatedModules": false, 
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["./shared/*"]
