@@ -1,34 +1,35 @@
-
+// tsconfig.server.json
 {
-    "compilerOptions": {
-      "outDir": "./dist",
-      "rootDir": ".", 
-      "noEmit": false,
-      "sourceMap": true, 
-  
-  
-      "module": "NodeNext", 
-      "moduleResolution": "NodeNext",
-      "esModuleInterop": true, 
-  
-    
-      "target": "ES2022",
-      "strict": true, 
-      "skipLibCheck": true, 
-      "forceConsistentCasingInFileNames": true,
-      "resolveJsonModule": true, 
-  
-      "lib": ["ESNext"], 
-      "types": ["node"]
-    },
-    "include": [
-      "server/**/*.ts", 
-      "shared/**/*.ts" 
-    ],
-    "exclude": [
-      "node_modules",
-      "dist", 
-      "client", 
-      "server/tests" 
-    ]
-  }
+  "compilerOptions": {
+    "types": ["node"],
+    "outDir": "./dist",
+    "rootDir": ".",
+    "noEmit": false,
+    "sourceMap": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "strict": true, // Usually inherited, good to be explicit
+    "target": "ES2022", // Usually inherited, good to be explicit
+    "lib": ["ESNext"], // Usually inherited, good to be explicit
+    "isolatedModules": false, // Or true if needed, but false is often fine for server
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["./shared/*"]
+    }
+  },
+  "include": [
+    "server/**/*.ts",
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "client",
+    "server/tests",
+    "server/vite.ts"
+  ]
+}

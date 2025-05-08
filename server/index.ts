@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { registerRoutes } from "./routes.js";
+import { setupVite, serveStatic, log } from "./vite.js";
 import { createServer } from "http";
 
 const app = express();
@@ -67,7 +67,7 @@ app.get('/api/debug', (req, res) => {
 // Add at the beginning of the registerRoutes function, right after the function declaration
 app.get("/api/debug/supabase", async (req, res) => {
   try {
-    const { supabase } = await import("./supabase");
+    const { supabase } = await import("./supabase.js");
     
     // Test the connection by fetching a small amount of data
     const { data, error } = await supabase
