@@ -112,11 +112,10 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
     } else {
        console.log(`[${callSid}] Dialing options: Forward=${forwardNum}, CallerID=${callerIdNum}, StatusCallback=${statusCallbackUrl}`);
        const dialOptions: ExtendedDialAttributes = {
-         callerId: callerIdNum,
-         statusCallback: statusCallbackUrl,
-         statusCallbackMethod: 'POST',
-         statusCallbackEvent: ['completed']
-       };
+        callerId: process.env.TWILIO_PHONE_NUMBER || '',
+        statusCallback: statusCallbackUrl,
+        statusCallbackEvent: ['completed']
+      };
        twiml.dial(dialOptions, forwardNum);
     }
 
