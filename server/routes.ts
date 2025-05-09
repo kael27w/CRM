@@ -10,8 +10,12 @@ import {
   insertActivitySchema
 } from "../shared/schema.js";
 import { supabase, normalizePhone } from "./supabase.js";
+import { twilioWebhook, handleVoiceWebhook, handleStatusCallback } from "./twilio.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Debugging log for route registration
+  console.log("Starting to register routes...");
+
   // User routes
   app.get("/api/users", async (req, res) => {
     try {
@@ -371,7 +375,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // =========== TWILIO ROUTES ===========
+  console.log("Registering Twilio routes...");
+  
+  // Define the base URL for Twilio webhook validation
+  const twilioWebhookBaseUrl = process.env.API_URL ? `${process.env.API_URL}/api/twilio/voice` : '';
+  console.log(`Twilio webhook base URL: ${twilioWebhookBaseUrl}`);
+  
+  // Twilio voice webhook endpoint
+  app.post("/api/twilio/voice", twilioWebhook(twilioWebhookBaseUrl), handleVoiceWebhook);
+  console.log("Registered POST /api/twilio/voice route");
+  
+  // Twilio status callback endpoint
+  app.post("/api/twilio/status-callback", twilioWebhook(""), handleStatusCallback);
+  console.log("Registered POST /api/twilio/status-callback route");
+
+  // Create the HTTP server
   const httpServer = createServer(app);
+  console.log("All routes registered successfully");
 
   return httpServer;
 }
