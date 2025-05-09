@@ -114,7 +114,7 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
        const dialOptions: ExtendedDialAttributes = {
         callerId: process.env.TWILIO_PHONE_NUMBER || '',
         statusCallback: statusCallbackUrl,
-        statusCallbackEvent: ['completed']
+       
       };
        twiml.dial(dialOptions, forwardNum);
     }
