@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { ZodError } from "zod";
@@ -214,6 +214,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: fromZodError(error).message });
       }
       res.status(500).json({ message: "Error logging call" });
+    }
+  });
+
+  // NEW ENDPOINT: Get all call records with contact information
+  app.get("/api/calls", async (req: Request, res: Response) => {
+    try {
+      console.log("GET /api/calls requested");
+      
+      // Query Supabase for all calls with joined contact information, ordered by created_at desc
+      const { data: calls, error } = await supabase
+        .from('calls')
+        .select(`
+          *,
+          contacts (
+            first_name,
+            last_name
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("Supabase error fetching calls:", error);
+        return res.status(500).json({ message: "Database error fetching calls" });
+      }
+      
+      // If no calls found, return empty array
+      if (!calls || calls.length === 0) {
+        console.log("No call records found");
+        return res.status(200).json([]);
+      }
+      
+      console.log(`Found ${calls.length} call records`);
+      
+      // Map the calls with joined contact data to the desired response format
+      const callsWithContactInfo = calls.map(call => ({
+        id: call.id,
+        call_sid: call.call_sid,
+        direction: call.direction,
+        from_number: call.from_number,
+        to_number: call.to_number,
+        status: call.status,
+        duration: call.duration,
+        created_at: call.created_at,
+        updated_at: call.updated_at,
+        contact_id: call.contact_id,
+        contact_first_name: call.contacts ? call.contacts.first_name : null,
+        contact_last_name: call.contacts ? call.contacts.last_name : null
+      }));
+      
+      res.status(200).json(callsWithContactInfo);
+    } catch (error) {
+      console.error("Error fetching call records:", error);
+      res.status(500).json({ message: "Error fetching call records" });
     }
   });
 
