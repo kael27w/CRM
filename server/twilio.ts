@@ -15,16 +15,22 @@ interface ExtendedDialAttributes {
 
 export const twilioWebhook = (baseUrl: string) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN || '';
+
   if (!authToken) {
-    console.error('CRITICAL: TWILIO_AUTH_TOKEN is not set. Request validation will fail.');
-    // You might want to throw an error here or ensure it doesn't proceed
+    // Log a critical error if the auth token is missing.
+    // The request will likely fail validation or Twilio SDK might error.
+    console.error('CRITICAL_ERROR: TWILIO_AUTH_TOKEN is not set. Request validation will likely fail.');
   }
   if (!baseUrl) {
-    console.error('CRITICAL: baseUrl for Twilio webhook validation is not set. Request validation will fail.');
+    // Log a critical error if the baseUrl is missing, as validation needs it.
+    console.error('CRITICAL_ERROR: baseUrl for Twilio webhook validation is empty or not set. Request validation will likely fail.');
   }
-  console.log(`[DEBUG] Twilio webhook middleware setup. URL for validation: ${baseUrl}`);
-  return twilio.webhook({ validate: true, url: baseUrl }); // Re-enable this
+  console.log(`[DEBUG] Twilio webhook middleware setup. Validation URL: ${baseUrl}, AuthToken Present: ${!!authToken}`);
+
+  // Return the actual Twilio validation middleware
+  return twilio.webhook({ validate: true, url: baseUrl });
 };
+
 
 /**
  * Handles incoming Twilio voice webhook requests
