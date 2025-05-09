@@ -148,49 +148,61 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * Handles Twilio status callback webhook requests
- */
+
+
 export const handleStatusCallback = async (req: Request, res: Response) => {
-  const callSid = req.body.CallSid || 'UNKNOWN_SID_STATUS';
-  console.log(`[${callSid}] handleStatusCallback START`);
+  const outgoingCallSid = req.body.CallSid || 'UNKNOWN_OUTGOING_SID'; // SID of the dialed leg
+  const parentCallSid = req.body.ParentCallSid || req.body.DialCallSid; // Twilio might use DialCallSid for parent on simple Dial
+  const effectiveCallSidToUpdate = parentCallSid || outgoingCallSid; // Prefer ParentCallSid if available
+
+  console.log(`[${outgoingCallSid}] handleStatusCallback START. Parent/DialCallSid: ${parentCallSid}. Will attempt to update record for SID: ${effectiveCallSidToUpdate}`);
 
   try {
     const callStatus = req.body.CallStatus;
     const duration = parseInt(req.body.CallDuration || '0', 10);
-    console.log(`[${callSid}] Data: Status=${callStatus}, Duration=${duration}`);
+    const twilioErrorCode = req.body.ErrorCode; // Capture Twilio error code if any
 
-    if (!callSid || callSid === 'UNKNOWN_SID_STATUS') { // Check for our default too
-      console.error(`[${callSid}] Missing CallSid in status callback.`);
-      return res.status(400).json({ error: 'Missing CallSid parameter' });
+    console.log(`[${outgoingCallSid}] Data: Status=${callStatus}, Duration=${duration}, TwilioErrorCode=${twilioErrorCode}`);
+
+    if (!effectiveCallSidToUpdate || effectiveCallSidToUpdate.startsWith('UNKNOWN_')) {
+      console.error(`[${outgoingCallSid}] Missing or invalid CallSid/ParentCallSid to update in status callback.`);
+      return res.status(400).send('Missing CallSid/ParentCallSid to identify call record.');
     }
 
-    // Update the call record with the final status and duration
-    console.log(`[${callSid}] Attempting to update call record in Supabase...`);
-    const { error: updateError } = await supabase
+    let updatePayload: any = {
+      status: callStatus,
+      duration: duration,
+      updated_at: new Date()
+    };
+
+    if (twilioErrorCode) {
+      updatePayload.notes = `Twilio Error: ${twilioErrorCode}. ${req.body.ErrorMessage || ''}`.trim();
+    }
+
+    console.log(`[${outgoingCallSid}] Attempting to update call record in Supabase for SID: ${effectiveCallSidToUpdate} with payload:`, updatePayload);
+    const { data, error: updateError } = await supabase
       .from('calls')
-      .update({
-        status: callStatus,
-        duration: duration,
-        updated_at: new Date() // Use Date object directly
-      })
-      .eq('call_sid', callSid);
+      .update(updatePayload)
+      .eq('call_sid', effectiveCallSidToUpdate) // Update based on the incoming (parent) call's SID
+      .select(); // Select to see if anything was updated
 
     if (updateError) {
-      console.error(`[${callSid}] Supabase call log UPDATE error:`, updateError.message);
-      // Twilio doesn't care about the response body on status callbacks as much,
-      // but we should log the error. A 500 might make Twilio retry, which isn't ideal.
-      // Let's send 200 OK so Twilio stops.
+      console.error(`[${outgoingCallSid}] Supabase call log UPDATE error for SID ${effectiveCallSidToUpdate}:`, updateError.message);
       return res.status(200).send('Error updating record, but acknowledged.');
     }
 
-    console.log(`[${callSid}] Successfully updated call record.`);
-    res.status(200).send(); // Send 200 OK to Twilio
-    console.log(`[${callSid}] handleStatusCallback END - Response sent.`);
+    if (data && data.length > 0) {
+        console.log(`[${outgoingCallSid}] Successfully updated call record for SID ${effectiveCallSidToUpdate}.`);
+    } else {
+        console.warn(`[${outgoingCallSid}] No call record found in Supabase for SID ${effectiveCallSidToUpdate} to update. This might be expected if ParentCallSid was not available and outgoingCallSid was used.`);
+    }
+
+    res.status(200).send();
+    console.log(`[${outgoingCallSid}] handleStatusCallback END - Response sent for SID ${effectiveCallSidToUpdate}.`);
 
   } catch (error: any) {
-    console.error(`[${callSid}] UNEXPECTED ERROR in handleStatusCallback:`, error.message, error.stack);
-    res.status(500).send('Internal server error'); // Send 500 to Twilio for unexpected errors
-    console.log(`[${callSid}] handleStatusCallback END - Error response sent.`);
+    console.error(`[${outgoingCallSid}] UNEXPECTED ERROR in handleStatusCallback:`, error.message, error.stack);
+    res.status(500).send('Internal server error');
+    console.log(`[${outgoingCallSid}] handleStatusCallback END - Error response sent.`);
   }
 };
