@@ -12,27 +12,18 @@ interface ExtendedDialAttributes {
   // Add other standard DialAttributes if needed
 }
 
-/**
- * Validates the incoming Twilio request using the Twilio auth token
- */
-export const twilioWebhook = (baseUrl: string) => {
-  // TEMPORARY: Always bypass validation for testing
-  console.log('[DEBUG] Twilio webhook middleware setup. Will bypass validation for testing.');
-  return (req: Request, res: Response, next: NextFunction) => {
-    console.log('[DEBUG] Twilio webhook middleware called. Bypassing validation for test.');
-    next();
-  };
 
-  // Original code commented out for now
-  /*
+export const twilioWebhook = (baseUrl: string) => {
   const authToken = process.env.TWILIO_AUTH_TOKEN || '';
-  // For production, always validate. For local dev, you might bypass.
-  // if (process.env.NODE_ENV !== 'production' && process.env.BYPASS_TWILIO_VALIDATION === 'true') {
-  //   console.warn('Development mode: Bypassing Twilio signature validation. DO NOT USE IN PRODUCTION.');
-  //   return (req: Request, res: Response, next: Function) => next();
-  // }
-  return twilio.webhook({ validate: true, url: baseUrl });
-  */
+  if (!authToken) {
+    console.error('CRITICAL: TWILIO_AUTH_TOKEN is not set. Request validation will fail.');
+    // You might want to throw an error here or ensure it doesn't proceed
+  }
+  if (!baseUrl) {
+    console.error('CRITICAL: baseUrl for Twilio webhook validation is not set. Request validation will fail.');
+  }
+  console.log(`[DEBUG] Twilio webhook middleware setup. URL for validation: ${baseUrl}`);
+  return twilio.webhook({ validate: true, url: baseUrl }); // Re-enable this
 };
 
 /**

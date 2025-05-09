@@ -375,22 +375,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+
   // =========== TWILIO ROUTES ===========
   console.log("Registering Twilio routes...");
-  
-  // Define the base URL for Twilio webhook validation
-  const twilioWebhookBaseUrl = process.env.API_URL ? `${process.env.API_URL}/api/twilio/voice` : '';
-  console.log(`Twilio webhook base URL: ${twilioWebhookBaseUrl}`);
-  
+
+  // Define the base URL for Twilio VOICE webhook validation
+  const voiceWebhookUrl = process.env.TWILIO_WEBHOOK_BASE_URL || (process.env.API_URL ? `${process.env.API_URL}/api/twilio/voice` : '');
+  console.log(`Twilio VOICE webhook URL for validation: ${voiceWebhookUrl}`);
+
   // Twilio voice webhook endpoint
-  app.post("/api/twilio/voice", twilioWebhook(twilioWebhookBaseUrl), handleVoiceWebhook);
+  app.post("/api/twilio/voice", twilioWebhook(voiceWebhookUrl), handleVoiceWebhook);
   console.log("Registered POST /api/twilio/voice route");
-  
+
+  // Define the base URL for Twilio STATUS CALLBACK webhook validation
+  const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || (process.env.API_URL ? `${process.env.API_URL}/api/twilio/status-callback` : '');
+  console.log(`Twilio STATUS CALLBACK webhook URL for validation: ${statusCallbackUrl}`);
+
   // Twilio status callback endpoint
-  app.post("/api/twilio/status-callback", twilioWebhook(""), handleStatusCallback);
+  app.post("/api/twilio/status-callback", twilioWebhook(statusCallbackUrl), handleStatusCallback); // Pass the correct URL
   console.log("Registered POST /api/twilio/status-callback route");
 
-  // Create the HTTP server
+  // ... (test routes if you still have them) ...
+
   const httpServer = createServer(app);
   console.log("All routes registered successfully");
 
