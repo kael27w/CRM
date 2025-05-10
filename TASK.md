@@ -89,3 +89,11 @@
 - [ ] Handle errors gracefully in API requests with user-friendly error messages
 - [ ] Implement proper loading states for all async operations
 - [ ] Add confirmation dialogs for destructive actions (delete, complete, etc.)
+
+## Debugging (Today's Date - Replace with Actual Date)
+- [ ] **Investigate API Connectivity Issue (Render)**
+  - [ ] Client (localhost:5173) to Render (crm-2lmw.onrender.com) requests for GET /api/stats/overview and GET /api/tasks result in 500 errors but no server-side logs on Render.
+  - [ ] Verify client-side fetch logic and URL construction (VITE_API_BASE_URL).
+  - [ ] Investigate Vite proxy interference.
+  - [ ] Simulate client requests with curl.
+  - [ ] Review backend for any pre-routing middleware.
