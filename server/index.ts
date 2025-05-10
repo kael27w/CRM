@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from 'cors';
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import { createServer } from "http";
@@ -11,23 +12,32 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parsers - make sure these are before any route handlers
+// --- CORS Configuration ---
+const allowedOrigins = [
+  'http://localhost:5173', // For local client development
+  // TODO: Add your production client domain here later if it's different
+  // e.g., 'https://your-deployed-client.onrender.com'
+];
+
+app.use(cors({
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `CORS policy: The origin '${origin}' is not allowed access.`;
+      console.warn(msg); // Log the blocked origin
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true, // Allow cookies and authorization headers to be sent and received
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Specify allowed HTTP methods
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'] // Specify allowed headers
+}));
+
+// Body parsers - make sure these are after CORS and before any route handlers
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-
-// Add CORS headers for development
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
-});
 
 app.use((req, res, next) => {
   const start = Date.now();
