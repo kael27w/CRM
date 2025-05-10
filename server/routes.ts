@@ -186,14 +186,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === TASK ROUTES (from activities table) ===
   app.get("/api/tasks", async (req: Request, res: Response) => {
-    console.log('EMERGENCY_DEBUG: GET /api/tasks - HANDLER REACHED!');
+    console.log("GET /api/tasks - Handler reached. Fetching tasks from Supabase.");
     try {
-      // Intentionally do NO Supabase calls for this test
-      console.log('EMERGENCY_DEBUG: GET /api/tasks - Sending dummy empty array response.');
-      res.status(200).json([]);
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('type', 'task')
+        .order('created_at', { ascending: false });
+
+      if (tasksError) {
+        console.error("GET /api/tasks - Supabase error fetching tasks:", tasksError.message, tasksError.details);
+        return res.status(500).json({ message: "Database error fetching tasks", error: tasksError.message });
+      }
+
+      if (!tasksData) {
+        console.log("GET /api/tasks - No tasks found, returning empty array.");
+        return res.status(200).json([]);
+      }
+
+      console.log(`GET /api/tasks - Successfully fetched ${tasksData.length} tasks.`);
+      res.status(200).json(tasksData);
     } catch (error: any) {
-      console.error('EMERGENCY_DEBUG: GET /api/tasks - UNEXPECTED ERROR IN DUMMY HANDLER:', error.message, error.stack);
-      res.status(500).json({ error: 'Internal server error in dummy tasks handler', details: error.message });
+      console.error("GET /api/tasks - Unexpected error in handler:", error.message, error.stack);
+      res.status(500).json({ message: "Internal server error fetching tasks", details: error.message });
     }
   });
 
@@ -236,21 +251,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === STATS ROUTES ===
   app.get("/api/stats/overview", async (req: Request, res: Response) => {
-    console.log('EMERGENCY_DEBUG: GET /api/stats/overview - HANDLER REACHED!');
+    console.log("GET /api/stats/overview - Handler reached. Fetching overview statistics from Supabase.");
     try {
-      // Intentionally do NO Supabase calls for this test
-      const dummyStats = {
-        activeContacts: 0,
-        activeDeals: 0,
-        pendingTasks: 0,
-        recentCalls: 0,
-        totalRevenue: 0
+      // Define the date for "recent" calls (e.g., last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      console.log("GET /api/stats/overview - Initiating parallel Supabase queries.");
+
+      const [
+        { data: contactsData, error: contactsError, count: activeContactsCount },
+        { data: dealsData, error: dealsError, count: activeDealsCount },
+        { data: tasksData, error: tasksError, count: pendingTasksCount },
+        { data: callsData, error: callsError, count: recentCallsCount }
+      ] = await Promise.all([
+        supabase.from('contacts').select('*', { count: 'exact', head: true }), // Count active contacts
+        supabase.from('deals').select('amount', { count: 'exact', head: false }), // Get all deal amounts for sum, and count
+        supabase.from('activities').select('*', { count: 'exact', head: true }).eq('type', 'task').neq('status', 'completed'), // Count pending tasks
+        supabase.from('calls').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo.toISOString()) // Count calls in the last 7 days
+      ]);
+
+      console.log("GET /api/stats/overview - Supabase queries completed.");
+
+      if (contactsError) {
+        console.error("GET /api/stats/overview - Supabase error fetching contacts count:", contactsError.message, contactsError.details);
+        // Decide if you want to fail the whole request or return partial data
+      }
+      if (dealsError) {
+        console.error("GET /api/stats/overview - Supabase error fetching deals:", dealsError.message, dealsError.details);
+      }
+      if (tasksError) {
+        console.error("GET /api/stats/overview - Supabase error fetching pending tasks count:", tasksError.message, tasksError.details);
+      }
+      if (callsError) {
+        console.error("GET /api/stats/overview - Supabase error fetching recent calls count:", callsError.message, callsError.details);
+      }
+      
+      // Consolidate potential errors for a single error response if any query failed critically
+      const errors = [contactsError, dealsError, tasksError, callsError].filter(Boolean);
+      if (errors.length > 0) {
+          console.error(`GET /api/stats/overview - Encountered ${errors.length} errors during Supabase queries. First error:`, errors[0]?.message);
+          // It might be better to throw a single error here or construct a more specific error response
+          // For now, returning a generic error if any part fails.
+          return res.status(500).json({ message: "Database error fetching overview statistics", details: errors.map(e => e?.message).join(', ') });
+      }
+
+      // Calculate total revenue from deals
+      let totalRevenue = 0;
+      if (dealsData) {
+        totalRevenue = dealsData.reduce((sum, deal) => sum + (Number(deal.amount) || 0), 0);
+      }
+      console.log(`GET /api/stats/overview - Calculated total revenue: ${totalRevenue}`);
+
+      const stats = {
+        activeContacts: activeContactsCount || 0,
+        activeDeals: activeDealsCount || 0,
+        pendingTasks: pendingTasksCount || 0,
+        recentCalls: recentCallsCount || 0,
+        totalRevenue: totalRevenue
       };
-      console.log('EMERGENCY_DEBUG: GET /api/stats/overview - Sending dummy success response.');
-      res.status(200).json(dummyStats);
+
+      console.log("GET /api/stats/overview - Successfully compiled stats:", stats);
+      res.status(200).json(stats);
+
     } catch (error: any) {
-      console.error('EMERGENCY_DEBUG: GET /api/stats/overview - UNEXPECTED ERROR IN DUMMY HANDLER:', error.message, error.stack);
-      res.status(500).json({ error: 'Internal server error in dummy overview handler', details: error.message });
+      console.error("GET /api/stats/overview - Unexpected error in handler:", error.message, error.stack);
+      res.status(500).json({ message: "Internal server error fetching overview statistics", details: error.message });
     }
   });
 
