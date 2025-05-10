@@ -351,9 +351,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Task routes - now using activity schema for tasks
   app.get("/api/tasks", async (req, res) => {
     try {
-      const tasks = await storage.getTasks();
-      res.json(tasks);
+      console.log("GET /api/tasks requested");
+      
+      // Query Supabase for activities with type='task'
+      const { data: tasks, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('type', 'task')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("Supabase error fetching tasks:", error);
+        return res.status(500).json({ message: "Database error fetching tasks" });
+      }
+      
+      console.log(`Found ${tasks?.length || 0} tasks`);
+      res.json(tasks || []);
     } catch (error) {
+      console.error("Error fetching tasks:", error);
       res.status(500).json({ message: "Error fetching tasks" });
     }
   });
@@ -415,6 +430,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Error fetching dashboard stats" });
+    }
+  });
+
+  // NEW ENDPOINT: Overview stats for dashboard
+  app.get("/api/stats/overview", async (req, res) => {
+    try {
+      console.log("GET /api/stats/overview requested");
+      
+      // Get counts from various tables
+      const contactsPromise = supabase
+        .from('contacts')
+        .select('id', { count: 'exact', head: true });
+        
+      const dealsPromise = supabase
+        .from('deals')
+        .select('id, amount', { count: 'exact' });
+        
+      const activitiesPromise = supabase
+        .from('activities')
+        .select('id', { count: 'exact', head: true })
+        .eq('type', 'task')
+        .eq('completed', false);
+        
+      const callsPromise = supabase
+        .from('calls')
+        .select('id', { count: 'exact', head: true });
+      
+      // Wait for all promises to resolve
+      const [contactsResult, dealsResult, activitiesResult, callsResult] = 
+        await Promise.all([contactsPromise, dealsPromise, activitiesPromise, callsPromise]);
+      
+      // Handle any errors
+      if (contactsResult.error) {
+        console.error("Error fetching contacts count:", contactsResult.error);
+        return res.status(500).json({ message: "Error fetching stats" });
+      }
+      
+      if (dealsResult.error) {
+        console.error("Error fetching deals:", dealsResult.error);
+        return res.status(500).json({ message: "Error fetching stats" });
+      }
+      
+      if (activitiesResult.error) {
+        console.error("Error fetching activities:", activitiesResult.error);
+        return res.status(500).json({ message: "Error fetching stats" });
+      }
+      
+      if (callsResult.error) {
+        console.error("Error fetching calls:", callsResult.error);
+        return res.status(500).json({ message: "Error fetching stats" });
+      }
+      
+      // Calculate total revenue from deals
+      const totalRevenue = dealsResult.data?.reduce((sum, deal) => 
+        sum + (deal.amount || 0), 0) || 0;
+      
+      // Construct the stats object
+      const stats = {
+        activeContacts: contactsResult.count || 0,
+        activeDeals: dealsResult.count || 0,
+        pendingTasks: activitiesResult.count || 0,
+        recentCalls: callsResult.count || 0,
+        totalRevenue
+      };
+      
+      console.log("Overview stats:", stats);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching overview stats:", error);
+      res.status(500).json({ message: "Error fetching overview stats" });
     }
   });
 
