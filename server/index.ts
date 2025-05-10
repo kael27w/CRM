@@ -117,9 +117,9 @@ app.get("/api/debug/supabase", async (req, res) => {
   });
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    console.error('GLOBAL_ERROR_HANDLER_CAUGHT_ERROR: ', err.message, err.stack);
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    
     log(`Error: ${err.stack || err.message || 'Unknown error'}`);
     res.status(status).json({ message });
   });

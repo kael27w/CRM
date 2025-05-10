@@ -14,7 +14,7 @@ import { supabase, normalizePhone } from "./supabase.js";
 import { twilioWebhook, handleVoiceWebhook, handleStatusCallback } from "./twilio.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  console.log("Starting to register routes...");
+  console.log('REGISTER_ROUTES_CALLED: Entry point of registerRoutes reached.');
 
   // === CONTACT ROUTES ===
   app.get("/api/contacts", async (req: Request, res: Response) => {
