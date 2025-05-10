@@ -186,36 +186,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === TASK ROUTES (from activities table) ===
   app.get("/api/tasks", async (req: Request, res: Response) => {
+    console.log('EMERGENCY_DEBUG: GET /api/tasks - HANDLER REACHED!');
     try {
-      console.log('GET /api/tasks - Request received');
-      console.log('GET /api/tasks - Fetching tasks data from Supabase...');
-      const tasksResult = await supabase
-        .from('activities')
-        .select('*')
-        .eq('type', 'task')
-        .order('created_at', { ascending: false });
-
-      console.log('GET /api/tasks - Supabase tasksResult:', {
-        data: tasksResult.data,
-        error: tasksResult.error,
-        count: tasksResult.count // Supabase JS v2 count is on the main object, not data
-      });
-
-      if (tasksResult.error) {
-        console.error('GET /api/tasks - Supabase error fetching tasks:', {
-          message: tasksResult.error.message,
-          details: tasksResult.error.details,
-          hint: tasksResult.error.hint
-        });
-        return res.status(500).json({ error: tasksResult.error.message });
-      }
-      const tasksData = tasksResult.data;
-      console.log('GET /api/tasks - Tasks data retrieved:', tasksData);
-      res.json(tasksData || []);
+      // Intentionally do NO Supabase calls for this test
+      console.log('EMERGENCY_DEBUG: GET /api/tasks - Sending dummy empty array response.');
+      res.status(200).json([]);
     } catch (error: any) {
-      console.error('GET /api/tasks - Error in handler:', error.message);
-      console.error(error.stack);
-      return res.status(500).json({ error: 'Internal server error fetching tasks' });
+      console.error('EMERGENCY_DEBUG: GET /api/tasks - UNEXPECTED ERROR IN DUMMY HANDLER:', error.message, error.stack);
+      res.status(500).json({ error: 'Internal server error in dummy tasks handler', details: error.message });
     }
   });
 
@@ -258,66 +236,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === STATS ROUTES ===
   app.get("/api/stats/overview", async (req: Request, res: Response) => {
+    console.log('EMERGENCY_DEBUG: GET /api/stats/overview - HANDLER REACHED!');
     try {
-      console.log('GET /api/stats/overview - Request received');
-
-      const contactsPromise = supabase
-        .from('contacts')
-        .select('id', { count: 'exact', head: true });
-      console.log('GET /api/stats/overview - Fetching deals data from Supabase...');
-      const dealsResultPromise = supabase.from('deals').select('amount', { count: 'exact' });
-
-      const activitiesPromise = supabase
-        .from('activities')
-        .select('id', { count: 'exact', head: true })
-        .eq('type', 'task')
-        .eq('completed', false);
-
-      const callsPromise = supabase
-        .from('calls')
-        .select('id', { count: 'exact', head: true });
-
-      const [contactsResult, dealsResult, activitiesResult, callsResult] =
-        await Promise.all([contactsPromise, dealsResultPromise, activitiesPromise, callsPromise]);
-
-      console.log('GET /api/stats/overview - Supabase contactsResult:', { error: contactsResult.error, count: contactsResult.count });
-      console.log('GET /api/stats/overview - Supabase dealsResult:', { data: dealsResult.data, error: dealsResult.error, count: dealsResult.count });
-      console.log('GET /api/stats/overview - Supabase activitiesResult:', { error: activitiesResult.error, count: activitiesResult.count });
-      console.log('GET /api/stats/overview - Supabase callsResult:', { error: callsResult.error, count: callsResult.count });
-
-      if (contactsResult.error) throw new Error(`Contacts count error: ${contactsResult.error.message}`);
-      if (dealsResult.error) throw new Error(`Deals data error: ${dealsResult.error.message}`);
-      if (activitiesResult.error) throw new Error(`Activities count error: ${activitiesResult.error.message}`);
-      if (callsResult.error) throw new Error(`Calls count error: ${callsResult.error.message}`);
-
-      const dealsData = dealsResult.data;
-      let totalDealAmount = 0;
-      if (Array.isArray(dealsData)) {
-        totalDealAmount = dealsData.reduce((sum, deal) => {
-          const amount = deal.amount;
-          if (typeof amount !== 'number' && amount !== null) { // Allow null, treat as 0
-            console.warn('GET /api/stats/overview - Non-numeric or non-null deal.amount encountered:', amount);
-          }
-          return sum + (Number(amount) || 0);
-        }, 0);
-      } else {
-        console.warn('GET /api/stats/overview - dealsResult.data is not an array or is undefined');
-      }
-      console.log('GET /api/stats/overview - Total deal amount calculated:', totalDealAmount);
-
-      const stats = {
-        activeContacts: contactsResult.count || 0,
-        activeDeals: dealsResult.count || 0,
-        pendingTasks: activitiesResult.count || 0,
-        recentCalls: callsResult.count || 0,
-        totalRevenue: totalDealAmount
+      // Intentionally do NO Supabase calls for this test
+      const dummyStats = {
+        activeContacts: 0,
+        activeDeals: 0,
+        pendingTasks: 0,
+        recentCalls: 0,
+        totalRevenue: 0
       };
-      console.log("GET /api/stats/overview - Overview stats:", stats);
-      res.json(stats);
+      console.log('EMERGENCY_DEBUG: GET /api/stats/overview - Sending dummy success response.');
+      res.status(200).json(dummyStats);
     } catch (error: any) {
-      console.error('GET /api/stats/overview - Error in handler:', error.message);
-      console.error(error.stack);
-      return res.status(500).json({ error: 'Internal server error fetching overview stats', details: error.message });
+      console.error('EMERGENCY_DEBUG: GET /api/stats/overview - UNEXPECTED ERROR IN DUMMY HANDLER:', error.message, error.stack);
+      res.status(500).json({ error: 'Internal server error in dummy overview handler', details: error.message });
     }
   });
 
