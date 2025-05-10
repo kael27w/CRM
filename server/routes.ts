@@ -212,6 +212,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/activities/:id - Update an existing activity (e.g., mark task as complete)
+  app.patch("/api/activities/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updates = req.body;
+    console.log(`PATCH /api/activities/${id} - Request received. Body:`, updates);
+
+    if (!id) {
+      console.warn("PATCH /api/activities/:id - Missing ID parameter.");
+      return res.status(400).json({ message: "Activity ID parameter is required" });
+    }
+
+    if (Object.keys(updates).length === 0) {
+      console.warn(`PATCH /api/activities/${id} - Empty request body.`);
+      return res.status(400).json({ message: "Request body cannot be empty for update" });
+    }
+
+    try {
+      // Ensure updated_at is set
+      const updatesWithTimestamp = {
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log(`PATCH /api/activities/${id} - Attempting to update activity in Supabase with:`, updatesWithTimestamp);
+      const { data: updatedActivity, error } = await supabase
+        .from('activities')
+        .update(updatesWithTimestamp)
+        .eq('id', id)
+        .select()
+        .single(); // .single() is important to get the updated record or null if not found/matches multiple (though id should be unique)
+
+      if (error) {
+        console.error(`PATCH /api/activities/${id} - Supabase error updating activity:`, error.message, error.details);
+        // Check for specific error types, e.g., PostgREST error P0002 (row not found)
+        if (error.code === 'PGRST204') { // PGRST204: No Rows Selected (often means record not found for update/delete)
+            console.warn(`PATCH /api/activities/${id} - Activity not found for update.`);
+            return res.status(404).json({ message: `Activity with ID ${id} not found` });
+        }
+        return res.status(500).json({ message: "Database error updating activity", error: error.message });
+      }
+
+      if (!updatedActivity) {
+        // This case might also be covered by error.code PGRST204, but as a fallback:
+        console.warn(`PATCH /api/activities/${id} - Activity not found or no changes made (no data returned).`);
+        return res.status(404).json({ message: `Activity with ID ${id} not found or no update was performed` });
+      }
+
+      console.log(`PATCH /api/activities/${id} - Activity updated successfully:`, updatedActivity);
+      res.status(200).json(updatedActivity);
+    } catch (error: any) {
+      console.error(`PATCH /api/activities/${id} - Unexpected error in handler:`, error.message, error.stack);
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      res.status(500).json({ message: "Internal server error updating activity", details: error.message });
+    }
+  });
+
   // You might need POST /api/activities (or /api/tasks if preferred) to create tasks
   // Example for POST /api/activities (can be adapted for tasks)
   app.post("/api/activities", async (req: Request, res: Response) => {
