@@ -48,12 +48,24 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask, showView
     }
   };
 
-  const handleTaskAdded = async (newTask: Task) => {
+  const handleTaskAdded = async (newTask: any) => {
     // In a real implementation, this would call an API to save the task
     console.log('Adding new task:', newTask);
     
+    // Map API response (which uses snake_case) to our client model (which uses camelCase)
+    const formattedTask: Task = {
+      id: newTask.id,
+      title: newTask.title,
+      description: newTask.description,
+      dueDate: newTask.dueDate || newTask.due_date,
+      completed: newTask.completed || false,
+      createdAt: newTask.created_at || new Date().toISOString(),
+      // Add any other required fields with sensible defaults
+      assignedToId: 1, // Default value
+    };
+    
     // Add the newly created task to our display list
-    setDisplayTasks(prev => [newTask, ...prev]);
+    setDisplayTasks(prev => [formattedTask, ...prev]);
     
     // Refresh data from the server (or mock data in this case)
     await refetch();
@@ -142,6 +154,12 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask, showView
                   {task.dueDate && (
                     <Badge variant={getBadgeVariant(task.dueDate)}>
                       {getBadgeText(task.dueDate)}
+                    </Badge>
+                  )}
+                  {/* Also support due_date property from API */}
+                  {!task.dueDate && (task as any).due_date && (
+                    <Badge variant={getBadgeVariant((task as any).due_date)}>
+                      {getBadgeText((task as any).due_date)}
                     </Badge>
                   )}
                 </div>

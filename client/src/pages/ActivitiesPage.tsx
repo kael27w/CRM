@@ -2,6 +2,7 @@ import React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import CallLogDisplay from "../components/activities/CallLogDisplay";
 import TestComponent from "../components/activities/TestComponent";
+import { TaskDisplay } from "../components/activities/TaskDisplay";
 
 /**
  * Activities page component that displays different activity types in tabs
@@ -34,7 +35,7 @@ export function ActivitiesPage() {
         
         <TabsContent value="tasks">
           <div className="p-4 border rounded-md bg-white shadow-sm">
-            <p className="p-4">Tasks feature coming soon.</p>
+            <TaskDisplay />
           </div>
         </TabsContent>
         

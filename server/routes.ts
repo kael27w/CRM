@@ -275,34 +275,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/activities", async (req: Request, res: Response) => {
     try {
       console.log("POST /api/activities - Request received. Body:", req.body);
-      // const validatedData = insertActivitySchema.parse(req.body); // Add Zod validation
-      // For tasks, ensure 'type' is 'task'
-      const activityData = { ...req.body };
-      if (req.path.includes('/tasks') && !activityData.type) { // If specifically creating a task via /api/tasks
-          activityData.type = 'task';
+      
+      // Validate with Zod (assuming insertActivitySchema is appropriate or a new one is made)
+      // For now, we'll manually construct and ensure 'type' and defaults for tasks.
+      // const validatedData = insertActivitySchema.parse(req.body);
+
+      let activityPayload = { ...req.body };
+
+      // If the client intends to create a task, ensure critical fields are set.
+      // The client should ideally always send type: 'task'.
+      if (activityPayload.type === 'task') {
+        activityPayload = {
+          status: 'pending', // Default status for new tasks
+          completed: false,  // Default completion state for new tasks
+          ...activityPayload, // Client-provided values will override defaults if present
+          type: 'task',      // Ensure type is explicitly 'task'
+        };
+      } else if (!activityPayload.type) {
+        // If type is not specified at all by the client, and this endpoint is generic,
+        // this could be an issue. For creating a TASK specifically, client MUST send type: 'task'.
+        // If this endpoint is ONLY for tasks, then uncomment below:
+        // activityPayload.type = 'task';
+        // activityPayload.status = activityPayload.status || 'pending';
+        // activityPayload.completed = activityPayload.completed === undefined ? false : activityPayload.completed;
+        // However, for now, we'll assume client sends type: 'task' for tasks.
       }
+      
+      // Ensure due_date is either a valid ISO string or null.
+      // Supabase might handle invalid date strings by erroring or setting to null depending on column type.
+      // It's good practice to validate/sanitize dates.
+      if (activityPayload.due_date && isNaN(new Date(activityPayload.due_date).getTime())) {
+        console.warn("POST /api/activities - Invalid due_date received:", activityPayload.due_date);
+        activityPayload.due_date = null; // Or handle as an error
+      }
+
 
       const { data: newActivity, error } = await supabase
           .from('activities')
-          .insert([activityData])
+          .insert([activityPayload]) // insert expects an array
           .select()
           .single();
 
       if (error) {
-          console.error("POST /api/activities - Supabase error:", error);
-          return res.status(500).json({ message: "Database error creating activity" });
+          console.error("POST /api/activities - Supabase error creating activity:", error);
+          // More specific error handling based on Supabase error codes can be added
+          // e.g., if (error.code === '23505') { /* unique constraint violation */ }
+          return res.status(500).json({ message: "Database error creating activity", details: error.message });
       }
       if (!newActivity) {
-          return res.status(500).json({ message: "Failed to create activity" });
+          // This case should ideally be caught by the Supabase error above
+          return res.status(500).json({ message: "Failed to create activity (no data returned)" });
       }
-      console.log("POST /api/activities - Activity created:", newActivity);
+      console.log("POST /api/activities - Activity created successfully:", newActivity);
       res.status(201).json(newActivity);
     } catch (error: any) {
-        console.error("POST /api/activities - Error:", error.message, error.stack);
+        console.error("POST /api/activities - Unexpected error in handler:", error.message, error.stack);
         if (error instanceof ZodError) {
-            return res.status(400).json({ message: fromZodError(error).message });
+            // Make sure you have `insertActivitySchema` defined and imported for this to work
+            // return res.status(400).json({ message: fromZodError(error).message });
+            return res.status(400).json({ message: "Invalid data format for activity.", details: fromZodError(error).toString() });
         }
-        res.status(500).json({ message: "Error creating activity" });
+        res.status(500).json({ message: "Internal server error creating activity", details: error.message });
     }
   });
 

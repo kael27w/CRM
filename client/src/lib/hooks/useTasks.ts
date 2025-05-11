@@ -67,9 +67,9 @@ export function useTasks() {
   const toggleTaskMutation = useMutation({
     mutationFn: async ({ id, completed }: { id: number, completed: boolean }) => {
       try {
-        const url = `/api/tasks/${id}`;
+        const url = `/api/activities/${id}`;
         const method = 'PATCH';
-        const body = { completed };
+        const body = { completed, status: completed ? 'completed' : 'pending' };
         
         const response = await apiRequest(method, url, body);
         if (!response.ok) {

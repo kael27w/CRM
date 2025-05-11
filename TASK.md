@@ -55,6 +55,19 @@
    - [ ] Implement data visualization for sales metrics
    - [ ] Add export capabilities for report data
 
+9. [x] **Create/Update Client-Side Task Components (Today's Date)**
+    - [x] Update `client/src/lib/api.ts` with `TaskEntry` interface, `fetchTasks`, and `updateTaskStatus` functions.
+    - [x] Create `client/src/components/activities/TaskDisplay.tsx` to display tasks and handle updates.
+    - [x] Integrate `TaskDisplay` into `client/src/pages/ActivitiesPage.tsx`.
+    - [x] Update `server/routes.ts` `POST /api/activities` to correctly handle task creation with defaults.
+    - [x] Add `createTask` function to `client/src/lib/api.ts`.
+    - [x] Provide an example of `useMutation` for task creation in the client.
+    - [ ] **Implement "Add Task" Form and `useMutation` Logic (Today's Date)**
+        - [ ] Create/Modify component for "Add Task" form using shadcn/ui.
+        - [ ] Implement `useMutation` for task creation, including `onSuccess` (invalidate queries, clear form) and `onError` (logging).
+        - [ ] Ensure form submission handler collects data, calls mutation, and provides debug logs.
+        - [ ] Integrate the form into the UI, potentially using a Dialog.
+
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)

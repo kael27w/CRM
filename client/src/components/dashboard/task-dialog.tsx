@@ -18,22 +18,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Calendar } from "lucide-react";
 import { CalendarIcon } from "lucide-react";
 import { Calendar as CalendarComponent } from "../ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { format } from "date-fns";
 import { cn } from "../../lib/utils";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { createTask, TaskEntry, NewTaskData } from "../../lib/api";
+import { toast } from 'sonner';
 
 interface TaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onTaskAdded: (task: any) => void;
-  existingTask?: any;
+  onTaskAdded?: (task: TaskEntry) => void;
+  existingTask?: Partial<TaskEntry>;
 }
 
 /**
- * Dialog for adding or editing a task
+ * Dialog for adding or editing a task using API integration
  */
 const TaskDialog: React.FC<TaskDialogProps> = ({
   open,
@@ -43,32 +45,56 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
 }) => {
   const [title, setTitle] = useState(existingTask?.title || '');
   const [description, setDescription] = useState(existingTask?.description || '');
-  const [dueDate, setDueDate] = useState<Date | undefined>(existingTask?.dueDate ? new Date(existingTask.dueDate) : undefined);
+  const [dueDate, setDueDate] = useState<Date | undefined>(
+    existingTask?.due_date ? new Date(existingTask.due_date) : undefined
+  );
   const [priority, setPriority] = useState(existingTask?.priority || 'medium');
 
+  const queryClient = useQueryClient();
+
+  const createTaskMutation = useMutation({
+    mutationFn: createTask,
+    onSuccess: (data) => {
+      console.log("Task created successfully, refetching tasks.", data);
+      toast.success("Task created successfully!");
+      
+      // Invalidate necessary queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      
+      // Call the callback if provided
+      if (onTaskAdded) {
+        onTaskAdded(data);
+      }
+      
+      // Reset form and close dialog
+      resetForm();
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      console.error("Error creating task:", error);
+      toast.error(`Error creating task: ${error.message}`);
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
+    console.log("Add Task form submission triggered!");
     e.preventDefault();
     
     if (!title.trim()) {
-      return; // Don't submit if title is empty
+      toast.error("Title is required to create a task.");
+      return;
     }
     
-    const newTask = {
-      id: existingTask?.id || Date.now(), // Generate a temporary ID if creating new task
-      title,
-      description,
-      dueDate: dueDate ? format(dueDate, 'yyyy-MM-dd') : undefined,
+    const taskDataToSubmit: NewTaskData = {
+      title: title.trim(),
+      description: description.trim() || undefined,
+      due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : undefined,
       priority,
-      completed: existingTask?.completed || false,
-      assignedToId: existingTask?.assignedToId || 1, // Current user ID
-      clientId: existingTask?.clientId,
-      policyId: existingTask?.policyId,
-      createdAt: existingTask?.createdAt || new Date().toISOString()
     };
     
-    onTaskAdded(newTask);
-    resetForm();
-    onOpenChange(false);
+    console.log("Form data to be sent:", taskDataToSubmit);
+    createTaskMutation.mutate(taskDataToSubmit);
   };
   
   const resetForm = () => {
@@ -129,29 +155,34 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
               <Label htmlFor="taskDueDate" className="text-right">
                 Due Date
               </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="taskDueDate"
-                    variant="outline"
-                    className={cn(
-                      "justify-start text-left font-normal col-span-3",
-                      !dueDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : "Select a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+              <div className="col-span-3">
+                <div className="border rounded-md p-3">
                   <CalendarComponent
                     mode="single"
                     selected={dueDate}
                     onSelect={setDueDate}
-                    initialFocus
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    initialFocus={false}
+                    className="rounded-md"
                   />
-                </PopoverContent>
-              </Popover>
+                </div>
+                {dueDate && (
+                  <div className="flex justify-between items-center mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {format(dueDate, "PPP")}
+                    </p>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setDueDate(undefined)}
+                      className="h-8 px-2"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
@@ -178,7 +209,15 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
             <Button type="button" variant="outline" onClick={handleCancel}>
               Cancel
             </Button>
-            <Button type="submit">{existingTask ? 'Save Changes' : 'Add Task'}</Button>
+            <Button 
+              type="submit" 
+              disabled={createTaskMutation.isPending}
+            >
+              {createTaskMutation.isPending 
+                ? 'Adding Task...' 
+                : existingTask ? 'Save Changes' : 'Add Task'
+              }
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
