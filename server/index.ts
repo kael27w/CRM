@@ -108,9 +108,44 @@ app.get("/api/debug/supabase", async (req, res) => {
   }
 });
 
+// MINIMAL DEBUG ROUTE
+app.get("/api/contacts/:contactId/all-activities", (req: Request, res: Response) => {
+  console.log('MINIMAL_DEBUG: /api/contacts/:contactId/all-activities HANDLER REACHED!');
+  console.log('MINIMAL_DEBUG: req.method:', req.method);
+  console.log('MINIMAL_DEBUG: req.url:', req.url);
+  console.log('MINIMAL_DEBUG: req.originalUrl:', req.originalUrl);
+  console.log('MINIMAL_DEBUG: req.path:', req.path);
+  console.log('MINIMAL_DEBUG: req.params:', JSON.stringify(req.params));
+  console.log('MINIMAL_DEBUG: contactId param:', req.params.contactId);
+  res.status(200).json({
+    message: "Minimal debug handler for /api/contacts/:contactId/all-activities was hit!",
+    contactId: req.params.contactId,
+    originalUrl: req.originalUrl,
+    path: req.path
+  });
+});
+
 (async () => {
+  // TEMPORARILY COMMENT OUT registerRoutes
   // Register all API routes first
-  const server = await registerRoutes(app);
+  // const server = await registerRoutes(app);
+
+  // Log all registered routes for debugging
+  console.log("--- Registered Routes ---");
+  app._router.stack.forEach(function(r: any){
+    if (r.route && r.route.path && r.route.methods){
+      console.log(`ROUTE: ${Object.keys(r.route.methods).join(', ').toUpperCase()} ${r.route.path}`);
+    } else if (r.name === 'router' && r.handle.stack) { // For nested routers
+      r.handle.stack.forEach(function(nestedR: any){
+        if (nestedR.route && nestedR.route.path && nestedR.route.methods){
+          console.log(`NESTED ROUTE: ${Object.keys(nestedR.route.methods).join(', ').toUpperCase()} ${nestedR.route.path}`);
+        }
+      });
+    } else if (r.handle && r.path) { // For middleware with paths
+       console.log(`MIDDLEWARE: ${r.handle.name || 'anonymous'} on path ${r.path}`);
+    }
+  });
+  console.log("-------------------------");
 
   // THEN add the catch-all for unknown API routes - after all real routes are registered
   app.use('/api/*', (req, res, next) => {
@@ -118,8 +153,19 @@ app.get("/api/debug/supabase", async (req, res) => {
     const handler = req.route;
     if (!handler) {
       log(`Unhandled API request: ${req.method} ${req.path}`);
+      console.log(`EMERGENCY_DEBUG: Catch-all triggered for: ${req.method} ${req.originalUrl}`);
+      console.log(`EMERGENCY_DEBUG: req.url:`, req.url);
+      console.log(`EMERGENCY_DEBUG: req.originalUrl:`, req.originalUrl);
+      console.log(`EMERGENCY_DEBUG: req.baseUrl:`, req.baseUrl);
+      console.log(`EMERGENCY_DEBUG: req.path:`, req.path);
+      console.log(`EMERGENCY_DEBUG: req.params:`, req.params);
+      console.log(`EMERGENCY_DEBUG: req.headers:`, JSON.stringify(req.headers, null, 2));
+      
       return res.status(404).json({
         message: `API endpoint not found: ${req.method} ${req.path}`,
+        originalUrl: req.originalUrl,
+        url: req.url,
+        path: req.path,
         success: false
       });
     }

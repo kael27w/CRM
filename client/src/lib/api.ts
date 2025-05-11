@@ -60,6 +60,17 @@ export interface ContactEntry {
 }
 
 /**
+ * Interface representing a unified activity entry
+ */
+export interface UnifiedActivityEntry {
+  id: string; // Format: 'call-123' or 'task-456'
+  type: 'call' | 'task'; // Type of activity
+  timestamp: string; // ISO date string
+  summary: string; // Brief description
+  details: any; // Original call or task data
+}
+
+/**
  * Type for the data expected by createContactManually.
  */
 export type NewContactData = {
@@ -457,5 +468,71 @@ export async function linkCallToContact(callId: number, contactId: number): Prom
     }
     
     throw error instanceof Error ? error : new Error('Unknown error linking call to contact');
+  }
+}
+
+/**
+ * Fetches all activities (calls and tasks) for a specific contact
+ * @param contactId - The ID of the contact to fetch activities for
+ * @returns Promise containing an array of unified activity entries
+ */
+export async function fetchContactActivities(contactId: string | number): Promise<UnifiedActivityEntry[]> {
+  console.log(`Fetching activities for contact ${contactId}`);
+  const url = `${API_BASE_URL}/api/contacts/${contactId}/all-activities`;
+  console.log("Fetching contact activities from URL:", url);
+
+  try {
+    // Add timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(url, {
+      signal: controller.signal
+    });
+    
+    // Clear the timeout
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      let errorMessage = `API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        console.log("Error response body:", errorData);
+        if (errorData && errorData.message) {
+          errorMessage = `${errorMessage} - ${errorData.message}`;
+        }
+      } catch (parseError) {
+        // Try to get raw text if JSON parsing fails
+        try {
+          const textError = await response.text();
+          console.error("Raw error response:", textError);
+          errorMessage = `${errorMessage} - Raw response: ${textError}`;
+        } catch (textError) {
+          console.warn("Could not get error response text either");
+        }
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    console.log(`Fetched ${data.length} activities for contact ${contactId}`, data);
+    return data as UnifiedActivityEntry[];
+  } catch (error) {
+    console.error(`Error fetching activities for contact ${contactId}:`, error);
+    
+    // Check if this is an AbortError (timeout)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. The server might be overloaded or unreachable.');
+    }
+    
+    // Check if this is a network error
+    if (error instanceof Error && 
+        (error.message.includes('Failed to fetch') ||
+         error.message.includes('NetworkError') ||
+         error.message.includes('network'))) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    
+    throw error instanceof Error ? error : new Error(`Unknown error fetching contact activities: ${error}`);
   }
 } 

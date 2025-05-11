@@ -15,6 +15,7 @@ import CompaniesPage from "./pages/companies";
 import ProductsPage from "./pages/products";
 import ActivitiesPage from "./pages/activities";
 import PipelinesPage from "./pages/pipelines";
+import { ContactDetailPage } from "./pages/ContactDetailPage";
 
 // For pages we haven't created yet
 const PlaceholderPage: React.FC<{title: string}> = ({title}) => (
@@ -41,6 +42,13 @@ function Router() {
       <Route path="/activities" component={ActivitiesPage} />
       <Route path="/settings" component={Settings} />
       <Route path="/help" component={HelpPage} />
+      <Route path="/contact-detail/:id">
+        {(params) => <ContactDetailPage contactId={params.id} />}
+      </Route>
+      {/* Test route with hardcoded contact ID for testing */}
+      <Route path="/test-contact-detail">
+        {() => <ContactDetailPage contactId={1} />}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
