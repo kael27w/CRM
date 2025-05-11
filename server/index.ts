@@ -108,27 +108,9 @@ app.get("/api/debug/supabase", async (req, res) => {
   }
 });
 
-// MINIMAL DEBUG ROUTE
-app.get("/api/contacts/:contactId/all-activities", (req: Request, res: Response) => {
-  console.log('MINIMAL_DEBUG: /api/contacts/:contactId/all-activities HANDLER REACHED!');
-  console.log('MINIMAL_DEBUG: req.method:', req.method);
-  console.log('MINIMAL_DEBUG: req.url:', req.url);
-  console.log('MINIMAL_DEBUG: req.originalUrl:', req.originalUrl);
-  console.log('MINIMAL_DEBUG: req.path:', req.path);
-  console.log('MINIMAL_DEBUG: req.params:', JSON.stringify(req.params));
-  console.log('MINIMAL_DEBUG: contactId param:', req.params.contactId);
-  res.status(200).json({
-    message: "Minimal debug handler for /api/contacts/:contactId/all-activities was hit!",
-    contactId: req.params.contactId,
-    originalUrl: req.originalUrl,
-    path: req.path
-  });
-});
-
 (async () => {
-  // TEMPORARILY COMMENT OUT registerRoutes
   // Register all API routes first
-  // const server = await registerRoutes(app);
+  const server = await registerRoutes(app);
 
   // Log all registered routes for debugging
   console.log("--- Registered Routes ---");

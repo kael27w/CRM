@@ -205,6 +205,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // === CONTACT ACTIVITIES ROUTE ===
+  app.get("/api/contacts/:contactId/all-activities", async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      // Using the "EMERGENCY_DEBUG" prefix for these logs for now to easily find them
+      console.log(`EMERGENCY_DEBUG: GET /api/contacts/${contactId}/all-activities - Full Handler Reached`);
+      console.log(`EMERGENCY_DEBUG: req.url: ${req.url}, req.originalUrl: ${req.originalUrl}, req.path: ${req.path}, req.params: ${JSON.stringify(req.params)}`);
+
+      if (!contactId || isNaN(Number(contactId))) {
+        console.error(`EMERGENCY_DEBUG: GET /api/contacts/${contactId}/all-activities - Invalid contactId`);
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      const contactIdNum = Number(contactId);
+
+      console.log(`EMERGENCY_DEBUG: GET /api/contacts/${contactIdNum}/all-activities - Fetching calls and tasks for contact.`);
+      const [callsResult, tasksResult] = await Promise.all([
+        supabase
+          .from('calls')
+          .select('id, created_at, direction, from_number, to_number, status, duration, call_sid')
+          .eq('contact_id', contactIdNum)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('activities')
+          .select('id, created_at, title, description, completed, status, due_date, type')
+          .eq('contact_id', contactIdNum)
+          .eq('type', 'task')
+          .order('created_at', { ascending: false })
+      ]);
+
+      if (callsResult.error) console.error(`EMERGENCY_DEBUG: Error fetching calls:`, callsResult.error);
+      if (tasksResult.error) console.error(`EMERGENCY_DEBUG: Error fetching tasks:`, tasksResult.error);
+
+      if (callsResult.error && tasksResult.error) {
+        return res.status(500).json({ message: "Failed to fetch contact activities due to database errors."});
+      }
+
+      const formattedCalls = (callsResult.data || []).map(call => ({
+        id: `call-${call.id}`, type: 'call', timestamp: call.created_at,
+        summary: `Call ${call.direction === 'inbound' ? 'from' : 'to'} ${call.direction === 'inbound' ? call.from_number : call.to_number}`,
+        details: call
+      }));
+      const formattedTasks = (tasksResult.data || []).map(task => ({
+        id: `task-${task.id}`, type: 'task', timestamp: task.created_at,
+        summary: task.title, details: task
+      }));
+
+      const allActivities = [...formattedCalls, ...formattedTasks].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      console.log(`EMERGENCY_DEBUG: GET /api/contacts/${contactIdNum}/all-activities - Found ${allActivities.length} total activities.`);
+      res.status(200).json(allActivities);
+    } catch (error: any) {
+      console.error(`EMERGENCY_DEBUG: GET /api/contacts/:contactId/all-activities - UNEXPECTED ERROR:`, error.message, error.stack);
+      res.status(500).json({ message: "Server error fetching contact activities" });
+    }
+  });
+
   // === CALL ROUTES ===
   app.post("/api/calls", async (req: Request, res: Response) => { // For manually logging calls (if needed)
     try {
@@ -675,99 +730,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error(`PATCH /api/calls/:callId/link-contact - Unexpected error:`, error.message, error.stack);
       res.status(500).json({ message: "Server error processing link contact request" });
-    }
-  });
-
-  // === CONTACT ACTIVITIES ROUTE ===
-  app.get("/api/contacts/:contactId/all-activities", async (req: Request, res: Response) => {
-    try {
-      const { contactId } = req.params;
-      console.log(`EMERGENCY_DEBUG: Contact Activities endpoint hit - Request details:`);
-      console.log(`EMERGENCY_DEBUG: req.url:`, req.url);
-      console.log(`EMERGENCY_DEBUG: req.originalUrl:`, req.originalUrl);
-      console.log(`EMERGENCY_DEBUG: req.baseUrl:`, req.baseUrl);
-      console.log(`EMERGENCY_DEBUG: req.path:`, req.path);
-      console.log(`EMERGENCY_DEBUG: req.params:`, req.params);
-      console.log(`EMERGENCY_DEBUG: contactId param:`, contactId);
-      console.log(`EMERGENCY_DEBUG: req.headers:`, JSON.stringify(req.headers, null, 2));
-      console.log(`GET /api/contacts/${contactId}/all-activities - Request received`);
-      
-      // Validate contactId
-      if (!contactId || isNaN(Number(contactId))) {
-        console.error(`GET /api/contacts/${contactId}/all-activities - Invalid contactId`);
-        return res.status(400).json({ message: "Invalid contact ID" });
-      }
-      
-      const contactIdNum = Number(contactId);
-      
-      // Perform two separate Supabase queries in parallel
-      const [callsResult, tasksResult] = await Promise.all([
-        // Query 1: Fetch all calls for this contact
-        supabase
-          .from('calls')
-          .select('id, created_at, direction, from_number, to_number, status, duration, call_sid')
-          .eq('contact_id', contactIdNum)
-          .order('created_at', { ascending: false }),
-          
-        // Query 2: Fetch all tasks for this contact
-        supabase
-          .from('activities')
-          .select('id, created_at, title, description, completed, status, due_date, type')
-          .eq('contact_id', contactIdNum)
-          .eq('type', 'task')
-          .order('created_at', { ascending: false })
-      ]);
-      
-      // Handle potential errors
-      if (callsResult.error) {
-        console.error(`GET /api/contacts/${contactId}/all-activities - Error fetching calls:`, callsResult.error);
-        // Continue with tasks if available, but log the error
-      }
-      
-      if (tasksResult.error) {
-        console.error(`GET /api/contacts/${contactId}/all-activities - Error fetching tasks:`, tasksResult.error);
-        // Continue with calls if available, but log the error
-      }
-      
-      // If both queries failed, return a 500 error
-      if (callsResult.error && tasksResult.error) {
-        return res.status(500).json({ 
-          message: "Failed to fetch contact activities", 
-          errors: [callsResult.error.message, tasksResult.error.message] 
-        });
-      }
-      
-      // Format calls
-      const calls = callsResult.data || [];
-      const formattedCalls = calls.map(call => ({
-        id: `call-${call.id}`,
-        type: 'call',
-        timestamp: call.created_at,
-        summary: `Call ${call.direction === 'inbound' ? 'from' : 'to'} ${call.direction === 'inbound' ? call.from_number : call.to_number}`,
-        details: call
-      }));
-      
-      // Format tasks
-      const tasks = tasksResult.data || [];
-      const formattedTasks = tasks.map(task => ({
-        id: `task-${task.id}`,
-        type: 'task',
-        timestamp: task.created_at,
-        summary: task.title,
-        details: task
-      }));
-      
-      // Combine and sort by timestamp (most recent first)
-      const allActivities = [...formattedCalls, ...formattedTasks].sort((a, b) => {
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-      });
-      
-      console.log(`GET /api/contacts/${contactId}/all-activities - Found ${allActivities.length} activities (${formattedCalls.length} calls, ${formattedTasks.length} tasks)`);
-      
-      res.status(200).json(allActivities);
-    } catch (error: any) {
-      console.error(`GET /api/contacts/:contactId/all-activities - Unexpected error:`, error.message, error.stack);
-      res.status(500).json({ message: "Server error fetching contact activities" });
     }
   });
 
