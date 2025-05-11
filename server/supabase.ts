@@ -12,7 +12,14 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
  */
 export function normalizePhone(phone: string | null | undefined): string {
   if (!phone) return '';
-  return phone.replace(/\D/g, '');
+  console.log(`normalizePhone - Original: '${phone}'`);
+  let normalized = phone.replace(/\D/g, '');
+  if (normalized.length === 10 && normalized.charAt(0) !== '1') {
+    normalized = '1' + normalized;
+  }
+  normalized = '+' + normalized;
+  console.log(`normalizePhone - Result: '${normalized}'`);
+  return normalized;
 }
 
 /**

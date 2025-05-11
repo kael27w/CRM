@@ -58,45 +58,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/contacts", async (req: Request, res: Response) => {
     try {
       console.log("POST /api/contacts - Request received. Body:", req.body);
-      const { first_name, last_name, phone } = req.body;
+      
+      // Extract fields from request body
+      const { first_name, last_name, phone, email, company } = req.body;
+      
+      // Validate required fields
+      if (!first_name || !last_name) {
+        console.error("POST /api/contacts - Missing required fields: first_name or last_name");
+        return res.status(400).json({ message: "First name and last name are required" });
+      }
+      
       if (!phone) {
+        console.error("POST /api/contacts - Missing required field: phone");
         return res.status(400).json({ message: "Phone number is required" });
       }
-      // const validatedData = insertContactSchema.parse(req.body); // If you want to use Zod validation
-      const { data: newContact, error } = await supabase
+
+      const normalizedPhone = normalizePhone(phone);
+      console.log(`POST /api/contacts - Normalized phone: ${normalizedPhone} (from original: ${phone})`);
+      
+      // Prepare contact data (remove timestamps - let Supabase handle them)
+      const contactData = {
+        first_name,
+        last_name,
+        phone: normalizedPhone,
+        email: email || null,
+        company: company || null
+      };
+      
+      console.log("POST /api/contacts - Inserting contact with data:", contactData);
+      
+      // Insert into contacts table
+      const { data, error } = await supabase
         .from('contacts')
-        .insert([{
-          first_name: first_name || 'Unknown',
-          last_name: last_name || 'Caller',
-          phone,
-          status: 'Lead'
-        }])
+        .insert([contactData])
         .select()
         .single();
-
+      
       if (error) {
         console.error("POST /api/contacts - Supabase error:", error);
+        console.error("POST /api/contacts - Error details:", error.details, error.hint, error.message);
         return res.status(500).json({ message: "Database error creating contact" });
       }
-      if (!newContact) {
+      
+      if (!data) {
+        console.error("POST /api/contacts - No data returned after insert");
         return res.status(500).json({ message: "Failed to create contact (no data returned)" });
       }
-      console.log("POST /api/contacts - Contact created successfully:", newContact);
-      const contactResponse = {
-        contact_id: newContact.id.toString(),
-        first_name: newContact.first_name,
-        last_name: newContact.last_name,
-        phone: newContact.phone,
-        email: newContact.email || '',
-        company: newContact.company || '',
-        contact_url: `${req.protocol}://${req.get('host')}/contacts/${newContact.id}`
-      };
-      res.status(201).json(contactResponse);
+      
+      console.log("POST /api/contacts - Contact created successfully:", data);
+      
+      // After successfully creating the contact, update historical calls that are not yet linked
+      console.log(`POST /api/contacts - Attempting to link historical calls for phone: ${normalizedPhone}`);
+      
+      try {
+        // First, get a count of how many unlinked calls will be affected
+        const { count, error: countError } = await supabase
+          .from('calls')
+          .select('*', { count: 'exact', head: true })
+          .eq('from_number', normalizedPhone)
+          .is('contact_id', null);
+          
+        console.log(`POST /api/contacts - Found ${count || 0} unlinked calls with phone number ${normalizedPhone}`);
+
+        // Update only calls that don't have a contact_id yet
+        const { data: updateData, error: updateError } = await supabase
+          .from('calls')
+          .update({ 
+            contact_id: data.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('from_number', normalizedPhone)
+          .is('contact_id', null)
+          .select('id');
+        
+        if (updateError) {
+          console.error("POST /api/contacts - Error updating historical calls:", updateError);
+        } else {
+          const updatedCount = updateData?.length || 0;
+          console.log(`POST /api/contacts - Successfully linked ${updatedCount} unlinked call(s) to contact ID ${data.id}`);
+        }
+      } catch (updateErr) {
+        // Log the error but don't fail the entire request
+        console.error("POST /api/contacts - Exception during historical call linking:", updateErr);
+      }
+      
+      // Return the newly created contact as the primary response
+      res.status(201).json(data);
     } catch (error: any) {
       console.error("POST /api/contacts - Error creating contact:", error.message, error.stack);
-      if (error instanceof ZodError) {
-        return res.status(400).json({ message: fromZodError(error).message });
-      }
       res.status(500).json({ message: "Error creating contact" });
     }
   });
@@ -462,6 +511,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test routes (consider removing for production or securing them)
   // app.post("/api/test/twilio/voice", handleVoiceWebhook);
   // app.post("/api/test/twilio/status-callback", handleStatusCallback);
+
+  // === LINK CALL TO CONTACT ROUTE ===
+  app.patch("/api/calls/:callId/link-contact", async (req: Request, res: Response) => {
+    try {
+      const { callId } = req.params;
+      const { contact_id } = req.body;
+      
+      console.log(`PATCH /api/calls/${callId}/link-contact - Request received. Body:`, req.body);
+      
+      // Validate callId
+      if (!callId || isNaN(Number(callId))) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Invalid callId`);
+        return res.status(400).json({ message: "Invalid call ID" });
+      }
+      
+      // Validate contact_id 
+      if (!contact_id || isNaN(Number(contact_id))) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Invalid or missing contact_id`);
+        return res.status(400).json({ message: "contact_id is required and must be a valid number" });
+      }
+      
+      const callIdNum = Number(callId);
+      const contactIdNum = Number(contact_id);
+      
+      // First check if call exists and get its phone number
+      const { data: existingCall, error: checkError } = await supabase
+        .from('calls')
+        .select('id, from_number')
+        .eq('id', callIdNum)
+        .single();
+      
+      if (checkError || !existingCall) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Call not found:`, checkError);
+        return res.status(404).json({ message: `Call with ID ${callId} not found` });
+      }
+      
+      // Store the phone number for later use
+      const phoneNumber = existingCall.from_number;
+      console.log(`PATCH /api/calls/${callId}/link-contact - Call has phone number: ${phoneNumber}`);
+      
+      // Check if contact exists
+      const { data: existingContact, error: contactCheckError } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('id', contactIdNum)
+        .single();
+      
+      if (contactCheckError || !existingContact) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Contact not found:`, contactCheckError);
+        return res.status(404).json({ message: `Contact with ID ${contact_id} not found` });
+      }
+      
+      // Update the specific call with the contact_id
+      const { data, error } = await supabase
+        .from('calls')
+        .update({ 
+          contact_id: contactIdNum,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', callIdNum)
+        .select('*, contacts(first_name, last_name)')
+        .single();
+      
+      if (error) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Update error:`, error);
+        return res.status(500).json({ message: "Error updating call with contact ID" });
+      }
+      
+      console.log(`PATCH /api/calls/${callId}/link-contact - Call updated successfully:`, data);
+      
+      // Only if we have a valid phone number, update other unlinked calls with the same number
+      if (phoneNumber) {
+        console.log(`PATCH /api/calls/${callId}/link-contact - Attempting to link other unlinked calls from the same number: ${phoneNumber}`);
+        
+        try {
+          // First, get a count of how many unlinked calls will be affected
+          const { count, error: countError } = await supabase
+            .from('calls')
+            .select('*', { count: 'exact', head: true })
+            .eq('from_number', phoneNumber)
+            .is('contact_id', null)
+            .neq('id', callIdNum);
+          
+          console.log(`PATCH /api/calls/${callId}/link-contact - Found ${count || 0} other unlinked calls with the same phone number`);
+          
+          // Update all other calls with the same phone number that don't have a contact_id yet
+          const { data: bulkUpdateData, error: bulkUpdateError } = await supabase
+            .from('calls')
+            .update({ 
+              contact_id: contactIdNum,
+              updated_at: new Date().toISOString()
+            })
+            .eq('from_number', phoneNumber)
+            .is('contact_id', null)
+            .neq('id', callIdNum) // Exclude the call we just updated
+            .select('id');
+          
+          if (bulkUpdateError) {
+            console.error(`PATCH /api/calls/${callId}/link-contact - Error updating other calls:`, bulkUpdateError);
+          } else {
+            const updatedCount = bulkUpdateData?.length || 0;
+            console.log(`PATCH /api/calls/${callId}/link-contact - Successfully linked ${updatedCount} additional unlinked call(s) with the same phone number`);
+          }
+        } catch (bulkUpdateErr) {
+          // Log the error but don't fail the entire request
+          console.error(`PATCH /api/calls/${callId}/link-contact - Exception during bulk call linking:`, bulkUpdateErr);
+        }
+      }
+      
+      // Transform the data to match the expected format
+      const responseData = {
+        ...data,
+        contact_first_name: data.contacts ? data.contacts.first_name : null,
+        contact_last_name: data.contacts ? data.contacts.last_name : null
+      };
+      
+      res.status(200).json(responseData);
+    } catch (error: any) {
+      console.error(`PATCH /api/calls/:callId/link-contact - Unexpected error:`, error.message, error.stack);
+      res.status(500).json({ message: "Server error processing link contact request" });
+    }
+  });
 
   const httpServer = createServer(app);
   console.log("All routes registered successfully");
