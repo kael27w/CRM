@@ -41,7 +41,9 @@ export function LinkCallToContactForm({
     },
     onError: (error) => {
       console.error('Error linking call to contact:', error);
-      alert('Failed to link call to contact. Please try again.');
+      // Show a more detailed error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to link call to contact: ${errorMessage}\n\nPlease check with your administrator if the API is properly configured.`);
     },
   });
 
