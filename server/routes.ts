@@ -74,15 +74,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const normalizedPhone = normalizePhone(phone);
-      console.log(`POST /api/contacts - Normalized phone: ${normalizedPhone} (from original: ${phone})`);
       
-      // Prepare contact data (remove timestamps - let Supabase handle them)
+      // Prepare contact data with timestamps
       const contactData = {
         first_name,
         last_name,
         phone: normalizedPhone,
         email: email || null,
-        company: company || null
+        company: company || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
       
       console.log("POST /api/contacts - Inserting contact with data:", contactData);
@@ -106,43 +107,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log("POST /api/contacts - Contact created successfully:", data);
-      
-      // After successfully creating the contact, update historical calls that are not yet linked
-      console.log(`POST /api/contacts - Attempting to link historical calls for phone: ${normalizedPhone}`);
-      
-      try {
-        // First, get a count of how many unlinked calls will be affected
-        const { count, error: countError } = await supabase
-          .from('calls')
-          .select('*', { count: 'exact', head: true })
-          .eq('from_number', normalizedPhone)
-          .is('contact_id', null);
-          
-        console.log(`POST /api/contacts - Found ${count || 0} unlinked calls with phone number ${normalizedPhone}`);
-
-        // Update only calls that don't have a contact_id yet
-        const { data: updateData, error: updateError } = await supabase
-          .from('calls')
-          .update({ 
-            contact_id: data.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('from_number', normalizedPhone)
-          .is('contact_id', null)
-          .select('id');
-        
-        if (updateError) {
-          console.error("POST /api/contacts - Error updating historical calls:", updateError);
-        } else {
-          const updatedCount = updateData?.length || 0;
-          console.log(`POST /api/contacts - Successfully linked ${updatedCount} unlinked call(s) to contact ID ${data.id}`);
-        }
-      } catch (updateErr) {
-        // Log the error but don't fail the entire request
-        console.error("POST /api/contacts - Exception during historical call linking:", updateErr);
-      }
-      
-      // Return the newly created contact as the primary response
       res.status(201).json(data);
     } catch (error: any) {
       console.error("POST /api/contacts - Error creating contact:", error.message, error.stack);
@@ -535,10 +499,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const callIdNum = Number(callId);
       const contactIdNum = Number(contact_id);
       
-      // First check if call exists and get its phone number
+      // First check if call exists
       const { data: existingCall, error: checkError } = await supabase
         .from('calls')
-        .select('id, from_number')
+        .select('id')
         .eq('id', callIdNum)
         .single();
       
@@ -546,10 +510,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error(`PATCH /api/calls/${callId}/link-contact - Call not found:`, checkError);
         return res.status(404).json({ message: `Call with ID ${callId} not found` });
       }
-      
-      // Store the phone number for later use
-      const phoneNumber = existingCall.from_number;
-      console.log(`PATCH /api/calls/${callId}/link-contact - Call has phone number: ${phoneNumber}`);
       
       // Check if contact exists
       const { data: existingContact, error: contactCheckError } = await supabase
@@ -563,7 +523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: `Contact with ID ${contact_id} not found` });
       }
       
-      // Update the specific call with the contact_id
+      // Update the call with the contact_id
       const { data, error } = await supabase
         .from('calls')
         .update({ 
@@ -580,45 +540,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`PATCH /api/calls/${callId}/link-contact - Call updated successfully:`, data);
-      
-      // Only if we have a valid phone number, update other unlinked calls with the same number
-      if (phoneNumber) {
-        console.log(`PATCH /api/calls/${callId}/link-contact - Attempting to link other unlinked calls from the same number: ${phoneNumber}`);
-        
-        try {
-          // First, get a count of how many unlinked calls will be affected
-          const { count, error: countError } = await supabase
-            .from('calls')
-            .select('*', { count: 'exact', head: true })
-            .eq('from_number', phoneNumber)
-            .is('contact_id', null)
-            .neq('id', callIdNum);
-          
-          console.log(`PATCH /api/calls/${callId}/link-contact - Found ${count || 0} other unlinked calls with the same phone number`);
-          
-          // Update all other calls with the same phone number that don't have a contact_id yet
-          const { data: bulkUpdateData, error: bulkUpdateError } = await supabase
-            .from('calls')
-            .update({ 
-              contact_id: contactIdNum,
-              updated_at: new Date().toISOString()
-            })
-            .eq('from_number', phoneNumber)
-            .is('contact_id', null)
-            .neq('id', callIdNum) // Exclude the call we just updated
-            .select('id');
-          
-          if (bulkUpdateError) {
-            console.error(`PATCH /api/calls/${callId}/link-contact - Error updating other calls:`, bulkUpdateError);
-          } else {
-            const updatedCount = bulkUpdateData?.length || 0;
-            console.log(`PATCH /api/calls/${callId}/link-contact - Successfully linked ${updatedCount} additional unlinked call(s) with the same phone number`);
-          }
-        } catch (bulkUpdateErr) {
-          // Log the error but don't fail the entire request
-          console.error(`PATCH /api/calls/${callId}/link-contact - Exception during bulk call linking:`, bulkUpdateErr);
-        }
-      }
       
       // Transform the data to match the expected format
       const responseData = {

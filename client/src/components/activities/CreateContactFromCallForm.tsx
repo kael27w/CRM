@@ -40,8 +40,21 @@ export function CreateContactFromCallForm({
     mutationFn: createContactManually,
     onSuccess: (newContact) => {
       console.log('Contact created successfully:', newContact);
+      // Get the appropriate ID, handling both possible API response formats
+      const contactId = typeof newContact.id !== 'undefined' 
+        ? newContact.id 
+        : (newContact as any).contact_id 
+          ? parseInt((newContact as any).contact_id, 10) 
+          : null;
+      
+      if (!contactId) {
+        console.error('Could not determine contact ID from response:', newContact);
+        alert('Contact was created but no ID was returned. Please try linking manually.');
+        return;
+      }
+      
       // Trigger the second mutation to link the call to the newly created contact
-      linkCallMutation.mutate({ callId: call.id, contactId: newContact.id });
+      linkCallMutation.mutate({ callId: call.id, contactId });
     },
     onError: (error) => {
       console.error('Error creating contact:', error);
