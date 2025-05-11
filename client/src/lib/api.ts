@@ -45,12 +45,42 @@ export interface TaskEntry {
 }
 
 /**
+ * Interface representing a contact entry from the API
+ */
+export interface ContactEntry {
+  id: number;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email?: string;
+  company?: string;
+  created_at: string; // ISO date string
+  updated_at: string; // ISO date string
+  // Add other fields as needed
+}
+
+/**
+ * Type for the data expected by createContactManually.
+ */
+export type NewContactData = {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email?: string;
+  company?: string;
+  // Add other client-side originated fields here
+};
+
+/**
  * Fetches call logs from the API
  * @returns Promise containing an array of call log entries
  */
 export async function fetchCallLogs(): Promise<CallLogEntry[]> {
+  const fullUrl = `${API_BASE_URL}/api/calls`;
+  console.log("Fetching call logs from:", fullUrl);
+  
   try {
-    const response = await fetch(`${API_BASE_URL}/api/calls`);
+    const response = await fetch(fullUrl);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -285,4 +315,69 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
   
   // If we get here, we've exhausted all retries
   throw new Error(`Failed to create task after ${maxRetries} attempts. Please check your network connection and server status.`);
+}
+
+/**
+ * Creates a new contact via the API.
+ * @param contactData - The data for the new contact.
+ * @returns Promise containing the newly created contact entry from the backend.
+ */
+export async function createContactManually(contactData: NewContactData): Promise<ContactEntry> {
+  console.log("Creating contact:", contactData);
+  const fullUrl = `${API_BASE_URL}/api/contacts`;
+  console.log("Creating contact at URL:", fullUrl);
+
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(contactData),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log("Contact created successfully:", data);
+    return data as ContactEntry;
+  } catch (error) {
+    console.error('Error creating contact:', error);
+    throw error instanceof Error ? error : new Error('Unknown error creating contact');
+  }
+}
+
+/**
+ * Links a call to a contact by updating the call record.
+ * @param callId - The ID of the call to update.
+ * @param contactId - The ID of the contact to link the call to.
+ * @returns Promise containing the updated call log entry.
+ */
+export async function linkCallToContact(callId: number, contactId: number): Promise<CallLogEntry> {
+  console.log(`Linking call ${callId} to contact ${contactId}`);
+  const fullUrl = `${API_BASE_URL}/api/calls/${callId}/link-contact`;
+  console.log("Linking call to contact at URL:", fullUrl);
+
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ contact_id: contactId }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log("Call linked to contact successfully:", data);
+    return data as CallLogEntry;
+  } catch (error) {
+    console.error('Error linking call to contact:', error);
+    throw error instanceof Error ? error : new Error('Unknown error linking call to contact');
+  }
 } 

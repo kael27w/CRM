@@ -25,6 +25,7 @@ import { useTasks } from '../lib/hooks/useTasks';
 import { useLocation } from 'wouter';
 import TaskDialog from '../components/dashboard/task-dialog';
 import { Task } from '../types';
+import { CallLogDisplay } from '../components/activities/CallLogDisplay';
 
 // This will be replaced with the actual Activity types from schema.ts
 // when we update the backend
@@ -986,8 +987,8 @@ const ActivitiesPage: React.FC = () => {
             </Button>
           </div>
           
-          <div className="text-center py-8">
-            <p className="text-slate-500 dark:text-slate-400 mb-4">Calls feature coming soon</p>
+          <div className="p-4 border rounded-md bg-white shadow-sm">
+            <CallLogDisplay />
           </div>
         </TabsContent>
       </Tabs>
