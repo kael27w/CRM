@@ -58,6 +58,13 @@ export function CreateContactFromCallForm({
     },
     onError: (error) => {
       console.error('Error creating contact:', error);
+      
+      // Check if this is a network error 
+      if (error instanceof Error && error.message.includes('Failed to fetch')) {
+        alert('Cannot connect to the server. Please check your network connection and try again.');
+        return;
+      }
+      
       // Show a more detailed error message
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       alert(`Failed to create contact: ${errorMessage}\n\nPlease check with your administrator if the contacts API is properly configured.`);

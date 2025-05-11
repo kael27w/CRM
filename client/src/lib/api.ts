@@ -328,13 +328,21 @@ export async function createContactManually(contactData: NewContactData): Promis
   console.log("Creating contact at URL:", url);
 
   try {
+    // Add timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(contactData),
+      signal: controller.signal
     });
+    
+    // Clear the timeout
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       let errorMessage = `API error: ${response.status} ${response.statusText}`;
@@ -345,7 +353,14 @@ export async function createContactManually(contactData: NewContactData): Promis
           errorMessage = `${errorMessage} - ${errorData.message}`;
         }
       } catch (parseError) {
-        // Ignore JSON parsing errors
+        // Try to get raw text if JSON parsing fails
+        try {
+          const textError = await response.text();
+          console.error("Raw error response:", textError);
+          errorMessage = `${errorMessage} - Raw response: ${textError}`;
+        } catch (textError) {
+          console.warn("Could not get error response text either");
+        }
       }
       throw new Error(errorMessage);
     }
@@ -355,6 +370,20 @@ export async function createContactManually(contactData: NewContactData): Promis
     return data as ContactEntry;
   } catch (error) {
     console.error('Error creating contact:', error);
+    
+    // Check if this is an AbortError (timeout)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. The server might be overloaded or unreachable.');
+    }
+    
+    // Check if this is a network error
+    if (error instanceof Error && 
+        (error.message.includes('Failed to fetch') ||
+         error.message.includes('NetworkError') ||
+         error.message.includes('network'))) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    
     throw error instanceof Error ? error : new Error('Unknown error creating contact');
   }
 }
@@ -371,13 +400,21 @@ export async function linkCallToContact(callId: number, contactId: number): Prom
   console.log("Linking call to contact at URL:", url);
 
   try {
+    // Add timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ contact_id: contactId }),
+      signal: controller.signal
     });
+    
+    // Clear the timeout
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       let errorMessage = `API error: ${response.status} ${response.statusText}`;
@@ -388,7 +425,14 @@ export async function linkCallToContact(callId: number, contactId: number): Prom
           errorMessage = `${errorMessage} - ${errorData.message}`;
         }
       } catch (parseError) {
-        // Ignore JSON parsing errors
+        // Try to get raw text if JSON parsing fails
+        try {
+          const textError = await response.text();
+          console.error("Raw error response:", textError);
+          errorMessage = `${errorMessage} - Raw response: ${textError}`;
+        } catch (textError) {
+          console.warn("Could not get error response text either");
+        }
       }
       throw new Error(errorMessage);
     }
@@ -398,6 +442,20 @@ export async function linkCallToContact(callId: number, contactId: number): Prom
     return data as CallLogEntry;
   } catch (error) {
     console.error('Error linking call to contact:', error);
+    
+    // Check if this is an AbortError (timeout)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. The server might be overloaded or unreachable.');
+    }
+    
+    // Check if this is a network error
+    if (error instanceof Error && 
+        (error.message.includes('Failed to fetch') ||
+         error.message.includes('NetworkError') ||
+         error.message.includes('network'))) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    
     throw error instanceof Error ? error : new Error('Unknown error linking call to contact');
   }
 } 

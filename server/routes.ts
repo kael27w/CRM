@@ -75,6 +75,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const normalizedPhone = normalizePhone(phone);
       
+      // Check if contact with this phone number already exists to avoid duplicates
+      const { data: existingContacts, error: checkError } = await supabase
+        .from('contacts')
+        .select('id')
+        .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phone}%`)
+        .limit(1);
+      
+      if (checkError) {
+        console.error("POST /api/contacts - Error checking for existing contact:", checkError);
+        return res.status(500).json({ message: "Database error checking for existing contact" });
+      }
+      
+      if (existingContacts && existingContacts.length > 0) {
+        console.log("POST /api/contacts - Contact with this phone number already exists:", existingContacts[0]);
+        return res.status(200).json(existingContacts[0]); // Return existing contact instead of an error
+      }
+      
       // Prepare contact data with timestamps
       const contactData = {
         first_name,
@@ -98,6 +115,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error) {
         console.error("POST /api/contacts - Supabase error:", error);
         console.error("POST /api/contacts - Error details:", error.details, error.hint, error.message);
+        
+        // Check for specific error types
+        if (error.code === '23505') { // unique constraint violation
+          console.log("POST /api/contacts - Unique constraint violation (duplicate contact)");
+          return res.status(409).json({ message: "Contact with this information already exists" });
+        }
+        
         return res.status(500).json({ message: "Database error creating contact" });
       }
       
