@@ -89,6 +89,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (existingContacts && existingContacts.length > 0) {
         console.log("POST /api/contacts - Contact with this phone number already exists:", existingContacts[0]);
+        
+        // Even for existing contacts, attempt to link any unassigned calls with this phone number
+        const existingContactId = existingContacts[0].id;
+        console.log(`POST /api/contacts - Attempting to link historical calls for phone: ${normalizedPhone} to existing contact ID: ${existingContactId}`);
+        
+        try {
+          const { data: updatedCalls, error: updateError } = await supabase
+            .from('calls')
+            .update({ 
+              contact_id: existingContactId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('from_number', normalizedPhone)
+            .is('contact_id', null);
+          
+          if (updateError) {
+            console.error(`POST /api/contacts - Error linking historical calls to existing contact:`, updateError);
+          } else {
+            const rowsAffected = updatedCalls ? (updatedCalls as any[]).length : 0;
+            console.log(`POST /api/contacts - Successfully linked historical calls to existing contact. Rows affected: ${rowsAffected}`);
+          }
+        } catch (linkError) {
+          console.error(`POST /api/contacts - Unexpected error linking historical calls to existing contact:`, linkError);
+        }
+        
         return res.status(200).json(existingContacts[0]); // Return existing contact instead of an error
       }
       
@@ -128,6 +153,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!data) {
         console.error("POST /api/contacts - No data returned after insert");
         return res.status(500).json({ message: "Failed to create contact (no data returned)" });
+      }
+      
+      // Successfully created contact, now link historical calls
+      const newContactId = data.id;
+      console.log(`POST /api/contacts - Attempting to link historical calls for phone: ${normalizedPhone} to new contact ID: ${newContactId}`);
+      
+      try {
+        const { data: updatedCalls, error: updateError } = await supabase
+          .from('calls')
+          .update({ 
+            contact_id: newContactId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('from_number', normalizedPhone)
+          .is('contact_id', null);
+        
+        if (updateError) {
+          console.error(`POST /api/contacts - Error linking historical calls to new contact:`, updateError);
+        } else {
+          const rowsAffected = updatedCalls ? (updatedCalls as any[]).length : 0;
+          console.log(`POST /api/contacts - Successfully linked historical calls to new contact. Rows affected: ${rowsAffected}`);
+        }
+      } catch (linkError) {
+        console.error(`POST /api/contacts - Unexpected error linking historical calls to new contact:`, linkError);
+        // We'll still return success for the contact creation even if linking fails
       }
       
       console.log("POST /api/contacts - Contact created successfully:", data);
@@ -526,7 +576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // First check if call exists
       const { data: existingCall, error: checkError } = await supabase
         .from('calls')
-        .select('id')
+        .select('id, from_number') // Also get from_number for later use
         .eq('id', callIdNum)
         .single();
       
@@ -534,6 +584,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error(`PATCH /api/calls/${callId}/link-contact - Call not found:`, checkError);
         return res.status(404).json({ message: `Call with ID ${callId} not found` });
       }
+      
+      // Store the from_number for historical linking
+      const fromNumberToLink = existingCall.from_number;
       
       // Check if contact exists
       const { data: existingContact, error: contactCheckError } = await supabase
@@ -564,6 +617,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`PATCH /api/calls/${callId}/link-contact - Call updated successfully:`, data);
+      
+      // Now update other historical calls with the same phone number
+      if (fromNumberToLink) {
+        console.log(`PATCH /api/calls/${callId}/link-contact - Attempting to link other historical calls with phone: ${fromNumberToLink} to contact ID: ${contactIdNum}`);
+        
+        try {
+          const { data: updatedCalls, error: bulkUpdateError } = await supabase
+            .from('calls')
+            .update({
+              contact_id: contactIdNum,
+              updated_at: new Date().toISOString()
+            })
+            .eq('from_number', fromNumberToLink)
+            .is('contact_id', null)
+            .neq('id', callIdNum); // Exclude the call we just updated
+          
+          if (bulkUpdateError) {
+            console.error(`PATCH /api/calls/${callId}/link-contact - Error linking other historical calls:`, bulkUpdateError);
+          } else {
+            const rowsAffected = updatedCalls ? (updatedCalls as any[]).length : 0;
+            console.log(`PATCH /api/calls/${callId}/link-contact - Successfully linked other historical calls. Rows affected: ${rowsAffected}`);
+          }
+        } catch (linkError) {
+          console.error(`PATCH /api/calls/${callId}/link-contact - Unexpected error linking other historical calls:`, linkError);
+          // We'll still return success for the primary call update even if bulk linking fails
+        }
+      } else {
+        console.log(`PATCH /api/calls/${callId}/link-contact - No from_number available for historical linking`);
+      }
       
       // Transform the data to match the expected format
       const responseData = {
