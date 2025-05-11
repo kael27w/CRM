@@ -219,8 +219,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const contactIdNum = Number(contactId);
 
-      console.log(`EMERGENCY_DEBUG: GET /api/contacts/${contactIdNum}/all-activities - Fetching calls and tasks for contact.`);
-      const [callsResult, tasksResult] = await Promise.all([
+      console.log(`EMERGENCY_DEBUG: GET /api/contacts/${contactIdNum}/all-activities - Fetching calls and activities for contact.`);
+      const [callsResult, activitiesResult] = await Promise.all([
         supabase
           .from('calls')
           .select('id, created_at, direction, from_number, to_number, status, duration, call_sid')
@@ -230,29 +230,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from('activities')
           .select('id, created_at, title, description, completed, status, due_date, type')
           .eq('contact_id', contactIdNum)
-          .eq('type', 'task')
+          .in('type', ['task', 'note']) // Fetch both tasks and notes
           .order('created_at', { ascending: false })
       ]);
 
       if (callsResult.error) console.error(`EMERGENCY_DEBUG: Error fetching calls:`, callsResult.error);
-      if (tasksResult.error) console.error(`EMERGENCY_DEBUG: Error fetching tasks:`, tasksResult.error);
+      if (activitiesResult.error) console.error(`EMERGENCY_DEBUG: Error fetching activities:`, activitiesResult.error);
 
-      if (callsResult.error && tasksResult.error) {
+      if (callsResult.error && activitiesResult.error) {
         return res.status(500).json({ message: "Failed to fetch contact activities due to database errors."});
       }
 
+      // Format calls
       const formattedCalls = (callsResult.data || []).map(call => ({
-        id: `call-${call.id}`, type: 'call', timestamp: call.created_at,
+        id: `call-${call.id}`, 
+        type: 'call', 
+        timestamp: call.created_at,
         summary: `Call ${call.direction === 'inbound' ? 'from' : 'to'} ${call.direction === 'inbound' ? call.from_number : call.to_number}`,
         details: call
       }));
-      const formattedTasks = (tasksResult.data || []).map(task => ({
-        id: `task-${task.id}`, type: 'task', timestamp: task.created_at,
-        summary: task.title, details: task
-      }));
+      
+      // Process activities (tasks and notes)
+      const activities = activitiesResult.data || [];
+      const formattedActivities = activities.map(activity => {
+        if (activity.type === 'task') {
+          return {
+            id: `task-${activity.id}`,
+            type: 'task',
+            timestamp: activity.created_at,
+            summary: activity.title,
+            details: activity
+          };
+        } else if (activity.type === 'note') {
+          return {
+            id: `note-${activity.id}`,
+            type: 'note',
+            timestamp: activity.created_at,
+            summary: activity.title || (activity.description 
+              ? activity.description.substring(0, 50) + (activity.description.length > 50 ? '...' : '') 
+              : 'Note'),
+            details: activity
+          };
+        }
+        // Fallback for any other activity types
+        return {
+          id: `activity-${activity.id}`,
+          type: activity.type || 'unknown',
+          timestamp: activity.created_at,
+          summary: activity.title || 'Activity',
+          details: activity
+        };
+      });
 
-      const allActivities = [...formattedCalls, ...formattedTasks].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      console.log(`EMERGENCY_DEBUG: GET /api/contacts/${contactIdNum}/all-activities - Found ${allActivities.length} total activities.`);
+      // Combine all activities and sort by timestamp
+      const allActivities = [...formattedCalls, ...formattedActivities].sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      
+      // Count types for logging
+      const taskCount = activities.filter(a => a.type === 'task').length;
+      const noteCount = activities.filter(a => a.type === 'note').length;
+      console.log(`EMERGENCY_DEBUG: GET /api/contacts/${contactIdNum}/all-activities - Found ${allActivities.length} total activities (${formattedCalls.length} calls, ${taskCount} tasks, ${noteCount} notes).`);
+      
       res.status(200).json(allActivities);
     } catch (error: any) {
       console.error(`EMERGENCY_DEBUG: GET /api/contacts/:contactId/all-activities - UNEXPECTED ERROR:`, error.message, error.stack);
