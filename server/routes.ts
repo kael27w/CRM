@@ -72,6 +72,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/contacts/list", async (req: Request, res: Response) => {
+    try {
+      console.log("GET /api/contacts/list - Fetching all contacts");
+      
+      // Extract optional sort parameter from query string
+      const { sort = 'created_at' } = req.query;
+      let orderBy: string = 'created_at';
+      let ascending: boolean = false;
+      
+      // Handle different sort options
+      if (sort === 'name') {
+        // Order by last_name, then first_name
+        orderBy = 'last_name';
+        ascending = true;
+      }
+      
+      console.log(`GET /api/contacts/list - Sorting by ${orderBy} ${ascending ? 'ascending' : 'descending'}`);
+      
+      const { data: contacts, error } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, phone, email, company, created_at')
+        .order(orderBy, { ascending })
+        // If sorting by last_name, add secondary sort by first_name
+        .order(orderBy === 'last_name' ? 'first_name' : 'id', { ascending: true });
+      
+      if (error) {
+        console.error("GET /api/contacts/list - Supabase error:", error);
+        return res.status(500).json({ message: "Database error fetching contacts" });
+      }
+      
+      if (!contacts || contacts.length === 0) {
+        console.log("GET /api/contacts/list - No contacts found");
+        return res.status(200).json([]);
+      }
+      
+      console.log(`GET /api/contacts/list - Successfully fetched ${contacts.length} contacts`);
+      res.status(200).json(contacts);
+    } catch (error: any) {
+      console.error("GET /api/contacts/list - Error fetching contacts:", error.message, error.stack);
+      res.status(500).json({ message: "Error fetching contacts" });
+    }
+  });
+
   app.post("/api/contacts", async (req: Request, res: Response) => {
     try {
       console.log("POST /api/contacts - Request received. Body:", req.body);
