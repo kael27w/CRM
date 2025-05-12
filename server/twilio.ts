@@ -90,26 +90,37 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
     const twiml = new twilio.twiml.VoiceResponse();
 
     if (contactName) {
-      twiml.say(`Hello ${contactName}, connecting your call.`);
+      twiml.say(`Hello ${contactName}, connecting you to the next available agent.`);
     } else {
-      twiml.say('Hello, connecting your call.');
+      twiml.say('Hello, connecting you to the next available agent.');
     }
 
-    const forwardNum = process.env.FORWARDING_NUMBER;
+    // Instead of dialing a phone number, we'll dial a client
+    const clientIdentity = 'agent1'; // Hardcoded client identity for MVP
     const callerIdNum = process.env.TWILIO_PHONE_NUMBER;
     const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || `${process.env.API_URL || ''}/api/twilio/status-callback`;
 
-    if (!forwardNum || !callerIdNum) {
-       console.error(`[${callSid}] CRITICAL ERROR: Missing FORWARDING_NUMBER or TWILIO_PHONE_NUMBER env variable!`);
-       twiml.say("Sorry, there is a configuration error with this phone number. Please contact support.");
-    } else {
-       console.log(`[${callSid}] Dialing: Forward=${forwardNum}, CallerID=${callerIdNum}, StatusCallback=${statusCallbackUrl}`);
-       const dialNode = twiml.dial({ callerId: callerIdNum });
-       dialNode.number({
-           statusCallback: statusCallbackUrl,
-           statusCallbackEvent: ['completed'] // Corrected: ensure it's an array
-       }, forwardNum);
+    if (!callerIdNum) {
+      console.error(`[${callSid}] WARNING: Missing TWILIO_PHONE_NUMBER env variable for caller ID!`);
     }
+
+    console.log(`[${callSid}] Dialing Client: Identity=${clientIdentity}, CallerID=${callerIdNum || 'Not Set'}, StatusCallback=${statusCallbackUrl}`);
+    
+    // Create dial options with caller ID if available
+    const dialOptions: any = {};
+    if (callerIdNum) {
+      dialOptions.callerId = callerIdNum;
+    }
+    
+    // Add status callback if available
+    if (statusCallbackUrl) {
+      dialOptions.statusCallback = statusCallbackUrl;
+      dialOptions.statusCallbackEvent = ['completed'];
+    }
+    
+    // Dial the client
+    const dialNode = twiml.dial(dialOptions);
+    dialNode.client(clientIdentity);
 
     console.log(`[${callSid}] Sending TwiML response: ${twiml.toString()}`);
     res.type('text/xml');
@@ -133,6 +144,57 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
          res.status(500).send("An unexpected error occurred.");
        }
     }
+  }
+};
+
+/**
+ * Generates a Twilio Voice Access Token for browser-based clients
+ */
+export const generateTwilioToken = (req: Request, res: Response) => {
+  const { AccessToken } = twilio.jwt;
+  const { VoiceGrant } = AccessToken;
+  
+  try {
+    console.log('generateTwilioToken - Request received');
+    
+    // Get credentials from environment variables
+    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioApiKeySid = process.env.TWILIO_API_KEY_SID;
+    const twilioApiKeySecret = process.env.TWILIO_API_KEY_SECRET;
+    const twilioAppSid = process.env.TWILIO_APP_SID;
+    
+    // Check if all required environment variables are set
+    if (!twilioAccountSid || !twilioApiKeySid || !twilioApiKeySecret || !twilioAppSid) {
+      console.error('generateTwilioToken - Missing required Twilio credentials in environment variables');
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
+    
+    // Create an access token
+    const accessToken = new AccessToken(
+      twilioAccountSid,
+      twilioApiKeySid,
+      twilioApiKeySecret,
+      { identity: 'agent1' } // Hardcoded identity for MVP
+    );
+    
+    // Create a Voice grant for this token
+    const voiceGrant = new VoiceGrant({
+      outgoingApplicationSid: twilioAppSid,
+      incomingAllow: true // Allow incoming connections
+    });
+    
+    // Add the grant to the token
+    accessToken.addGrant(voiceGrant);
+    
+    // Generate the token string
+    const token = accessToken.toJwt();
+    console.log('generateTwilioToken - Token generated successfully for agent1');
+    
+    // Send the token to the client
+    res.status(200).json({ token });
+  } catch (error: any) {
+    console.error('generateTwilioToken - Error generating token:', error.message, error.stack);
+    res.status(500).json({ message: 'Failed to generate token', error: error.message });
   }
 };
 

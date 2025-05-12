@@ -2,6 +2,7 @@ import React, { ReactNode } from 'react';
 import Sidebar from './sidebar';
 import Header from './header';
 import { useAppContext } from '@/lib/context/app-context';
+import Softphone from '@/components/Softphone';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -23,6 +24,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           </div>
         </main>
       </div>
+      
+      {/* Softphone component */}
+      <Softphone />
     </div>
   );
 };

@@ -11,7 +11,7 @@ import {
   insertActivitySchema // Keeping if any activity/task POST route uses it
 } from "../shared/schema.js"; // Assuming path alias @shared might still be an issue for some setups
 import { supabase, normalizePhone } from "./supabase.js";
-import { twilioWebhook, handleVoiceWebhook, handleStatusCallback } from "./twilio.js";
+import { twilioWebhook, handleVoiceWebhook, handleStatusCallback, generateTwilioToken } from "./twilio.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log('REGISTER_ROUTES_CALLED: Entry point of registerRoutes reached.');
@@ -699,6 +699,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   console.log(`Twilio STATUS CALLBACK webhook URL for validation: ${statusCallbackUrl}`);
   app.post("/api/twilio/status-callback", twilioWebhook(statusCallbackUrl), handleStatusCallback);
   console.log("Registered POST /api/twilio/status-callback route");
+  
+  // New route for generating Twilio client tokens
+  app.get("/api/twilio/token", generateTwilioToken);
+  console.log("Registered GET /api/twilio/token route");
 
   // Test routes (consider removing for production or securing them)
   // app.post("/api/test/twilio/voice", handleVoiceWebhook);

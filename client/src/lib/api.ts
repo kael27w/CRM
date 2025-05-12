@@ -9,6 +9,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://crm-2lmw.onre
 console.log("API base URL:", API_BASE_URL);
 
 /**
+ * Interface for Twilio Access Token response
+ */
+export interface TwilioTokenResponse {
+  token: string;
+}
+
+/**
  * Interface representing a call log entry from the API
  */
 export interface CallLogEntry {
@@ -603,5 +610,29 @@ export async function createNoteActivity(noteData: NewNoteData): Promise<Unified
   } catch (error) {
     console.error('Error creating note activity:', error);
     throw error instanceof Error ? error : new Error('Unknown error creating note activity');
+  }
+}
+
+/**
+ * Fetches a Twilio Access Token from the API for client-side calling
+ * @returns Promise containing the Twilio token response
+ */
+export async function fetchTwilioToken(): Promise<TwilioTokenResponse> {
+  const fullUrl = `${API_BASE_URL}/api/twilio/token`;
+  console.log("Fetching Twilio token from:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log("Twilio token fetched successfully");
+    return data as TwilioTokenResponse;
+  } catch (error) {
+    console.error('Error fetching Twilio token:', error);
+    throw error instanceof Error ? error : new Error('Unknown error fetching Twilio token');
   }
 } 
