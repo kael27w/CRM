@@ -295,7 +295,7 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
               {activity.type === "note" && (
                 <div className="text-sm">
                   {activity.details.description && (
-                    <p className="whitespace-pre-wrap">{activity.details.description}</p>
+                    <div className="whitespace-pre-wrap">{activity.details.description}</div>
                   )}
                 </div>
               )}
