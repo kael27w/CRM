@@ -37,6 +37,35 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
     const toNumber = req.body.To;
     console.log(`[${callSid}] Data: From=${fromNumber}, To=${toNumber}`);
 
+    // Attempt to find the contact before inserting the call record
+    let foundContactId: number | null = null;
+    let contactName = '';
+    
+    if (fromNumber) {
+      console.log(`[${callSid}] Attempting contact lookup in Supabase for ${fromNumber}...`);
+      const normalizedPhone = normalizePhone(fromNumber);
+      console.log(`[${callSid}] Normalized phone: ${normalizedPhone}`);
+
+      const { data: contacts, error: contactError } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name')
+        .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${fromNumber}%`)
+        .limit(1);
+
+      if (contactError) {
+        console.error(`[${callSid}] Supabase contact SELECT error:`, contactError.message);
+      } else if (contacts && contacts.length > 0) {
+        foundContactId = contacts[0].id;
+        contactName = contacts[0].first_name;
+        console.log(`[${callSid}] Contact found: ${contactName}, ID: ${foundContactId}`);
+        console.log(`[${callSid}] Linking incoming call to existing contact ID: ${foundContactId}`);
+      } else {
+        console.log(`[${callSid}] Contact not found.`);
+      }
+    } else {
+       console.log(`[${callSid}] No From number provided, skipping contact lookup.`);
+    }
+
     console.log(`[${callSid}] Attempting to log initial call to Supabase...`);
     const { error: callError } = await supabase
       .from('calls')
@@ -47,37 +76,14 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
         to_number: toNumber,
         call_type: 'inbound',
         status: 'initiated',
-        duration: 0
+        duration: 0,
+        contact_id: foundContactId || null // Include the contact ID in the insert
       }]);
 
     if (callError) {
       console.error(`[${callSid}] Supabase call log INSERT error:`, callError.message);
     } else {
       console.log(`[${callSid}] Supabase call log INSERT success.`);
-    }
-
-    let contactName = '';
-    if (fromNumber) {
-      console.log(`[${callSid}] Attempting contact lookup in Supabase for ${fromNumber}...`);
-      const normalizedPhone = normalizePhone(fromNumber);
-      console.log(`[${callSid}] Normalized phone: ${normalizedPhone}`);
-
-      const { data: contacts, error: contactError } = await supabase
-        .from('contacts')
-        .select('first_name, last_name')
-        .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${fromNumber}%`)
-        .limit(1);
-
-      if (contactError) {
-        console.error(`[${callSid}] Supabase contact SELECT error:`, contactError.message);
-      } else if (contacts && contacts.length > 0) {
-        contactName = contacts[0].first_name;
-        console.log(`[${callSid}] Contact found: ${contactName}`);
-      } else {
-        console.log(`[${callSid}] Contact not found.`);
-      }
-    } else {
-       console.log(`[${callSid}] No From number provided, skipping contact lookup.`);
     }
 
     console.log(`[${callSid}] Generating TwiML...`);
