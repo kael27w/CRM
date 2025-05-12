@@ -64,7 +64,7 @@ export interface ContactEntry {
  */
 export interface UnifiedActivityEntry {
   id: string; // Format: 'call-123' or 'task-456'
-  type: 'call' | 'task'; // Type of activity
+  type: 'call' | 'task' | 'note'; // Type of activity
   timestamp: string; // ISO date string
   summary: string; // Brief description
   details: any; // Original call or task data
@@ -534,5 +534,74 @@ export async function fetchContactActivities(contactId: string | number): Promis
     }
     
     throw error instanceof Error ? error : new Error(`Unknown error fetching contact activities: ${error}`);
+  }
+}
+
+/**
+ * Type for the data required to create a note activity
+ */
+export type NewNoteData = {
+  contact_id: number;
+  type: 'note';
+  title?: string;
+  description: string;
+};
+
+/**
+ * Creates a new note activity for a contact
+ * @param noteData - The data for the new note activity
+ * @returns Promise containing the newly created note activity
+ */
+export async function createNoteActivity(noteData: NewNoteData): Promise<UnifiedActivityEntry> {
+  console.log("createNoteActivity API function called with payload:", noteData);
+  
+  // The payload is the noteData directly since we don't need defaults like tasks
+  const payload = noteData;
+  
+  // The API URL to call (same as createTask)
+  const apiUrl = `${API_BASE_URL}/api/activities`;
+  console.log("Making API request to:", apiUrl);
+  
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    console.log("API response received:", response.status, response.statusText);
+
+    if (!response.ok) {
+      let errorMessage = `API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        console.log("Error response body:", errorData);
+        if (errorData && errorData.message) {
+          errorMessage = `${errorMessage} - ${errorData.message}`;
+        }
+      } catch (parseError) {
+        console.warn("Could not parse error response from API:", parseError);
+      }
+      throw new Error(errorMessage);
+    }
+
+    const createdNote = await response.json();
+    console.log("Note created successfully:", createdNote);
+    
+    // Format the created note as a UnifiedActivityEntry
+    const unifiedNote: UnifiedActivityEntry = {
+      id: `note-${createdNote.id}`,
+      type: 'note',
+      timestamp: createdNote.created_at,
+      summary: createdNote.title || 'Note', 
+      details: createdNote
+    };
+    
+    return unifiedNote;
+  } catch (error) {
+    console.error('Error creating note activity:', error);
+    throw error instanceof Error ? error : new Error('Unknown error creating note activity');
   }
 } 

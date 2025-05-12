@@ -131,11 +131,8 @@ function CallLogDisplay() {
                 {format(new Date(call.created_at), 'MMM d, yyyy h:mm a')}
               </TableCell>
               <TableCell>
-                {call.contact_id && call.contact_first_name && call.contact_last_name ? (
-                  <>
-                    <div>{`${call.contact_first_name} ${call.contact_last_name}`}</div>
-                    <div className="text-xs text-gray-500">{call.from_number}</div>
-                  </>
+                {call.contact_id && call.contact_first_name ? (
+                  <div>{`${call.contact_first_name} ${call.contact_last_name || ''}`}</div>
                 ) : (
                   <div className="flex flex-col space-y-2">
                     <div>{call.from_number || "Unknown"}</div>

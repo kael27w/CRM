@@ -1,145 +1,154 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/shared/data-table';
-import { Badge } from '@/components/ui/badge';
-import { apiRequest } from '@/lib/queryClient';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
-// This will be replaced with the actual Contact type from schema.ts
-// when we update the backend
+// Define the type for a contact object
 interface Contact {
   id: number;
-  name: string;
-  email: string;
+  first_name: string;
+  last_name: string;
   phone: string;
-  company: string;
-  title: string;
-  status: string;
-  owner: string;
+  email: string | null;
+  company: string | null;
+  created_at: string;
 }
 
+/**
+ * Fetches the list of contacts from the API
+ */
+const fetchContacts = async (): Promise<Contact[]> => {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
+  console.log("Fetching contacts from:", `${apiBaseUrl}/api/contacts/list`);
+  
+  const response = await fetch(`${apiBaseUrl}/api/contacts/list`);
+  
+  if (!response.ok) {
+    throw new Error(`Error fetching contacts: ${response.status} ${response.statusText}`);
+  }
+  
+  return response.json();
+};
+
+/**
+ * ContactsPage component that displays a table of all contacts
+ */
 const ContactsPage: React.FC = () => {
-  // Sample data - this will be replaced with actual API data
-  const sampleContacts: Contact[] = [
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      email: "sarah.j@example.com",
-      phone: "(555) 123-4567",
-      company: "Acme Corp",
-      title: "VP of Sales",
-      status: "active",
-      owner: "Alex Davis"
-    },
-    {
-      id: 2,
-      name: "Robert Thompson",
-      email: "r.thompson@example.com",
-      phone: "(555) 987-6543",
-      company: "TechStart Inc",
-      title: "CEO",
-      status: "active",
-      owner: "Sarah Johnson"
-    },
-    {
-      id: 3,
-      name: "Jennifer Williams",
-      email: "j.williams@example.com",
-      phone: "(555) 567-8901",
-      company: "Global Innovations",
-      title: "Marketing Director",
-      status: "inactive",
-      owner: "Michael Rodriguez"
-    },
-    {
-      id: 4,
-      name: "Michael Brown",
-      email: "m.brown@example.com",
-      phone: "(555) 234-5678",
-      company: "Brown Enterprises",
-      title: "Owner",
-      status: "active",
-      owner: "Emily Chen"
-    },
-    {
-      id: 5,
-      name: "Lisa Davis",
-      email: "lisa.d@example.com",
-      phone: "(555) 345-6789",
-      company: "Medical Solutions",
-      title: "Physician",
-      status: "active",
-      owner: "Alex Davis"
-    }
-  ];
+  const {
+    data: contacts,
+    isLoading,
+    isError,
+    error
+  } = useQuery({
+    queryKey: ["contactsList"],
+    queryFn: fetchContacts,
+    staleTime: 60000, // 1 minute
+  });
 
-  // Define columns for the data table
-  const columns: ColumnDef<Contact>[] = [
-    {
-      accessorKey: "name",
-      header: "Contact Name",
-      cell: ({ row }) => (
-        <div className="font-medium">{row.getValue("name")}</div>
-      ),
-    },
-    {
-      accessorKey: "company",
-      header: "Company Name",
-    },
-    {
-      accessorKey: "email",
-      header: "Email",
-    },
-    {
-      accessorKey: "phone",
-      header: "Phone",
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const status = row.getValue("status") as string;
-        return (
-          <Badge
-            variant={status === "active" ? "default" : "secondary"}
-          >
-            {status}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "owner",
-      header: "Contact Owner",
-    },
-  ];
-
-  // For now we'll use the sample data. Later this will be replaced with actual API data
-  // const { data: contacts = [], isLoading, error } = useQuery({
-  //   queryKey: ['/api/contacts'],
-  //   queryFn: () => apiRequest('/api/contacts'),
-  // });
-
-  const handleRowClick = (row: any) => {
-    console.log('Contact clicked:', row.original);
-    // This will be expanded to show contact details or edit contact
-  };
-
-  const handleAddField = () => {
-    console.log('Add field clicked');
-    // This will be expanded to allow adding custom fields
-  };
-
+  console.log("ContactsPage - Contacts data:", contacts);
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-4 p-4">
+        <h1 className="text-2xl font-bold">Contacts</h1>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Skeleton className="h-8 w-40" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Error state
+  if (isError) {
+    return (
+      <div className="space-y-4 p-4">
+        <h1 className="text-2xl font-bold">Contacts</h1>
+        <Card className="border-red-200 bg-red-50 dark:bg-red-900/10">
+          <CardContent className="pt-6">
+            <p className="text-red-600 dark:text-red-400">
+              Error fetching contacts: {error instanceof Error ? error.message : "Unknown error"}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Empty state
+  if (!contacts || contacts.length === 0) {
+    return (
+      <div className="space-y-4 p-4">
+        <h1 className="text-2xl font-bold">Contacts</h1>
+        <Card>
+          <CardContent className="pt-6 text-center">
+            <p className="text-gray-500">No contacts found.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
   return (
-    <DataTable
-      columns={columns}
-      data={sampleContacts}
-      title="Contacts"
-      description="Manage your contact records"
-      searchPlaceholder="Search contacts..."
-      onRowClick={handleRowClick}
-      onAddField={handleAddField}
-    />
+    <div className="space-y-4 p-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Contacts</h1>
+        <Badge variant="outline">{contacts.length} Contacts</Badge>
+      </div>
+      
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Company</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {contacts.map((contact) => (
+                <TableRow key={contact.id}>
+                  <TableCell>
+                    <Link 
+                      href={`/contact-detail/${contact.id}`}
+                      className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {contact.first_name} {contact.last_name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>{contact.phone || "—"}</TableCell>
+                  <TableCell>{contact.email || "—"}</TableCell>
+                  <TableCell>{contact.company || "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

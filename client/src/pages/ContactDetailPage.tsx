@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchContactActivities, UnifiedActivityEntry } from "../lib/api";
 import { format } from "date-fns";
@@ -12,6 +12,16 @@ import {
 } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
+import { Button } from "../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../components/ui/dialog";
+import { AddNoteForm } from "../components/contacts/AddNoteForm";
+import { PlusCircle } from "lucide-react"; // Import the icon
 
 // Used for direct component usage
 interface ContactDetailPageProps {
@@ -22,6 +32,7 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
   // Get contactId from route params if not provided as prop
   const params = useParams<{ id: string }>();
   const contactId = propContactId || params.id;
+  const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState(false);
 
   console.log("ContactDetailPage - contactId from props:", propContactId);
   console.log("ContactDetailPage - contactId from params:", params.id);
@@ -31,7 +42,8 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
     data: activities,
     isLoading,
     isError,
-    error
+    error,
+    refetch
   } = useQuery({
     queryKey: ["contactActivities", contactId],
     queryFn: () => fetchContactActivities(contactId),
@@ -59,7 +71,27 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+          <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Add Note
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add a Note</DialogTitle>
+              </DialogHeader>
+              <AddNoteForm
+                contactId={contactId}
+                onNoteAdded={() => refetch()}
+                setOpen={setIsAddNoteDialogOpen}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="w-full">
@@ -85,7 +117,27 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
   if (isError) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+          <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Add Note
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add a Note</DialogTitle>
+              </DialogHeader>
+              <AddNoteForm
+                contactId={contactId}
+                onNoteAdded={() => refetch()}
+                setOpen={setIsAddNoteDialogOpen}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
         <Card className="border-red-200 bg-red-50 dark:bg-red-900/10">
           <CardContent className="pt-6">
             <p className="text-red-600 dark:text-red-400">
@@ -100,7 +152,27 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
   if (!activities || activities.length === 0) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+          <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Add Note
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add a Note</DialogTitle>
+              </DialogHeader>
+              <AddNoteForm
+                contactId={contactId}
+                onNoteAdded={() => refetch()}
+                setOpen={setIsAddNoteDialogOpen}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
         <Card>
           <CardContent className="pt-6">
             <p className="text-gray-500">No activities found for this contact.</p>
@@ -126,10 +198,40 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
   };
+  
+  // Helper function to get badge variant based on activity type
+  const getBadgeVariant = (type: string) => {
+    switch (type) {
+      case 'call': return "default";
+      case 'task': return "secondary";
+      case 'note': return "outline";
+      default: return "default";
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Activity Feed for Contact {contactId}</h1>
+        <Dialog open={isAddNoteDialogOpen} onOpenChange={setIsAddNoteDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              Add Note
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add a Note</DialogTitle>
+            </DialogHeader>
+            <AddNoteForm
+              contactId={contactId}
+              onNoteAdded={() => refetch()}
+              setOpen={setIsAddNoteDialogOpen}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
       
       <div className="space-y-4">
         {activities.map((activity: UnifiedActivityEntry) => (
@@ -139,10 +241,11 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
                 <CardTitle className="flex items-center gap-2 text-lg">
                   {activity.summary}
                   <Badge
-                    variant={activity.type === "call" ? "default" : "secondary"}
+                    variant={getBadgeVariant(activity.type)}
                     className="ml-2"
                   >
-                    {activity.type === "call" ? "Call" : "Task"}
+                    {activity.type === "call" ? "Call" : 
+                     activity.type === "task" ? "Task" : "Note"}
                   </Badge>
                 </CardTitle>
                 <CardDescription>
@@ -185,6 +288,14 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
                     <div className="col-span-2">
                       <span className="font-medium">Description:</span> {activity.details.description}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {activity.type === "note" && (
+                <div className="text-sm">
+                  {activity.details.description && (
+                    <p className="whitespace-pre-wrap">{activity.details.description}</p>
                   )}
                 </div>
               )}
