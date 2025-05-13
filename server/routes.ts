@@ -590,15 +590,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       console.log("GET /api/stats/overview - Initiating parallel Supabase queries.");
+      console.log('GET /api/stats/overview - "deals" table query intentionally skipped as table does not exist.');
 
       const [
         { data: contactsData, error: contactsError, count: activeContactsCount },
-        { data: dealsData, error: dealsError, count: activeDealsCount },
         { data: tasksData, error: tasksError, count: pendingTasksCount },
         { data: callsData, error: callsError, count: recentCallsCount }
       ] = await Promise.all([
         supabase.from('contacts').select('*', { count: 'exact', head: true }), // Count active contacts
-        supabase.from('deals').select('amount', { count: 'exact', head: false }), // Get all deal amounts for sum, and count
         supabase.from('activities').select('*', { count: 'exact', head: true }).eq('type', 'task').neq('status', 'completed'), // Count pending tasks
         supabase.from('calls').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo.toISOString()) // Count calls in the last 7 days
       ]);
@@ -609,9 +608,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("GET /api/stats/overview - Supabase error fetching contacts count:", contactsError.message, contactsError.details);
         // Decide if you want to fail the whole request or return partial data
       }
-      if (dealsError) {
-        console.error("GET /api/stats/overview - Supabase error fetching deals:", dealsError.message, dealsError.details);
-      }
       if (tasksError) {
         console.error("GET /api/stats/overview - Supabase error fetching pending tasks count:", tasksError.message, tasksError.details);
       }
@@ -620,7 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Consolidate potential errors for a single error response if any query failed critically
-      const errors = [contactsError, dealsError, tasksError, callsError].filter(Boolean);
+      const errors = [contactsError, tasksError, callsError].filter(Boolean);
       if (errors.length > 0) {
           console.error(`GET /api/stats/overview - Encountered ${errors.length} errors during Supabase queries. First error:`, errors[0]?.message);
           // It might be better to throw a single error here or construct a more specific error response
@@ -628,16 +624,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ message: "Database error fetching overview statistics", details: errors.map(e => e?.message).join(', ') });
       }
 
-      // Calculate total revenue from deals
-      let totalRevenue = 0;
-      if (dealsData) {
-        totalRevenue = dealsData.reduce((sum, deal) => sum + (Number(deal.amount) || 0), 0);
-      }
-      console.log(`GET /api/stats/overview - Calculated total revenue: ${totalRevenue}`);
+      // Hardcode deals-related values
+      const activeDeals = 0;
+      const totalRevenue = 0;
+      console.log('GET /api/stats/overview - Using hardcoded values: activeDeals=0, totalRevenue=0');
 
       const stats = {
         activeContacts: activeContactsCount || 0,
-        activeDeals: activeDealsCount || 0,
+        activeDeals: activeDeals,
         pendingTasks: pendingTasksCount || 0,
         recentCalls: recentCallsCount || 0,
         totalRevenue: totalRevenue
