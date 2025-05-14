@@ -119,7 +119,7 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
     const clientOptions: any = {};
     if (statusCallbackUrl) {
       clientOptions.statusCallback = statusCallbackUrl;
-      clientOptions.statusCallbackEvent = ['completed'];
+      clientOptions.statusCallbackEvent = 'completed';
     }
     
     // Add client element with options
