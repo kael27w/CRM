@@ -5,7 +5,7 @@ import { fetchTwilioToken } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { PhoneIcon, PhoneOffIcon, PhoneIncomingIcon, XIcon } from 'lucide-react';
+import { PhoneIcon, PhoneOffIcon, PhoneIncomingIcon, XIcon, VolumeIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 
@@ -37,23 +37,70 @@ const Softphone: React.FC = () => {
   // References and state
   const deviceRef = useRef<Device | null>(null);
   const connectionRef = useRef<Connection | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [status, setStatus] = useState<CallStatus>('disconnected');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [callerInfo, setCallerInfo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
+  const [audioInitialized, setAudioInitialized] = useState(false);
+
+  // Initialize AudioContext
+  const initializeAudio = () => {
+    try {
+      console.log('Attempting to initialize AudioContext...');
+      if (!audioContextRef.current) {
+        // Create a new AudioContext if it doesn't exist
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContext();
+      }
+      
+      // Resume the AudioContext if it's suspended
+      if (audioContextRef.current.state === 'suspended') {
+        console.log('Resuming suspended AudioContext...');
+        audioContextRef.current.resume().then(() => {
+          console.log('AudioContext resumed successfully:', audioContextRef.current?.state);
+          setAudioInitialized(true);
+        }).catch(err => {
+          console.error('Failed to resume AudioContext:', err);
+        });
+      } else {
+        console.log('AudioContext already running:', audioContextRef.current.state);
+        setAudioInitialized(true);
+      }
+      
+      // Create a silent audio node to keep context active (optional)
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
+      gainNode.gain.value = 0; // Silent
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+      oscillator.start();
+      oscillator.stop(audioContextRef.current.currentTime + 0.001); // Stop after a very short time
+      
+      console.log('Audio initialization complete');
+      return true;
+    } catch (err) {
+      console.error('Error initializing AudioContext:', err);
+      return false;
+    }
+  };
 
   // Initialize the Twilio Device on component mount
   useEffect(() => {
     let mounted = true;
     let Device: any;
     
+    console.log('Softphone component mounted');
+    
     // Dynamically import the Twilio Voice SDK
     const loadTwilioSDK = async () => {
       try {
+        console.log('Loading Twilio Voice SDK...');
         const twilioVoice = await import('@twilio/voice-sdk');
         Device = twilioVoice.Device;
+        console.log('Twilio Voice SDK loaded successfully');
         await setupDevice();
       } catch (err) {
         console.error('Error loading Twilio Voice SDK:', err);
@@ -69,6 +116,7 @@ const Softphone: React.FC = () => {
     const setupDevice = async () => {
       try {
         // Fetch token from backend
+        console.log('Fetching Twilio token from backend...');
         const { token } = await fetchTwilioToken();
         console.log('Twilio token received, initializing Device');
         
@@ -79,19 +127,21 @@ const Softphone: React.FC = () => {
             deviceRef.current.destroy();
           }
           
-          // Initialize new Device
+          // Initialize new Device with debug logging
+          console.log('Creating new Device instance...');
           deviceRef.current = new Device(token, {
-            logLevel: 'info',
+            logLevel: 'debug', // Enhanced logging
             // Add other options as needed
           });
           
+          console.log('Device created, registering event handlers...');
           // Register event handlers
           registerDeviceEvents();
           
           // Mark as ready
           setIsReady(true);
           setError(null);
-          console.log('Twilio Device initialized successfully');
+          console.log('Twilio Device initialized successfully, ready for calls');
         }
       } catch (err) {
         if (mounted) {
@@ -109,6 +159,9 @@ const Softphone: React.FC = () => {
     
     loadTwilioSDK();
     
+    // Attempt to initialize audio
+    initializeAudio();
+    
     // Cleanup function
     return () => {
       mounted = false;
@@ -117,23 +170,39 @@ const Softphone: React.FC = () => {
         deviceRef.current.destroy();
         deviceRef.current = null;
       }
+      if (audioContextRef.current) {
+        console.log('Closing AudioContext');
+        audioContextRef.current.close().catch(err => {
+          console.error('Error closing AudioContext:', err);
+        });
+      }
     };
   }, []);
   
   // Register event handlers for the Twilio Device
   const registerDeviceEvents = () => {
-    if (!deviceRef.current) return;
+    if (!deviceRef.current) {
+      console.error('Cannot register events - Device is null');
+      return;
+    }
     
     // Called when the Device is registered and ready to make/receive calls
     deviceRef.current.on('registered', () => {
-      console.log('Twilio Device registered');
+      console.log('>>> DEVICE EVENT: registered - Device is registered and ready');
       setStatus('disconnected');
       setIsReady(true);
     });
     
     // Called when the Device fails to register
     deviceRef.current.on('error', (twilioError: TwilioError) => {
-      console.error('Twilio Device error:', twilioError);
+      console.error('>>> DEVICE EVENT: error', twilioError);
+      console.error('Error details:', {
+        code: twilioError.code,
+        message: twilioError.message,
+        info: twilioError.info,
+        explanation: twilioError.explanation
+      });
+      
       setError(`Twilio error: ${twilioError.message || 'Unknown error'}`);
       setStatus('error');
       toast({
@@ -145,12 +214,19 @@ const Softphone: React.FC = () => {
     
     // Called when there's an incoming call
     deviceRef.current.on('incoming', (connection: Connection) => {
-      console.log('Incoming call', connection);
+      console.log('>>> DEVICE EVENT: incoming', connection);
+      console.log('Connection parameters:', connection.parameters);
+      console.log('From:', connection.parameters.From);
+      console.log('To:', connection.parameters.To);
+      console.log('Direction:', connection.parameters.Direction);
+      console.log('CallSid:', connection.parameters.CallSid);
+      
       connectionRef.current = connection;
       
       // Get caller information (phone number)
       const from = connection.parameters.From || 'Unknown caller';
       setCallerInfo(from);
+      console.log(`Setting status to "incoming" for call from ${from}`);
       setStatus('incoming');
       
       // Play a sound to alert the user (you could add a sound file here)
@@ -163,21 +239,68 @@ const Softphone: React.FC = () => {
       });
       
       // Handle connection events
+      console.log('Registering connection event handlers for incoming call');
       registerConnectionEvents(connection);
     });
+    
+    // Additional device events to monitor
+    deviceRef.current.on('connect', (connection: Connection) => {
+      console.log('>>> DEVICE EVENT: connect - Successfully established call', connection);
+      connectionRef.current = connection;
+      registerConnectionEvents(connection);
+    });
+    
+    deviceRef.current.on('disconnect', (connection: Connection) => {
+      console.log('>>> DEVICE EVENT: disconnect - Call ended', connection);
+      connectionRef.current = null;
+      setStatus('disconnected');
+      setCallerInfo('');
+    });
+    
+    deviceRef.current.on('offline', () => {
+      console.log('>>> DEVICE EVENT: offline - Device is offline');
+      setStatus('error');
+      setError('Device is offline. Check your network connection.');
+    });
+    
+    deviceRef.current.on('unregistered', () => {
+      console.log('>>> DEVICE EVENT: unregistered - Device is unregistered');
+      setIsReady(false);
+    });
+    
+    // These events might not exist in all versions, so check if they're supported
+    if (typeof deviceRef.current.on === 'function') {
+      try {
+        deviceRef.current.on('tokenWillExpire', () => {
+          console.log('>>> DEVICE EVENT: tokenWillExpire - Token is about to expire');
+          // Here you would implement token refresh logic
+        });
+        
+        deviceRef.current.on('ready', () => {
+          console.log('>>> DEVICE EVENT: ready - Device is ready');
+        });
+      } catch (e) {
+        console.log('Some device events are not supported in this version');
+      }
+    }
   };
   
   // Register event handlers for a specific call connection
   const registerConnectionEvents = (connection: Connection) => {
+    if (!connection) {
+      console.error('Cannot register connection events - Connection is null');
+      return;
+    }
+    
     // Called when a call is accepted and establishes connection
     connection.on('accept', () => {
-      console.log('Call accepted');
+      console.log('>>> CONNECTION EVENT: accept - Call accepted');
       setStatus('connected');
     });
     
     // Called when a call is disconnected
     connection.on('disconnect', () => {
-      console.log('Call disconnected');
+      console.log('>>> CONNECTION EVENT: disconnect - Call disconnected');
       setStatus('disconnected');
       setCallerInfo('');
       connectionRef.current = null;
@@ -185,18 +308,25 @@ const Softphone: React.FC = () => {
     
     // Called when there's a warning or transition state
     connection.on('warning', (warningName: string) => {
-      console.warn('Call warning:', warningName);
+      console.warn('>>> CONNECTION EVENT: warning', warningName);
     });
     
     // Called when a call is reconnecting 
     connection.on('reconnecting', (error: TwilioError) => {
-      console.warn('Call reconnecting:', error);
+      console.warn('>>> CONNECTION EVENT: reconnecting', error);
       setStatus('reconnecting');
     });
     
     // Called on various errors
     connection.on('error', (error: TwilioError) => {
-      console.error('Call error:', error);
+      console.error('>>> CONNECTION EVENT: error', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        info: error.info,
+        explanation: error.explanation
+      });
+      
       setError(`Call error: ${error?.message || 'Unknown error'}`);
       setStatus('error');
       toast({
@@ -205,14 +335,69 @@ const Softphone: React.FC = () => {
         variant: 'destructive',
       });
     });
+    
+    // Additional connection events
+    connection.on('reject', () => {
+      console.log('>>> CONNECTION EVENT: reject - Call was rejected');
+      setStatus('disconnected');
+      setCallerInfo('');
+      connectionRef.current = null;
+    });
+    
+    connection.on('cancel', () => {
+      console.log('>>> CONNECTION EVENT: cancel - Call was cancelled');
+      setStatus('disconnected');
+      setCallerInfo('');
+      connectionRef.current = null;
+    });
+    
+    connection.on('mute', (isMuted: boolean) => {
+      console.log(`>>> CONNECTION EVENT: mute - Call ${isMuted ? 'muted' : 'unmuted'}`);
+    });
+    
+    // These events might not exist in all versions
+    try {
+      connection.on('volume', (inputVolume: number, outputVolume: number) => {
+        console.log(`>>> CONNECTION EVENT: volume - Input: ${inputVolume}, Output: ${outputVolume}`);
+      });
+      
+      connection.on('ringing', () => {
+        console.log('>>> CONNECTION EVENT: ringing - Call is ringing');
+      });
+    } catch (e) {
+      console.log('Some connection events are not supported in this version');
+    }
+  };
+  
+  // Handler for initializing audio context (can be triggered by user gesture)
+  const handleInitializeAudio = () => {
+    const success = initializeAudio();
+    if (success) {
+      toast({
+        title: 'Audio Initialized',
+        description: 'Audio system is ready for calls',
+        variant: 'default',
+      });
+    } else {
+      toast({
+        title: 'Audio Error',
+        description: 'Failed to initialize audio system',
+        variant: 'destructive',
+      });
+    }
   };
   
   // Handler for accepting an incoming call
   const handleAcceptCall = () => {
+    // Ensure audio is initialized before accepting
+    initializeAudio();
+    
     if (connectionRef.current) {
       console.log('Accepting incoming call');
       connectionRef.current.accept();
       setStatus('connected');
+    } else {
+      console.error('No connection to accept!');
     }
   };
   
@@ -224,6 +409,8 @@ const Softphone: React.FC = () => {
     } else if (deviceRef.current) {
       console.log('No active connection, disconnecting any device connections');
       deviceRef.current.disconnectAll();
+    } else {
+      console.error('No connection or device to disconnect!');
     }
     setStatus('disconnected');
     setCallerInfo('');
@@ -231,7 +418,13 @@ const Softphone: React.FC = () => {
   
   // Handler for making an outbound call
   const handleMakeCall = () => {
-    if (!deviceRef.current || !phoneNumber) return;
+    // Ensure audio is initialized before making a call
+    initializeAudio();
+    
+    if (!deviceRef.current || !phoneNumber) {
+      console.error('Cannot make call: Device not ready or phone number empty');
+      return;
+    }
     
     try {
       console.log(`Making outbound call to: ${phoneNumber}`);
@@ -246,9 +439,11 @@ const Softphone: React.FC = () => {
         // Any additional parameters needed
       };
       
+      console.log('Connecting with params:', params);
       // Initiate the call
       const connection = deviceRef.current.connect({ params });
       connectionRef.current = connection;
+      console.log('Call connection initiated, registering connection events');
       registerConnectionEvents(connection);
       
     } catch (err) {
@@ -329,6 +524,19 @@ const Softphone: React.FC = () => {
         </CardHeader>
         
         <CardContent className="p-4 pt-2 space-y-3">
+          {/* Initialize Audio Button for debugging */}
+          {!audioInitialized && (
+            <Button
+              onClick={handleInitializeAudio}
+              variant="outline"
+              size="sm"
+              className="w-full mb-2"
+            >
+              <VolumeIcon className="h-4 w-4 mr-1" />
+              Initialize Audio
+            </Button>
+          )}
+          
           {/* Show caller info when relevant */}
           {(status === 'incoming' || status === 'connected') && callerInfo && (
             <div className="text-center font-medium">
