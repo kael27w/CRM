@@ -106,21 +106,24 @@ export const handleVoiceWebhook = async (req: Request, res: Response) => {
 
     console.log(`[${callSid}] Dialing Client: Identity=${clientIdentity}, CallerID=${callerIdNum || 'Not Set'}, StatusCallback=${statusCallbackUrl}`);
     
-    // Create dial options with caller ID if available
+    // Create dial options with ONLY caller ID if available
     const dialOptions: any = {};
     if (callerIdNum) {
       dialOptions.callerId = callerIdNum;
     }
     
-    // Add status callback if available
-    if (statusCallbackUrl) {
-      dialOptions.statusCallback = statusCallbackUrl;
-      dialOptions.statusCallbackEvent = ['completed'];
-    }
-    
     // Dial the client
     const dialNode = twiml.dial(dialOptions);
-    dialNode.client(clientIdentity);
+    
+    // Create client options with status callback
+    const clientOptions: any = {};
+    if (statusCallbackUrl) {
+      clientOptions.statusCallback = statusCallbackUrl;
+      clientOptions.statusCallbackEvent = ['completed'];
+    }
+    
+    // Add client element with options
+    dialNode.client(clientOptions, clientIdentity);
 
     console.log(`[${callSid}] Sending TwiML response: ${twiml.toString()}`);
     res.type('text/xml');
