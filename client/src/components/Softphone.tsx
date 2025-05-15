@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Device } from '@twilio/voice-sdk';
-// Remove the Connection import
+import { Device } from '@twilio/voice-sdk';
 import { fetchTwilioToken } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,13 +8,15 @@ import { PhoneIcon, PhoneOffIcon, PhoneIncomingIcon, XIcon, VolumeIcon } from 'l
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 
-// Then create a type alias for Connection
+// Define a type for Connection since it might not be directly importable
 type Connection = any;
 
 // Define interface for Twilio error object
 interface TwilioError {
   message?: string;
   code?: number;
+  explanation?: string;
+  info?: any;
   [key: string]: any;
 }
 
@@ -54,6 +55,7 @@ const Softphone: React.FC = () => {
         // Create a new AudioContext if it doesn't exist
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         audioContextRef.current = new AudioContext();
+        console.log('New AudioContext created:', audioContextRef.current.state);
       }
       
       // Resume the AudioContext if it's suspended
@@ -87,86 +89,71 @@ const Softphone: React.FC = () => {
     }
   };
 
-  // Initialize the Twilio Device on component mount
+  // Set up the Twilio Device
+  const setupDevice = async () => {
+    try {
+      console.log('Setting up Twilio Device...');
+      
+      // Fetch token from backend
+      console.log('Fetching Twilio token from backend...');
+      const { token } = await fetchTwilioToken();
+      console.log('Twilio token received, initializing Device');
+      
+      // Clean up any existing Device
+      if (deviceRef.current) {
+        console.log('Destroying existing Device');
+        deviceRef.current.destroy();
+        deviceRef.current = null;
+      }
+      
+      // Initialize new Device with debug logging
+      console.log('Creating new Device instance...');
+      deviceRef.current = new Device(token, {
+        logLevel: 'debug', // Enhanced logging
+        // Add other options as needed
+      });
+      
+      if (!deviceRef.current) {
+        throw new Error("Failed to create Device instance");
+      }
+      
+      console.log('Device created, registering event handlers...');
+      // Register event handlers immediately after Device creation
+      registerDeviceEvents();
+      
+      // Mark as ready
+      setIsReady(true);
+      setError(null);
+      console.log('Twilio Device initialized successfully, ready for calls');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Twilio Device';
+      console.error('Error initializing Twilio Device:', err);
+      setError(errorMessage);
+      toast({
+        title: 'Softphone Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Initialize the Twilio Device AFTER audio is initialized
   useEffect(() => {
-    let mounted = true;
-    let Device: any;
-    
     console.log('Softphone component mounted');
     
-    // Dynamically import the Twilio Voice SDK
-    const loadTwilioSDK = async () => {
-      try {
-        console.log('Loading Twilio Voice SDK...');
-        const twilioVoice = await import('@twilio/voice-sdk');
-        Device = twilioVoice.Device;
-        console.log('Twilio Voice SDK loaded successfully');
-        await setupDevice();
-      } catch (err) {
-        console.error('Error loading Twilio Voice SDK:', err);
-        setError('Failed to load Twilio Voice SDK. Please make sure it is installed.');
-        toast({
-          title: 'Softphone Error',
-          description: 'Failed to load Twilio Voice SDK',
-          variant: 'destructive',
-        });
-      }
-    };
-    
-    const setupDevice = async () => {
-      try {
-        // Fetch token from backend
-        console.log('Fetching Twilio token from backend...');
-        const { token } = await fetchTwilioToken();
-        console.log('Twilio token received, initializing Device');
-        
-        // Create a new Device instance with the token
-        if (mounted && Device) {
-          if (deviceRef.current) {
-            console.log('Destroying existing Device');
-            deviceRef.current.destroy();
-          }
-          
-          // Initialize new Device with debug logging
-          console.log('Creating new Device instance...');
-          deviceRef.current = new Device(token, {
-            logLevel: 'debug', // Enhanced logging
-            // Add other options as needed
-          });
-          
-          console.log('Device created, registering event handlers...');
-          // Register event handlers
-          registerDeviceEvents();
-          
-          // Mark as ready
-          setIsReady(true);
-          setError(null);
-          console.log('Twilio Device initialized successfully, ready for calls');
-        }
-      } catch (err) {
-        if (mounted) {
-          const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Twilio Device';
-          console.error('Error initializing Twilio Device:', err);
-          setError(errorMessage);
-          toast({
-            title: 'Softphone Error',
-            description: errorMessage,
-            variant: 'destructive',
-          });
-        }
-      }
-    };
-    
-    loadTwilioSDK();
-    
-    // Attempt to initialize audio
-    initializeAudio();
+    // Only setup device once audio is initialized
+    if (audioInitialized) {
+      console.log('Audio initialized, proceeding with Twilio Device setup');
+      setupDevice();
+    } else {
+      console.log('Waiting for audio initialization before setting up Twilio Device');
+    }
     
     // Cleanup function
     return () => {
-      mounted = false;
+      console.log('Component unmounting, cleaning up resources');
       if (deviceRef.current) {
-        console.log('Component unmounting, destroying Twilio Device');
+        console.log('Destroying Twilio Device');
         deviceRef.current.destroy();
         deviceRef.current = null;
       }
@@ -177,7 +164,7 @@ const Softphone: React.FC = () => {
         });
       }
     };
-  }, []);
+  }, [audioInitialized]); // Only re-run when audioInitialized changes
   
   // Register event handlers for the Twilio Device
   const registerDeviceEvents = () => {
@@ -214,8 +201,16 @@ const Softphone: React.FC = () => {
     
     // Called when there's an incoming call
     deviceRef.current.on('incoming', (connection: Connection) => {
+      // Immediate logging first for debugging
       console.log('>>> DEVICE EVENT: incoming', connection);
       console.log('Connection parameters:', connection.parameters);
+      
+      // Immediate visual feedback for testing
+      document.body.style.backgroundColor = 'rgba(255, 0, 0, 0.1)';
+      setTimeout(() => {
+        document.body.style.backgroundColor = '';
+      }, 5000); // Reset after 5 seconds
+      
       console.log('From:', connection.parameters.From);
       console.log('To:', connection.parameters.To);
       console.log('Direction:', connection.parameters.Direction);
@@ -228,9 +223,6 @@ const Softphone: React.FC = () => {
       setCallerInfo(from);
       console.log(`Setting status to "incoming" for call from ${from}`);
       setStatus('incoming');
-      
-      // Play a sound to alert the user (you could add a sound file here)
-      // new Audio('/sounds/incoming-call.mp3').play().catch(e => console.error('Error playing sound:', e));
       
       toast({
         title: 'Incoming Call',
@@ -524,7 +516,7 @@ const Softphone: React.FC = () => {
         </CardHeader>
         
         <CardContent className="p-4 pt-2 space-y-3">
-          {/* Initialize Audio Button for debugging */}
+          {/* Initialize Audio Button - Always show if not initialized */}
           {!audioInitialized && (
             <Button
               onClick={handleInitializeAudio}
