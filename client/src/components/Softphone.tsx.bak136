@@ -134,7 +134,7 @@ const Softphone: React.FC = () => {
       console.log('Device Registration Details:', {
         identity: 'agent1',
         token: token.substring(0, 20) + '...',  // Log partial token for debugging
-        deviceRegistered: isReady, // Use our component state instead
+        registered: isReady, // Use our component state instead
         deviceExists: !!deviceRef.current
       });
     } catch (err) {

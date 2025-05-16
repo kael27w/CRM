@@ -134,8 +134,8 @@ const Softphone: React.FC = () => {
       console.log('Device Registration Details:', {
         identity: 'agent1',
         token: token.substring(0, 20) + '...',  // Log partial token for debugging
-        deviceRegistered: isReady, // Use our component state instead
-        deviceExists: !!deviceRef.current
+        registered: isReady, // Use component state instead of isRegistered
+        deviceExists: !!deviceRef.current, // Use this instead of state
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Twilio Device';
@@ -189,10 +189,14 @@ const Softphone: React.FC = () => {
     deviceRef.current.on('registered', () => {
       console.log('>>> DEVICE EVENT: registered - Device is registered and ready');
       setStatus('disconnected');
+      setIsReady(true);
+      
+      // Log additional registration info
       console.log('Device Registration Details:', {
         identity: 'agent1',
-        deviceRegistered: isReady,
-        deviceExists: !!deviceRef.current,
+        token: token.substring(0, 20) + '...',  // Log partial token for debugging
+        registered: isReady, // Use our component state instead
+        state: deviceRef.current?.state,  // Check internal state
       });
     });
     
