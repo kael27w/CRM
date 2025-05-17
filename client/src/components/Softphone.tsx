@@ -189,9 +189,12 @@ const Softphone: React.FC = () => {
     deviceRef.current.on('registered', () => {
       console.log('>>> DEVICE EVENT: registered - Device is registered and ready');
       setStatus('disconnected');
+      setIsReady(true);
+      
+      // Log additional registration info
       console.log('Device Registration Details:', {
         identity: 'agent1',
-        deviceRegistered: isReady, // No access to token in this scope
+        deviceRegistered: isReady,
         deviceExists: !!deviceRef.current
       });
     });
