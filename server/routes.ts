@@ -12,6 +12,7 @@ import {
 } from "../shared/schema.js"; // Assuming path alias @shared might still be an issue for some setups
 import { supabase, normalizePhone } from "./supabase.js";
 import { twilioWebhook, handleVoiceWebhook, handleStatusCallback, generateTwilioToken } from "./twilio.js";
+import twilio from "twilio";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log('REGISTER_ROUTES_CALLED: Entry point of registerRoutes reached.');
@@ -697,6 +698,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // New route for generating Twilio client tokens
   app.get("/api/twilio/token", generateTwilioToken);
   console.log("Registered GET /api/twilio/token route");
+
+  // New route for handling outbound calls from the browser client
+  app.post("/api/twilio/outbound-voice-twiml", (req: Request, res: Response) => {
+    try {
+      console.log("POST /api/twilio/outbound-voice-twiml - Request received. Body:", req.body);
+      
+      // Extract the destination phone number from the request body
+      const to = req.body.To;
+      
+      // Get the Twilio phone number from environment variables
+      const callerId = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (!callerId) {
+        console.error("POST /api/twilio/outbound-voice-twiml - Missing TWILIO_PHONE_NUMBER in environment variables");
+        return res.status(500).send("<Response><Say>Server configuration error: Missing caller ID</Say></Response>");
+      }
+      
+      if (!to) {
+        console.error("POST /api/twilio/outbound-voice-twiml - Missing 'To' parameter in request body");
+        return res.status(400).send("<Response><Say>Missing destination phone number</Say></Response>");
+      }
+      
+      // Create TwiML to instruct Twilio to dial the number
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.dial({ callerId }, to);
+      
+      console.log(`POST /api/twilio/outbound-voice-twiml - Generated TwiML for outbound call to ${to}: ${twiml.toString()}`);
+      
+      // Set content type and send the TwiML response
+      res.type('text/xml');
+      res.send(twiml.toString());
+      
+    } catch (error: any) {
+      console.error("POST /api/twilio/outbound-voice-twiml - Error generating TwiML:", error.message, error.stack);
+      
+      // Provide a fallback TwiML response in case of error
+      const errorTwiml = new twilio.twiml.VoiceResponse();
+      errorTwiml.say("An error occurred while processing your call request. Please try again later.");
+      
+      res.type('text/xml');
+      res.status(500).send(errorTwiml.toString());
+    }
+  });
+  console.log("Registered POST /api/twilio/outbound-voice-twiml route");
 
   // Test routes (consider removing for production or securing them)
   // app.post("/api/test/twilio/voice", handleVoiceWebhook);
