@@ -61,9 +61,7 @@ export interface ContactEntry {
   phone: string;
   email?: string;
   company?: string;
-  created_at: string; // ISO date string
-  updated_at: string; // ISO date string
-  // Add other fields as needed
+  [key: string]: any;
 }
 
 /**
@@ -634,5 +632,32 @@ export async function fetchTwilioToken(): Promise<TwilioTokenResponse> {
   } catch (error) {
     console.error('Error fetching Twilio token:', error);
     throw error instanceof Error ? error : new Error('Unknown error fetching Twilio token');
+  }
+}
+
+/**
+ * Fetches a contact by phone number from the backend.
+ * @param phoneNumber - The phone number to look up.
+ * @returns The contact entry if found, or null.
+ */
+export async function fetchContactByPhone(phoneNumber: string): Promise<ContactEntry | null> {
+  try {
+    const res = await fetch(`/api/contacts?phone=${encodeURIComponent(phoneNumber)}`);
+    if (!res.ok) {
+      console.warn('fetchContactByPhone: Non-200 response', res.status);
+      return null;
+    }
+    const data = await res.json();
+    if (!data) return null;
+    if (Array.isArray(data)) {
+      return data.length > 0 ? data[0] : null;
+    }
+    if (typeof data === 'object' && data.id) {
+      return data;
+    }
+    return null;
+  } catch (err) {
+    console.error('fetchContactByPhone: Error fetching contact:', err);
+    return null;
   }
 } 

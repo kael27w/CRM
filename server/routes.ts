@@ -700,43 +700,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
   console.log("Registered GET /api/twilio/token route");
 
   // New route for handling outbound calls from the browser client
-  app.post("/api/twilio/outbound-voice-twiml", (req: Request, res: Response) => {
+  app.post("/api/twilio/outbound-voice-twiml", async (req: Request, res: Response) => {
     try {
       console.log("POST /api/twilio/outbound-voice-twiml - Request received. Body:", req.body);
-      
-      // Extract the destination phone number from the request body
-      const to = req.body.To;
-      
-      // Get the Twilio phone number from environment variables
-      const callerId = process.env.TWILIO_PHONE_NUMBER;
-      
-      if (!callerId) {
+
+      // 1. Extract parameters from Twilio's POST
+      const destinationNumber = req.body.To;
+      const outboundCallSid = req.body.CallSid;
+      const clientIdentity = req.body.From; // e.g., "client:agent1"
+      const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+
+      if (!twilioPhoneNumber) {
         console.error("POST /api/twilio/outbound-voice-twiml - Missing TWILIO_PHONE_NUMBER in environment variables");
         return res.status(500).send("<Response><Say>Server configuration error: Missing caller ID</Say></Response>");
       }
-      
-      if (!to) {
+
+      if (!destinationNumber) {
         console.error("POST /api/twilio/outbound-voice-twiml - Missing 'To' parameter in request body");
         return res.status(400).send("<Response><Say>Missing destination phone number</Say></Response>");
       }
-      
-      // Create TwiML to instruct Twilio to dial the number
+
+      // 2. Contact Lookup (Optional but recommended)
+      let foundContactId: number | null = null;
+      try {
+        const normalizedPhone = normalizePhone(destinationNumber);
+        const { data: contacts, error: contactError } = await supabase
+          .from('contacts')
+          .select('id')
+          .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${destinationNumber}%`)
+          .limit(1);
+
+        if (contactError) {
+          console.error("Supabase contact SELECT error:", contactError.message);
+        } else if (contacts && contacts.length > 0) {
+          foundContactId = contacts[0].id;
+          console.log(`Contact found for outbound call: contact_id=${foundContactId}`);
+        } else {
+          console.log("No contact found for outbound call to", destinationNumber);
+        }
+      } catch (lookupError) {
+        console.error("Error during contact lookup:", lookupError);
+      }
+
+      // 3. Insert a new record into the Supabase `calls` table
+      try {
+        const { error: callInsertError } = await supabase
+          .from('calls')
+          .insert([{
+            call_sid: outboundCallSid,
+            direction: 'outbound',
+            from_number: twilioPhoneNumber,
+            to_number: destinationNumber,
+            contact_id: foundContactId,
+            status: 'initiated',
+            duration: 0,
+            call_type: 'outbound'
+          }]);
+        if (callInsertError) {
+          console.error("Supabase call log INSERT error:", callInsertError.message);
+        } else {
+          console.log("Supabase call log INSERT success for outbound call:", outboundCallSid);
+        }
+      } catch (insertError) {
+        console.error("Unexpected error inserting outbound call log:", insertError);
+      }
+
+      // 4. Generate TwiML to instruct Twilio to dial the number
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.dial({ callerId }, to);
       
-      console.log(`POST /api/twilio/outbound-voice-twiml - Generated TwiML for outbound call to ${to}: ${twiml.toString()}`);
+      // Get the status callback URL 
+      const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || `${process.env.API_URL || ''}/api/twilio/status-callback`;
+      console.log(`POST /api/twilio/outbound-voice-twiml - Using status callback URL: ${statusCallbackUrl}`);
       
-      // Set content type and send the TwiML response
+      // Add statusCallback and statusCallbackEvent to dial options
+      const dialOptions = { 
+        callerId: twilioPhoneNumber,
+        statusCallback: statusCallbackUrl,
+        statusCallbackEvent: ['initiated', 'ringing', 'answered', 'in-progress', 'completed']
+      };
+      
+      twiml.dial(dialOptions, destinationNumber);
+
+      console.log(`POST /api/twilio/outbound-voice-twiml - Generated TwiML for outbound call to ${destinationNumber}: ${twiml.toString()}`);
+
+      // 5. Set content type and send the TwiML response
       res.type('text/xml');
       res.send(twiml.toString());
-      
+
     } catch (error: any) {
-      console.error("POST /api/twilio/outbound-voice-twiml - Error generating TwiML:", error.message, error.stack);
-      
+      console.error("POST /api/twilio/outbound-voice-twiml - Error generating TwiML or logging call:", error.message, error.stack);
+
       // Provide a fallback TwiML response in case of error
       const errorTwiml = new twilio.twiml.VoiceResponse();
       errorTwiml.say("An error occurred while processing your call request. Please try again later.");
-      
+
       res.type('text/xml');
       res.status(500).send(errorTwiml.toString());
     }

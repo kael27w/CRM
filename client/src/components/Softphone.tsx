@@ -1,24 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Device } from '@twilio/voice-sdk';
-import { fetchTwilioToken } from '@/lib/api';
+import { Device, Call as TwilioCall } from '@twilio/voice-sdk';
+import { fetchTwilioToken, fetchContactByPhone } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { PhoneIcon, PhoneOffIcon, PhoneIncomingIcon, XIcon, VolumeIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-
-// Define a type for Connection since it might not be directly importable
-type Connection = any;
-
-// Define interface for Twilio error object
-interface TwilioError {
-  message?: string;
-  code?: number;
-  explanation?: string;
-  info?: any;
-  [key: string]: any;
-}
 
 /**
  * Status values for the Softphone
@@ -28,6 +16,7 @@ type CallStatus =
   | 'connecting' 
   | 'connected' 
   | 'incoming' 
+  | 'ringing'
   | 'reconnecting'
   | 'error';
 
@@ -37,7 +26,7 @@ type CallStatus =
 const Softphone: React.FC = () => {
   // References and state
   const deviceRef = useRef<Device | null>(null);
-  const connectionRef = useRef<Connection | null>(null);
+  const connectionRef = useRef<TwilioCall | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [status, setStatus] = useState<CallStatus>('disconnected');
@@ -46,6 +35,8 @@ const Softphone: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [audioInitialized, setAudioInitialized] = useState(false);
+  const [activeCallSid, setActiveCallSid] = useState<string | null>(null);
+  const [activeContactId, setActiveContactId] = useState<number | null>(null);
 
   // Initialize AudioContext
   const initializeAudio = () => {
@@ -199,14 +190,17 @@ const Softphone: React.FC = () => {
       });
     });
     
-    // Called when the Device fails to register
-    deviceRef.current.on('error', (twilioError: TwilioError) => {
+    /**
+     * Twilio error object (see Twilio Voice JS SDK docs for structure)
+     * @param twilioError - Twilio error object, typically has .code and .message
+     */
+    deviceRef.current.on('error', (twilioError: any) => {
       console.error('>>> DEVICE EVENT: error', twilioError);
       console.error('Error details:', {
         code: twilioError.code,
         message: twilioError.message,
-        info: twilioError.info,
-        explanation: twilioError.explanation
+        info: (twilioError as any).info,
+        explanation: (twilioError as any).explanation
       });
       
       setError(`Twilio error: ${twilioError.message || 'Unknown error'}`);
@@ -219,10 +213,11 @@ const Softphone: React.FC = () => {
     });
     
     // Called when there's an incoming call
-    deviceRef.current.on('incoming', (connection: Connection) => {
+    deviceRef.current.on('incoming', (connection: TwilioCall) => {
       // Immediate logging first for debugging
       console.log('>>> DEVICE EVENT: incoming', connection);
-      console.log('Connection parameters:', connection.parameters);
+      // @ts-ignore: parameters is not in TwilioCall typings but is present at runtime
+      console.log('Connection parameters:', (connection as any).parameters);
       
       // Immediate visual feedback for testing
       document.body.style.backgroundColor = 'rgba(255, 0, 0, 0.1)';
@@ -230,18 +225,32 @@ const Softphone: React.FC = () => {
         document.body.style.backgroundColor = '';
       }, 5000); // Reset after 5 seconds
       
-      console.log('From:', connection.parameters.From);
-      console.log('To:', connection.parameters.To);
-      console.log('Direction:', connection.parameters.Direction);
-      console.log('CallSid:', connection.parameters.CallSid);
-      
-      connectionRef.current = connection;
-      
-      // Get caller information (phone number)
-      const from = connection.parameters.From || 'Unknown caller';
+      // @ts-ignore
+      const from = (connection as any).parameters?.From || 'Unknown caller';
       setCallerInfo(from);
-      console.log(`Setting status to "incoming" for call from ${from}`);
       setStatus('incoming');
+      // Set active call SID
+      // @ts-ignore
+      setActiveCallSid((connection as any).parameters?.CallSid || null);
+      // Lookup contact by phone number
+      (async () => {
+        const phone = (connection as any).parameters?.From;
+        if (phone) {
+          console.log('Looking up contact for incoming call from:', phone);
+          const contact = await fetchContactByPhone(phone);
+          if (contact) {
+            setActiveContactId(contact.id);
+            setCallerInfo(`${contact.first_name} ${contact.last_name} (${phone})`);
+            console.log('Contact found for incoming call:', contact);
+          } else {
+            setActiveContactId(null);
+            console.log('No contact found for incoming call from:', phone);
+          }
+        } else {
+          setActiveContactId(null);
+          console.log('No From parameter for incoming call');
+        }
+      })();
       
       toast({
         title: 'Incoming Call',
@@ -255,13 +264,13 @@ const Softphone: React.FC = () => {
     });
     
     // Additional device events to monitor
-    deviceRef.current.on('connect', (connection: Connection) => {
+    deviceRef.current.on('connect', (connection: TwilioCall) => {
       console.log('>>> DEVICE EVENT: connect - Successfully established call', connection);
       connectionRef.current = connection;
       registerConnectionEvents(connection);
     });
     
-    deviceRef.current.on('disconnect', (connection: Connection) => {
+    deviceRef.current.on('disconnect', (connection: TwilioCall) => {
       console.log('>>> DEVICE EVENT: disconnect - Call ended', connection);
       connectionRef.current = null;
       setStatus('disconnected');
@@ -297,176 +306,93 @@ const Softphone: React.FC = () => {
   };
   
   // Register event handlers for a specific call connection
-  const registerConnectionEvents = (connection: Connection) => {
+  const registerConnectionEvents = (connection: TwilioCall) => {
     if (!connection) {
       console.error('Cannot register connection events - Connection is null');
       return;
     }
     
+    console.log('Registering connection events for call:', connection);
+    
+    // Called when the remote end is ringing
+    connection.on('ringing', () => {
+      console.log('>>> CONNECTION EVENT: ringing');
+      console.log('Connection parameters during ringing:', connection.parameters);
+      const callSid = connection.parameters?.CallSid;
+      if (callSid) {
+        console.log('Call SID during ringing:', callSid);
+        setActiveCallSid(callSid);
+      }
+      setStatus('ringing');
+    });
+    
     // Called when a call is accepted and establishes connection
     connection.on('accept', () => {
       console.log('>>> CONNECTION EVENT: accept - Call accepted');
+      console.log('Full connection object during accept:', connection);
+      console.log('Connection parameters during accept:', connection.parameters);
+      
+      const callSid = connection.parameters?.CallSid;
+      if (callSid) {
+        console.log('Call SID during accept:', callSid);
+        setActiveCallSid(callSid);
+      } else {
+        console.warn('No CallSid available during accept event');
+      }
+      
       setStatus('connected');
     });
     
     // Called when a call is disconnected
     connection.on('disconnect', () => {
       console.log('>>> CONNECTION EVENT: disconnect - Call disconnected');
+      console.log('Connection parameters during disconnect:', connection.parameters);
+      
       setStatus('disconnected');
       setCallerInfo('');
       connectionRef.current = null;
+      setActiveCallSid(null);
+      setActiveContactId(null);
     });
     
     // Called when there's a warning or transition state
     connection.on('warning', (warningName: string) => {
       console.warn('>>> CONNECTION EVENT: warning', warningName);
+      console.log('Connection parameters during warning:', connection.parameters);
     });
     
-    // Called when a call is reconnecting 
-    connection.on('reconnecting', (error: TwilioError) => {
+    /**
+     * Twilio error object (see Twilio Voice JS SDK docs for structure)
+     * @param error - Twilio error object, typically has .code and .message
+     */
+    connection.on('reconnecting', (error: any) => {
       console.warn('>>> CONNECTION EVENT: reconnecting', error);
+      console.log('Connection parameters during reconnecting:', connection.parameters);
       setStatus('reconnecting');
     });
     
-    // Called on various errors
-    connection.on('error', (error: TwilioError) => {
+    /**
+     * Twilio error object (see Twilio Voice JS SDK docs for structure)
+     * @param error - Twilio error object, typically has .code and .message
+     */
+    connection.on('error', (error: any) => {
       console.error('>>> CONNECTION EVENT: error', error);
       console.error('Error details:', {
         code: error.code,
         message: error.message,
-        info: error.info,
-        explanation: error.explanation
+        info: (error as any).info,
+        explanation: (error as any).explanation
       });
+      console.log('Connection parameters during error:', connection.parameters);
       
-      setError(`Call error: ${error?.message || 'Unknown error'}`);
+      setError(`Twilio error: ${error.message || 'Unknown error'}`);
       setStatus('error');
       toast({
-        title: 'Call Error',
-        description: error?.message || 'An error occurred during the call',
+        title: 'Softphone Error',
+        description: error.message || 'An error occurred with the phone connection',
         variant: 'destructive',
       });
     });
-    
-    // Additional connection events
-    connection.on('reject', () => {
-      console.log('>>> CONNECTION EVENT: reject - Call was rejected');
-      setStatus('disconnected');
-      setCallerInfo('');
-      connectionRef.current = null;
-    });
-    
-    connection.on('cancel', () => {
-      console.log('>>> CONNECTION EVENT: cancel - Call was cancelled');
-      setStatus('disconnected');
-      setCallerInfo('');
-      connectionRef.current = null;
-    });
-    
-    connection.on('mute', (isMuted: boolean) => {
-      console.log(`>>> CONNECTION EVENT: mute - Call ${isMuted ? 'muted' : 'unmuted'}`);
-    });
-    
-    // These events might not exist in all versions
-    try {
-      connection.on('volume', (inputVolume: number, outputVolume: number) => {
-        console.log(`>>> CONNECTION EVENT: volume - Input: ${inputVolume}, Output: ${outputVolume}`);
-      });
-      
-      connection.on('ringing', () => {
-        console.log('>>> CONNECTION EVENT: ringing - Call is ringing');
-      });
-    } catch (e) {
-      console.log('Some connection events are not supported in this version');
-    }
-  };
-  
-  // Handler for initializing audio context (can be triggered by user gesture)
-  const handleInitializeAudio = () => {
-    const success = initializeAudio();
-    if (success) {
-      toast({
-        title: 'Audio Initialized',
-        description: 'Audio system is ready for calls',
-        variant: 'default',
-      });
-    } else {
-      toast({
-        title: 'Audio Error',
-        description: 'Failed to initialize audio system',
-        variant: 'destructive',
-      });
-    }
-  };
-  
-  // Handler for accepting an incoming call
-  const handleAcceptCall = () => {
-    // Ensure audio is initialized before accepting
-    initializeAudio();
-    
-    if (connectionRef.current) {
-      console.log('Accepting incoming call');
-      connectionRef.current.accept();
-      setStatus('connected');
-    } else {
-      console.error('No connection to accept!');
-    }
-  };
-  
-  // Handler for rejecting or ending a call
-  const handleRejectOrEndCall = () => {
-    if (connectionRef.current) {
-      console.log('Rejecting/ending call');
-      connectionRef.current.disconnect();
-    } else if (deviceRef.current) {
-      console.log('No active connection, disconnecting any device connections');
-      deviceRef.current.disconnectAll();
-    } else {
-      console.error('No connection or device to disconnect!');
-    }
-    setStatus('disconnected');
-    setCallerInfo('');
-  };
-  
-  // Handler for making an outbound call
-  const handleMakeCall = () => {
-    // Ensure audio is initialized before making a call
-    initializeAudio();
-    
-    if (!deviceRef.current || !phoneNumber) {
-      console.error('Cannot make call: Device not ready or phone number empty');
-      return;
-    }
-    
-    try {
-      console.log(`Making outbound call to: ${phoneNumber}`);
-      setStatus('connecting');
-      
-      // Format phone number if necessary
-      let formattedNumber = phoneNumber.trim();
-      
-      // Call params for outbound call
-      const params = {
-        To: formattedNumber, 
-        // Any additional parameters needed
-      };
-      
-      console.log('Connecting with params:', params);
-      // Initiate the call
-      const connection = deviceRef.current.connect({ params });
-      connectionRef.current = connection;
-      console.log('Call connection initiated, registering connection events');
-      registerConnectionEvents(connection);
-      
-    } catch (err) {
-      console.error('Error placing call:', err);
-      setError(`Error placing call: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setStatus('error');
-      toast({
-        title: 'Call Error',
-        description: `Could not place call to ${phoneNumber}`,
-        variant: 'destructive',
-      });
-    }
   };
   
   // Get status text and color for UI
@@ -480,6 +406,8 @@ const Softphone: React.FC = () => {
         return { text: 'On Call', color: 'bg-blue-500' };
       case 'incoming':
         return { text: 'Incoming Call', color: 'bg-red-500 animate-pulse' };
+      case 'ringing':
+        return { text: 'Ringing', color: 'bg-yellow-500' };
       case 'reconnecting':
         return { text: 'Reconnecting...', color: 'bg-orange-500' };
       case 'error':
@@ -488,9 +416,9 @@ const Softphone: React.FC = () => {
         return { text: 'Unknown', color: 'bg-gray-500' };
     }
   };
-  
+
   const statusDetails = getStatusDetails();
-  
+
   // Minimized view of the softphone
   if (minimized) {
     return (
@@ -512,7 +440,81 @@ const Softphone: React.FC = () => {
       </div>
     );
   }
-  
+
+  // Handler for making an outbound call
+  const handleMakeCall = async () => {
+    const audioInit = initializeAudio();
+    if (!audioInit) {
+      toast({ title: "Audio Error", description: "Could not initialize audio for call.", variant: "destructive" });
+      return;
+    }
+    if (!deviceRef.current || !phoneNumber.trim()) {
+      toast({ title: "Call Error", description: "Softphone not ready or no number entered.", variant: "destructive" });
+      return;
+    }
+    const numberToDial = phoneNumber.trim();
+    setStatus('connecting');
+    try {
+      const params = { To: numberToDial };
+      console.log("Starting call to:", numberToDial, "with params:", params);
+      const callInstance: TwilioCall = await deviceRef.current.connect({ params });
+      
+      // Log call parameters
+      console.log("Call instance created:", callInstance);
+      console.log("Call parameters:", callInstance.parameters);
+      
+      // Save initial CallSid if available, will be updated on accept/connect
+      const initialCallSid = callInstance.parameters?.CallSid;
+      if (initialCallSid) {
+        console.log("Initial call SID captured:", initialCallSid);
+        setActiveCallSid(initialCallSid);
+      } else {
+        console.log("No initial CallSid available, will capture during 'accept' event");
+      }
+      
+      if (callInstance && typeof callInstance.on === 'function') {
+        connectionRef.current = callInstance;
+        registerConnectionEvents(callInstance);
+        setActiveContactId(null); // Outbound: set to null for now
+      } else {
+        setError('Failed to properly initiate call connection object.');
+        setStatus('error');
+        toast({ title: "Call Setup Error", description: "Could not set up call events.", variant: "destructive"});
+      }
+    } catch (err: any) {
+      console.error("Error in handleMakeCall:", err);
+      setError(`Error placing call: ${err?.message || 'Unknown SDK error'}`);
+      setStatus('error');
+      toast({
+        title: 'Outbound Call Error',
+        description: err?.message || `Could not place call to ${numberToDial}.`,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Handler for accepting an incoming call
+  const handleAcceptCall = () => {
+    initializeAudio();
+    if (connectionRef.current) {
+      connectionRef.current.accept();
+      setStatus('connected');
+    } else {
+      console.error('No connection to accept!');
+    }
+  };
+
+  // Handler for rejecting or ending a call
+  const handleRejectOrEndCall = () => {
+    if (connectionRef.current) {
+      connectionRef.current.disconnect();
+    } else if (deviceRef.current) {
+      deviceRef.current.disconnectAll();
+    }
+    setStatus('disconnected');
+    setCallerInfo('');
+  };
+
   // Full softphone view
   return (
     <div className="fixed bottom-4 right-4 z-50 w-80">
@@ -538,7 +540,7 @@ const Softphone: React.FC = () => {
           {/* Initialize Audio Button - Always show if not initialized */}
           {!audioInitialized && (
             <Button
-              onClick={handleInitializeAudio}
+              onClick={initializeAudio}
               variant="outline"
               size="sm"
               className="w-full mb-2"
@@ -579,6 +581,13 @@ const Softphone: React.FC = () => {
                 <PhoneIcon className="h-4 w-4 mr-1" />
                 Call
               </Button>
+            </div>
+          )}
+          {/* Debug display for active call info */}
+          {status === 'connected' && (
+            <div>
+              <p className="text-xs">Active Call SID: {activeCallSid || 'N/A'}</p>
+              <p className="text-xs">Active Contact ID: {activeContactId || 'N/A'}</p>
             </div>
           )}
         </CardContent>
@@ -622,4 +631,4 @@ const Softphone: React.FC = () => {
   );
 };
 
-export default Softphone; 
+export default Softphone;
