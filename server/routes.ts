@@ -702,75 +702,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // New route for handling outbound calls from the browser client
   app.post("/api/twilio/outbound-voice-twiml", async (req: Request, res: Response) => {
     try {
-      console.log("POST /api/twilio/outbound-voice-twiml - Request received. Body:", req.body);
+      const outboundCallSid = req.body.CallSid || 'UNKNOWN_SID';
+      console.log(`[${outboundCallSid}] POST /api/twilio/outbound-voice-twiml - Request received. Body:`, JSON.stringify(req.body));
 
       // 1. Extract parameters from Twilio's POST
       const destinationNumber = req.body.To;
-      const outboundCallSid = req.body.CallSid;
       const clientIdentity = req.body.From; // e.g., "client:agent1"
       const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+      
+      console.log(`[${outboundCallSid}] Call details: To=${destinationNumber}, From=${clientIdentity}, SID=${outboundCallSid}`);
 
       if (!twilioPhoneNumber) {
-        console.error("POST /api/twilio/outbound-voice-twiml - Missing TWILIO_PHONE_NUMBER in environment variables");
+        console.error(`[${outboundCallSid}] CRITICAL ERROR: Missing TWILIO_PHONE_NUMBER in environment variables`);
         return res.status(500).send("<Response><Say>Server configuration error: Missing caller ID</Say></Response>");
       }
 
       if (!destinationNumber) {
-        console.error("POST /api/twilio/outbound-voice-twiml - Missing 'To' parameter in request body");
+        console.error(`[${outboundCallSid}] ERROR: Missing 'To' parameter in request body`);
         return res.status(400).send("<Response><Say>Missing destination phone number</Say></Response>");
       }
 
+      if (!outboundCallSid || outboundCallSid === 'UNKNOWN_SID') {
+        console.error(`[${outboundCallSid}] WARNING: Missing CallSid in request. This is unexpected for Twilio calls.`);
+        // We'll continue but log this warning
+      }
+
       // 2. Contact Lookup (Optional but recommended)
+      console.log(`[${outboundCallSid}] Performing contact lookup for number: ${destinationNumber}`);
       let foundContactId: number | null = null;
       try {
         const normalizedPhone = normalizePhone(destinationNumber);
+        console.log(`[${outboundCallSid}] Normalized phone for lookup: ${normalizedPhone}`);
+        
         const { data: contacts, error: contactError } = await supabase
           .from('contacts')
-          .select('id')
+          .select('id, first_name, last_name')
           .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${destinationNumber}%`)
           .limit(1);
 
         if (contactError) {
-          console.error("Supabase contact SELECT error:", contactError.message);
+          console.error(`[${outboundCallSid}] Supabase contact SELECT error:`, contactError.message);
         } else if (contacts && contacts.length > 0) {
           foundContactId = contacts[0].id;
-          console.log(`Contact found for outbound call: contact_id=${foundContactId}`);
+          console.log(`[${outboundCallSid}] Contact found: ID=${foundContactId}, Name=${contacts[0].first_name} ${contacts[0].last_name}`);
         } else {
-          console.log("No contact found for outbound call to", destinationNumber);
+          console.log(`[${outboundCallSid}] No contact found for outbound call to ${destinationNumber}`);
         }
-      } catch (lookupError) {
-        console.error("Error during contact lookup:", lookupError);
+      } catch (lookupError: any) {
+        console.error(`[${outboundCallSid}] Error during contact lookup:`, lookupError.message, lookupError.stack);
+        // We'll continue despite lookup errors to ensure the call goes through
       }
 
       // 3. Insert a new record into the Supabase `calls` table
+      console.log(`[${outboundCallSid}] Attempting to INSERT call record into Supabase...`);
       try {
-        const { error: callInsertError } = await supabase
+        const callData = {
+          call_sid: outboundCallSid,
+          direction: 'outbound',
+          from_number: twilioPhoneNumber,
+          to_number: destinationNumber,
+          contact_id: foundContactId,
+          status: 'initiated',
+          duration: 0,
+          call_type: 'outbound',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        console.log(`[${outboundCallSid}] Call data to insert:`, JSON.stringify(callData));
+        
+        const { data: newCallRecord, error: insertError } = await supabase
           .from('calls')
-          .insert([{
-            call_sid: outboundCallSid,
-            direction: 'outbound',
-            from_number: twilioPhoneNumber,
-            to_number: destinationNumber,
-            contact_id: foundContactId,
-            status: 'initiated',
-            duration: 0,
-            call_type: 'outbound'
-          }]);
-        if (callInsertError) {
-          console.error("Supabase call log INSERT error:", callInsertError.message);
+          .insert([callData])
+          .select() // Select the created record
+          .single();
+        
+        if (insertError) {
+          console.error(`[${outboundCallSid}] Supabase call log INSERT error:`, insertError.message, insertError.details || '');
+          console.error(`[${outboundCallSid}] INSERT payload was:`, JSON.stringify(callData));
+        } else if (newCallRecord) {
+          console.log(`[${outboundCallSid}] Successfully INSERTED outbound call to Supabase. DB Record ID: ${newCallRecord.id}`);
         } else {
-          console.log("Supabase call log INSERT success for outbound call:", outboundCallSid);
+          console.warn(`[${outboundCallSid}] INSERT succeeded but no record returned`);
         }
-      } catch (insertError) {
-        console.error("Unexpected error inserting outbound call log:", insertError);
+      } catch (insertError: any) {
+        console.error(`[${outboundCallSid}] CRITICAL ERROR inserting outbound call log:`, insertError.message, insertError.stack);
+        // Continue to provide TwiML even if logging fails
       }
 
       // 4. Generate TwiML to instruct Twilio to dial the number
+      console.log(`[${outboundCallSid}] Generating TwiML response...`);
       const twiml = new twilio.twiml.VoiceResponse();
       
       // Get the status callback URL 
       const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || `${process.env.API_URL || ''}/api/twilio/status-callback`;
-      console.log(`POST /api/twilio/outbound-voice-twiml - Using status callback URL: ${statusCallbackUrl}`);
+      console.log(`[${outboundCallSid}] Using status callback URL: ${statusCallbackUrl}`);
       
       // Add statusCallback and statusCallbackEvent to dial options
       const dialOptions = { 
@@ -781,14 +807,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       twiml.dial(dialOptions, destinationNumber);
 
-      console.log(`POST /api/twilio/outbound-voice-twiml - Generated TwiML for outbound call to ${destinationNumber}: ${twiml.toString()}`);
+      console.log(`[${outboundCallSid}] Generated TwiML for outbound call: ${twiml.toString()}`);
 
       // 5. Set content type and send the TwiML response
       res.type('text/xml');
       res.send(twiml.toString());
+      console.log(`[${outboundCallSid}] TwiML response sent successfully`);
 
     } catch (error: any) {
-      console.error("POST /api/twilio/outbound-voice-twiml - Error generating TwiML or logging call:", error.message, error.stack);
+      const callSid = req.body?.CallSid || 'UNKNOWN_SID';
+      console.error(`[${callSid}] CRITICAL ERROR in outbound-voice-twiml handler:`, error.message, error.stack);
 
       // Provide a fallback TwiML response in case of error
       const errorTwiml = new twilio.twiml.VoiceResponse();
@@ -796,6 +824,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.type('text/xml');
       res.status(500).send(errorTwiml.toString());
+      console.error(`[${callSid}] Sent error TwiML response`);
     }
   });
   console.log("Registered POST /api/twilio/outbound-voice-twiml route");
