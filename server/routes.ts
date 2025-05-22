@@ -701,20 +701,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // New route for handling outbound calls from the browser client
   app.post("/api/twilio/outbound-voice-twiml", async (req: Request, res: Response) => {
-    try {
-      const outboundCallSid = req.body.CallSid || 'UNKNOWN_SID';
-      console.log(`[${outboundCallSid}] POST /api/twilio/outbound-voice-twiml - Request received. Body:`, JSON.stringify(req.body));
+    const outboundCallSid = req.body.CallSid || 'UNKNOWN_SID';
+    
+    console.log(`[${outboundCallSid}] POST /api/twilio/outbound-voice-twiml - START - Request received`);
+    console.log(`[${outboundCallSid}] Complete request body:`, JSON.stringify(req.body, null, 2));
 
+    try {
       // 1. Extract parameters from Twilio's POST
       const destinationNumber = req.body.To;
       const clientIdentity = req.body.From; // e.g., "client:agent1"
       const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
       
-      console.log(`[${outboundCallSid}] Call details: To=${destinationNumber}, From=${clientIdentity}, SID=${outboundCallSid}`);
+      console.log(`[${outboundCallSid}] Extracted parameters:`);
+      console.log(`[${outboundCallSid}] - To (destination): "${destinationNumber}"`);
+      console.log(`[${outboundCallSid}] - From (client): "${clientIdentity}"`);
+      console.log(`[${outboundCallSid}] - CallSid: "${outboundCallSid}"`);
+      console.log(`[${outboundCallSid}] - Using caller ID from env: "${twilioPhoneNumber}"`);
 
       if (!twilioPhoneNumber) {
-        console.error(`[${outboundCallSid}] CRITICAL ERROR: Missing TWILIO_PHONE_NUMBER in environment variables`);
-        return res.status(500).send("<Response><Say>Server configuration error: Missing caller ID</Say></Response>");
+        console.error(`[${outboundCallSid}] CRITICAL WARNING: Missing TWILIO_PHONE_NUMBER in environment variables`);
+        // Continue anyway, but log the error
       }
 
       if (!destinationNumber) {
@@ -723,8 +729,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!outboundCallSid || outboundCallSid === 'UNKNOWN_SID') {
-        console.error(`[${outboundCallSid}] WARNING: Missing CallSid in request. This is unexpected for Twilio calls.`);
-        // We'll continue but log this warning
+        console.error(`[${outboundCallSid}] ERROR: Missing 'CallSid' parameter in request body`);
+        // We'll still proceed but this is unusual and might cause issues with call tracking
       }
 
       // 2. Contact Lookup (Optional but recommended)
@@ -742,6 +748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (contactError) {
           console.error(`[${outboundCallSid}] Supabase contact SELECT error:`, contactError.message);
+          console.error(`[${outboundCallSid}] Contact lookup error details:`, contactError.details || '');
         } else if (contacts && contacts.length > 0) {
           foundContactId = contacts[0].id;
           console.log(`[${outboundCallSid}] Contact found: ID=${foundContactId}, Name=${contacts[0].first_name} ${contacts[0].last_name}`);
@@ -754,14 +761,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 3. Insert a new record into the Supabase `calls` table
-      console.log(`[${outboundCallSid}] Attempting to INSERT call record into Supabase...`);
+      console.log(`[${outboundCallSid}] Preparing to INSERT call record into Supabase...`);
+      
+      let dbRecordId: number | null = null;
+      let insertSuccess = false;
+      
       try {
+        // Create the call record object with all required fields
         const callData = {
           call_sid: outboundCallSid,
           direction: 'outbound',
-          from_number: twilioPhoneNumber,
+          from_number: twilioPhoneNumber || 'unknown', // Fallback if env var is missing
           to_number: destinationNumber,
-          contact_id: foundContactId,
+          contact_id: foundContactId, // This will be null if no contact was found
           status: 'initiated',
           duration: 0,
           call_type: 'outbound',
@@ -769,24 +781,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updated_at: new Date().toISOString()
         };
         
-        console.log(`[${outboundCallSid}] Call data to insert:`, JSON.stringify(callData));
+        console.log(`[${outboundCallSid}] Call data payload for Supabase insert:`, JSON.stringify(callData, null, 2));
         
-        const { data: newCallRecord, error: insertError } = await supabase
-          .from('calls')
-          .insert([callData])
-          .select() // Select the created record
-          .single();
+        // Perform the insert with retry logic
+        let retryCount = 0;
+        const maxRetries = 2;
         
-        if (insertError) {
-          console.error(`[${outboundCallSid}] Supabase call log INSERT error:`, insertError.message, insertError.details || '');
-          console.error(`[${outboundCallSid}] INSERT payload was:`, JSON.stringify(callData));
-        } else if (newCallRecord) {
-          console.log(`[${outboundCallSid}] Successfully INSERTED outbound call to Supabase. DB Record ID: ${newCallRecord.id}`);
-        } else {
-          console.warn(`[${outboundCallSid}] INSERT succeeded but no record returned`);
+        while (!insertSuccess && retryCount <= maxRetries) {
+          try {
+            if (retryCount > 0) {
+              console.log(`[${outboundCallSid}] Retrying Supabase insert (attempt ${retryCount})`);
+            }
+            
+            const insertResult = await supabase
+              .from('calls')
+              .insert([callData])
+              .select();
+            
+            const { data: newCallRecords, error: insertError } = insertResult;
+            
+            if (insertError) {
+              console.error(`[${outboundCallSid}] Supabase call log INSERT error:`, insertError.message);
+              console.error(`[${outboundCallSid}] INSERT error details:`, insertError.details || '');
+              
+              // Check for specific error types that might indicate a transient issue
+              if (insertError.code === '23505') { // Unique constraint violation
+                console.log(`[${outboundCallSid}] Duplicate record detected, call may already be logged. Continuing...`);
+                
+                // Try to get the existing record ID for logging purposes
+                try {
+                  const { data: existingData } = await supabase
+                    .from('calls')
+                    .select('id')
+                    .eq('call_sid', outboundCallSid)
+                    .single();
+                    
+                  if (existingData) {
+                    dbRecordId = existingData.id;
+                    console.log(`[${outboundCallSid}] Found existing record with ID: ${dbRecordId}`);
+                  }
+                } catch (lookupErr) {
+                  console.error(`[${outboundCallSid}] Error looking up existing record:`, lookupErr);
+                }
+                
+                insertSuccess = true; // Consider it a success if it's already in the database
+                break;
+              }
+              
+              retryCount++;
+              // Add a small delay before retrying
+              await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+            } else {
+              if (newCallRecords && newCallRecords.length > 0) {
+                dbRecordId = newCallRecords[0].id;
+                console.log(`[${outboundCallSid}] Successfully INSERTED outbound call to Supabase. DB Record ID: ${dbRecordId}`);
+              } else {
+                console.warn(`[${outboundCallSid}] INSERT succeeded but no records returned`);
+              }
+              insertSuccess = true;
+              break;
+            }
+          } catch (retryError: any) {
+            console.error(`[${outboundCallSid}] Error during Supabase insert retry:`, retryError.message);
+            console.error(`[${outboundCallSid}] Retry error stack:`, retryError.stack);
+            retryCount++;
+            // Add a small delay before retrying
+            await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+          }
+        }
+        
+        if (!insertSuccess) {
+          console.error(`[${outboundCallSid}] CRITICAL: Failed to insert call record after ${maxRetries} retries`);
         }
       } catch (insertError: any) {
-        console.error(`[${outboundCallSid}] CRITICAL ERROR inserting outbound call log:`, insertError.message, insertError.stack);
+        console.error(`[${outboundCallSid}] CRITICAL ERROR inserting outbound call log:`, insertError.message);
+        console.error(`[${outboundCallSid}] Full error stack:`, insertError.stack);
         // Continue to provide TwiML even if logging fails
       }
 
@@ -800,31 +869,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add statusCallback and statusCallbackEvent to dial options
       const dialOptions = { 
-        callerId: twilioPhoneNumber,
+        callerId: twilioPhoneNumber || '', // Empty string if env var is missing
         statusCallback: statusCallbackUrl,
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'in-progress', 'completed']
       };
       
+      console.log(`[${outboundCallSid}] Dial options:`, JSON.stringify(dialOptions, null, 2));
+      
       twiml.dial(dialOptions, destinationNumber);
-
-      console.log(`[${outboundCallSid}] Generated TwiML for outbound call: ${twiml.toString()}`);
+      
+      const twimlString = twiml.toString();
+      console.log(`[${outboundCallSid}] Generated TwiML:`, twimlString);
 
       // 5. Set content type and send the TwiML response
       res.type('text/xml');
-      res.send(twiml.toString());
+      res.send(twimlString);
       console.log(`[${outboundCallSid}] TwiML response sent successfully`);
+      console.log(`[${outboundCallSid}] POST /api/twilio/outbound-voice-twiml - END - Handler completed ` + 
+                 (insertSuccess ? `(call logged, DB ID: ${dbRecordId})` : `(WARNING: call logging failed)`));
 
     } catch (error: any) {
-      const callSid = req.body?.CallSid || 'UNKNOWN_SID';
-      console.error(`[${callSid}] CRITICAL ERROR in outbound-voice-twiml handler:`, error.message, error.stack);
+      console.error(`[${outboundCallSid}] CRITICAL ERROR in outbound-voice-twiml handler:`, error.message);
+      console.error(`[${outboundCallSid}] Full error stack:`, error.stack);
 
-      // Provide a fallback TwiML response in case of error
-      const errorTwiml = new twilio.twiml.VoiceResponse();
-      errorTwiml.say("An error occurred while processing your call request. Please try again later.");
-
-      res.type('text/xml');
-      res.status(500).send(errorTwiml.toString());
-      console.error(`[${callSid}] Sent error TwiML response`);
+      try {
+        // Provide a fallback TwiML response in case of error
+        const errorTwiml = new twilio.twiml.VoiceResponse();
+        errorTwiml.say("An error occurred while processing your call request. Please try again later.");
+        
+        console.error(`[${outboundCallSid}] Sending error TwiML response`);
+        res.type('text/xml');
+        res.status(500).send(errorTwiml.toString());
+        console.error(`[${outboundCallSid}] Error TwiML response sent`);
+      } catch (twimlError: any) {
+        console.error(`[${outboundCallSid}] FAILED to create or send error TwiML:`, twimlError.message);
+        if (!res.headersSent) {
+          res.status(500).send("Internal server error");
+        }
+      }
+      
+      console.log(`[${outboundCallSid}] POST /api/twilio/outbound-voice-twiml - END - Handler failed with errors`);
     }
   });
   console.log("Registered POST /api/twilio/outbound-voice-twiml route");
