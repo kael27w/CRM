@@ -690,10 +690,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/twilio/voice", twilioWebhook(voiceWebhookUrl), handleVoiceWebhook);
   console.log("Registered POST /api/twilio/voice route");
 
-  const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || (process.env.API_URL ? `${process.env.API_URL}/api/twilio/status-callback` : '');
-  console.log(`Twilio STATUS CALLBACK webhook URL for validation: ${statusCallbackUrl}`);
-  app.post("/api/twilio/status-callback", twilioWebhook(statusCallbackUrl), handleStatusCallback);
-  console.log("Registered POST /api/twilio/status-callback route");
+  // Old route with validation
+  // app.post("/api/twilio/status-callback", twilioWebhook(statusCallbackUrl), handleStatusCallback);
+
+  // New route without validation - temporarily disabled to test if webhook validation is the issue
+  app.post("/api/twilio/status-callback", async (req: Request, res: Response) => {
+    console.log("DIRECT ENTRY POINT: /api/twilio/status-callback route hit without middleware");
+    try {
+      await handleStatusCallback(req, res);
+    } catch (error: any) {
+      console.error("CRITICAL: Unhandled error in status-callback route:", error.message, error.stack);
+      if (!res.headersSent) {
+        res.status(500).send("Server error");
+      }
+    }
+  });
+  console.log("Registered POST /api/twilio/status-callback route WITHOUT Twilio validation middleware");
   
   // New route for generating Twilio client tokens
   app.get("/api/twilio/token", generateTwilioToken);

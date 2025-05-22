@@ -201,46 +201,99 @@ export const generateTwilioToken = (req: Request, res: Response) => {
   }
 };
 
-// handleStatusCallback remains the same as the last version you had,
-// which correctly uses ParentCallSid/DialCallSid
+/**
+ * Handles status callbacks from Twilio
+ */
 export const handleStatusCallback = async (req: Request, res: Response) => {
+  // Extremely early logging to confirm the handler is being invoked
+  console.log(`POST /api/twilio/status-callback - HANDLER INVOKED. Request received.`);
+  console.log(`Complete raw request body:`, JSON.stringify(req.body, null, 2));
+  
   const outgoingCallSid = req.body.CallSid || 'UNKNOWN_OUTGOING_SID';
   const parentCallSid = req.body.ParentCallSid || req.body.DialCallSid;
+  
+  // For outbound calls from browser client, we need to use the original CallSid from the outbound request
+  // But for status updates on the dialed leg, we need to look at the parent relationship
   const effectiveCallSidToUpdate = parentCallSid || outgoingCallSid;
 
-  console.log(`[${outgoingCallSid}] handleStatusCallback START. Parent/DialCallSid: ${parentCallSid}. Will attempt to update record for SID: ${effectiveCallSidToUpdate}`);
-  console.log(`[${outgoingCallSid}] Full request body:`, JSON.stringify(req.body, null, 2));
+  console.log(`[${outgoingCallSid}] STATUS CALLBACK START. Parent/DialCallSid: ${parentCallSid || 'NONE'}`);
+  console.log(`[${outgoingCallSid}] Will attempt to update record for SID: ${effectiveCallSidToUpdate}`);
+  
+  // Send a 200 OK response early to prevent Twilio from retrying due to timeouts
+  // This is important as database operations might take time
+  res.status(200).send('OK');
+  console.log(`[${outgoingCallSid}] Sent immediate 200 OK response to Twilio to acknowledge receipt`);
 
   try {
-    const callStatus = req.body.CallStatus;
+    const callStatus = req.body.CallStatus || 'unknown';
     const duration = parseInt(req.body.CallDuration || '0', 10);
     const twilioErrorCode = req.body.ErrorCode;
-
-    console.log(`[${outgoingCallSid}] Status Event: ${callStatus}`);
-    console.log(`[${outgoingCallSid}] Data: Status=${callStatus}, Duration=${duration}, TwilioErrorCode=${twilioErrorCode}`);
-
+    
+    // Log more call details that might help diagnose issues
+    console.log(`[${outgoingCallSid}] Call details:`);
+    console.log(`[${outgoingCallSid}] - Status: ${callStatus}`);
+    console.log(`[${outgoingCallSid}] - Duration: ${duration} seconds`);
+    console.log(`[${outgoingCallSid}] - From: ${req.body.From || 'unknown'}`);
+    console.log(`[${outgoingCallSid}] - To: ${req.body.To || 'unknown'}`);
+    console.log(`[${outgoingCallSid}] - Direction: ${req.body.Direction || 'unknown'}`);
+    console.log(`[${outgoingCallSid}] - Error Code: ${twilioErrorCode || 'none'}`);
+    
     if (!effectiveCallSidToUpdate || effectiveCallSidToUpdate.startsWith('UNKNOWN_')) {
-      console.error(`[${outgoingCallSid}] Missing or invalid CallSid/ParentCallSid to update in status callback.`);
-      return res.status(400).send('Missing CallSid/ParentCallSid to identify call record.');
+      console.error(`[${outgoingCallSid}] CRITICAL: Missing or invalid CallSid to update in status callback.`);
+      // Response already sent, so we just log the error and continue
     }
 
-    // First check if we have a record for this call SID
-    const { data: existingCall, error: checkError } = await supabase
+    // IMPORTANT: Try multiple approaches to find the call record
+    console.log(`[${outgoingCallSid}] FIRST ATTEMPT: Looking for call record with call_sid = ${effectiveCallSidToUpdate}`);
+    
+    // First approach: Try to find record using the effective SID (parent/dial or direct)
+    let { data: existingCall, error: checkError } = await supabase
       .from('calls')
       .select('*')
       .eq('call_sid', effectiveCallSidToUpdate)
       .single();
 
     if (checkError) {
-      console.error(`[${outgoingCallSid}] Error checking for existing call record:`, checkError.message);
+      console.log(`[${outgoingCallSid}] First lookup attempt error:`, checkError.message);
+      
+      // Second approach: If that failed and we have a parent SID, try with the direct outgoing SID
+      if (parentCallSid && parentCallSid !== outgoingCallSid) {
+        console.log(`[${outgoingCallSid}] SECOND ATTEMPT: Looking for call record with call_sid = ${outgoingCallSid}`);
+        
+        const secondLookup = await supabase
+          .from('calls')
+          .select('*')
+          .eq('call_sid', outgoingCallSid)
+          .single();
+          
+        if (!secondLookup.error) {
+          existingCall = secondLookup.data;
+          console.log(`[${outgoingCallSid}] Found record using direct outgoing SID!`);
+        } else {
+          console.log(`[${outgoingCallSid}] Second lookup attempt error:`, secondLookup.error.message);
+        }
+      }
     }
 
     if (!existingCall) {
-      console.warn(`[${outgoingCallSid}] No existing call record found for SID ${effectiveCallSidToUpdate}. This could be normal for certain status events.`);
+      console.warn(`[${outgoingCallSid}] No existing call record found. Printing ALL recent calls for debugging:`);
       
-      // If this is a valid call status and we don't have a record, we should create one
-      if (['initiated', 'ringing', 'in-progress'].includes(callStatus)) {
-        console.log(`[${outgoingCallSid}] Creating new call record for SID ${effectiveCallSidToUpdate} with status ${callStatus}`);
+      // Debug: List recent calls to see what's actually in the database
+      const { data: recentCalls, error: listError } = await supabase
+        .from('calls')
+        .select('id, call_sid, status, direction, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+        
+      if (listError) {
+        console.error(`[${outgoingCallSid}] Error listing recent calls:`, listError.message);
+      } else {
+        console.log(`[${outgoingCallSid}] Recent calls:`, JSON.stringify(recentCalls, null, 2));
+      }
+      
+      // Conditionally create a new record for important statuses
+      if (['initiated', 'ringing', 'in-progress', 'completed', 'answered'].includes(callStatus)) {
+        console.log(`[${outgoingCallSid}] Creating new call record with status ${callStatus}`);
         
         // Determine direction based on context
         const isOutbound = req.body.Direction === 'outbound-api' || 
@@ -250,30 +303,42 @@ export const handleStatusCallback = async (req: Request, res: Response) => {
         const direction = isOutbound ? 'outbound' : 'inbound';
         const call_type = direction; // Keeping call_type and direction consistent
         
-        const { error: insertError } = await supabase
+        const callToInsert = {
+          call_sid: effectiveCallSidToUpdate,
+          direction: direction,
+          call_type: call_type,
+          from_number: req.body.From || '',
+          to_number: req.body.To || '',
+          status: callStatus,
+          duration: duration,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        console.log(`[${outgoingCallSid}] Inserting new call record:`, JSON.stringify(callToInsert, null, 2));
+        
+        const { data: newCallRecord, error: insertError } = await supabase
           .from('calls')
-          .insert([{
-            call_sid: effectiveCallSidToUpdate,
-            direction: direction,
-            call_type: call_type,
-            from_number: req.body.From || '',
-            to_number: req.body.To || '',
-            status: callStatus,
-            duration: duration,
-          }]);
+          .insert([callToInsert])
+          .select();
 
         if (insertError) {
           console.error(`[${outgoingCallSid}] Error creating new call record:`, insertError.message);
+          console.error(`[${outgoingCallSid}] Insert error details:`, insertError.details || '');
         } else {
-          console.log(`[${outgoingCallSid}] Successfully created new call record for SID ${effectiveCallSidToUpdate}`);
+          console.log(`[${outgoingCallSid}] Successfully created new call record with ID:`, 
+                      newCallRecord && newCallRecord.length > 0 ? newCallRecord[0].id : 'unknown');
         }
+      } else {
+        console.log(`[${outgoingCallSid}] Status '${callStatus}' not significant enough to create a new record`);
       }
     } else {
-      console.log(`[${outgoingCallSid}] Found existing call record for SID ${effectiveCallSidToUpdate}, updating status to ${callStatus}`);
+      console.log(`[${outgoingCallSid}] Found existing call record with ID ${existingCall.id}, updating status to '${callStatus}'`);
       
-      let updatePayload: any = {
+      // Create update payload
+      const updatePayload: any = {
         status: callStatus,
-        updated_at: new Date()
+        updated_at: new Date().toISOString() // Use ISO string format for consistency
       };
       
       // Only update duration if it's a completed call or has a duration
@@ -285,31 +350,35 @@ export const handleStatusCallback = async (req: Request, res: Response) => {
         updatePayload.notes = `Twilio Error: ${twilioErrorCode}. ${req.body.ErrorMessage || ''}`.trim();
       }
 
-      console.log(`[${outgoingCallSid}] Attempting to update call record in Supabase for SID: ${effectiveCallSidToUpdate} with payload:`, updatePayload);
-      const { data, error: updateError } = await supabase
-        .from('calls')
-        .update(updatePayload)
-        .eq('call_sid', effectiveCallSidToUpdate)
-        .select();
+      console.log(`[${outgoingCallSid}] Update payload:`, JSON.stringify(updatePayload, null, 2));
+      
+      // Try a more targeted update with better error handling
+      try {
+        const { data: updatedData, error: updateError } = await supabase
+          .from('calls')
+          .update(updatePayload)
+          .eq('id', existingCall.id) // Update by primary key for reliability
+          .select();
 
-      if (updateError) {
-        console.error(`[${outgoingCallSid}] Supabase call log UPDATE error for SID ${effectiveCallSidToUpdate}:`, updateError.message);
-        return res.status(200).send('Error updating record, but acknowledged.');
-      }
-
-      if (data && data.length > 0) {
-        console.log(`[${outgoingCallSid}] Successfully updated call record for SID ${effectiveCallSidToUpdate}.`);
-      } else {
-        console.warn(`[${outgoingCallSid}] No call record updated for SID ${effectiveCallSidToUpdate}.`);
+        if (updateError) {
+          console.error(`[${outgoingCallSid}] Supabase UPDATE error:`, updateError.message);
+          console.error(`[${outgoingCallSid}] Update error details:`, updateError.details || '');
+        } else if (updatedData && updatedData.length > 0) {
+          console.log(`[${outgoingCallSid}] Successfully updated call record. New status: '${updatedData[0].status}', Duration: ${updatedData[0].duration}s`);
+        } else {
+          console.warn(`[${outgoingCallSid}] No rows updated. The record might have been deleted or ID changed.`);
+        }
+      } catch (dbError: any) {
+        console.error(`[${outgoingCallSid}] Unexpected database error during update:`, dbError.message);
+        console.error(`[${outgoingCallSid}] Error stack:`, dbError.stack);
       }
     }
 
-    res.status(200).send();
-    console.log(`[${outgoingCallSid}] handleStatusCallback END - Response sent for SID ${effectiveCallSidToUpdate}.`);
+    console.log(`[${outgoingCallSid}] STATUS CALLBACK PROCESSING COMPLETE`);
 
   } catch (error: any) {
-    console.error(`[${outgoingCallSid}] UNEXPECTED ERROR in handleStatusCallback:`, error.message, error.stack);
-    res.status(500).send('Internal server error');
-    console.log(`[${outgoingCallSid}] handleStatusCallback END - Error response sent.`);
+    console.error(`[${outgoingCallSid}] CRITICAL ERROR in status callback handler:`, error.message);
+    console.error(`[${outgoingCallSid}] Full error stack:`, error.stack);
+    // Response already sent earlier
   }
 };
