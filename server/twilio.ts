@@ -208,14 +208,27 @@ export const handleStatusCallback = async (req: Request, res: Response) => {
   // Extremely early detailed logging to confirm the handler is being invoked
   console.log(`[STATUS_CALLBACK_HANDLER] INVOKED. CallSid: ${req.body.CallSid}, Status: ${req.body.CallStatus}, Duration: ${req.body.CallDuration}, Full Body:`, JSON.stringify(req.body, null, 2));
   
-  const outgoingCallSid = req.body.CallSid || 'UNKNOWN_OUTGOING_SID';
+  const currentCallSid = req.body.CallSid || 'UNKNOWN_SID';
   const parentCallSid = req.body.ParentCallSid || req.body.DialCallSid;
+  const direction = req.body.Direction || 'unknown';
+  
+  // Determine which leg of the call we're dealing with
+  const isChildLeg = !!parentCallSid;
+  const legType = isChildLeg ? 'CHILD' : 'PARENT';
+  
+  console.log(`[STATUS_CALLBACK_HANDLER] Processing ${legType} LEG. CallSid: ${currentCallSid}`);
+  if (isChildLeg) {
+    console.log(`[STATUS_CALLBACK_HANDLER] This is a child leg (Twilio->Destination). Parent SID: ${parentCallSid}`);
+  } else {
+    console.log(`[STATUS_CALLBACK_HANDLER] This is a parent leg (Client->Twilio). No parent SID.`);
+  }
   
   // For outbound calls from browser client, we need to use the original CallSid from the outbound request
-  // But for status updates on the dialed leg, we need to look at the parent relationship
-  const callSidToUpdate = parentCallSid || outgoingCallSid;
+  // For outbound calls, we should update the parent leg record, since that's what we created initially
+  const callSidToUpdate = isChildLeg ? parentCallSid : currentCallSid;
 
-  console.log(`[STATUS_CALLBACK_HANDLER] Parsed values - SID: ${callSidToUpdate}, Status: ${req.body.CallStatus}, Duration: ${req.body.CallDuration}`);
+  console.log(`[STATUS_CALLBACK_HANDLER] We will attempt to update the call record with SID: ${callSidToUpdate}`);
+  console.log(`[STATUS_CALLBACK_HANDLER] Status: ${req.body.CallStatus}, Duration: ${req.body.CallDuration || '0'}`);
   
   // Send a 200 OK response early to prevent Twilio from retrying due to timeouts
   // This is important as database operations might take time
@@ -234,7 +247,7 @@ export const handleStatusCallback = async (req: Request, res: Response) => {
     console.log(`[STATUS_CALLBACK_HANDLER] - Duration: ${duration} seconds`);
     console.log(`[STATUS_CALLBACK_HANDLER] - From: ${req.body.From || 'unknown'}`);
     console.log(`[STATUS_CALLBACK_HANDLER] - To: ${req.body.To || 'unknown'}`);
-    console.log(`[STATUS_CALLBACK_HANDLER] - Direction: ${req.body.Direction || 'unknown'}`);
+    console.log(`[STATUS_CALLBACK_HANDLER] - Direction: ${direction}`);
     console.log(`[STATUS_CALLBACK_HANDLER] - Error Code: ${twilioErrorCode || 'none'}`);
     
     if (!callSidToUpdate || callSidToUpdate.startsWith('UNKNOWN_')) {
@@ -261,21 +274,21 @@ export const handleStatusCallback = async (req: Request, res: Response) => {
       console.log(`[STATUS_CALLBACK_HANDLER] Found call record. DB ID: ${existingCallData.id}`);
     }
 
-    // Second approach if first fails: Try with direct outgoing SID
-    if (!existingCallData && parentCallSid && parentCallSid !== outgoingCallSid) {
-      console.log(`[STATUS_CALLBACK_HANDLER] SECOND ATTEMPT: Looking for call record with call_sid = ${outgoingCallSid}`);
+    // If we didn't find it with the parent SID (for child legs), try with the current SID as a fallback
+    if (!existingCallData && isChildLeg) {
+      console.log(`[STATUS_CALLBACK_HANDLER] FALLBACK: Looking for call record with current leg's SID = ${currentCallSid}`);
       
       const secondLookup = await supabase
         .from('calls')
         .select('*')
-        .eq('call_sid', outgoingCallSid)
+        .eq('call_sid', currentCallSid)
         .single();
         
       if (secondLookup.error) {
-        console.log(`[STATUS_CALLBACK_HANDLER] Second lookup attempt error: ${secondLookup.error.message}`);
+        console.log(`[STATUS_CALLBACK_HANDLER] Fallback lookup error: ${secondLookup.error.message}`);
       } else if (secondLookup.data) {
         existingCallData = secondLookup.data;
-        console.log(`[STATUS_CALLBACK_HANDLER] Found record using direct outgoing SID! DB ID: ${existingCallData.id}`);
+        console.log(`[STATUS_CALLBACK_HANDLER] Found record using current leg's SID! DB ID: ${existingCallData.id}`);
       }
     }
 
@@ -304,8 +317,7 @@ export const handleStatusCallback = async (req: Request, res: Response) => {
                           req.body.Direction === 'outbound' || 
                           req.body.From?.startsWith('client:');
         
-        const direction = isOutbound ? 'outbound' : 'inbound';
-        const call_type = direction; // Keeping call_type and direction consistent
+        const call_type = isOutbound ? 'outbound' : 'inbound';
         
         const callToInsert = {
           call_sid: callSidToUpdate,

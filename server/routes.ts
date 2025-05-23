@@ -778,6 +778,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   console.log("Registered POST /api/test/update-call route for testing call updates");
   
+  // Add a test endpoint to manually update a call record by CallSid
+  app.post("/api/test/update-call-by-sid", async (req: Request, res: Response) => {
+    try {
+      const { callSid, duration, status, parentCallSid } = req.body;
+      
+      if (!callSid && !parentCallSid) {
+        return res.status(400).json({ message: "Either callSid or parentCallSid is required" });
+      }
+      
+      // Create minimal update payload
+      const updatePayload: any = {
+        updated_at: new Date().toISOString()
+      };
+      
+      // Only add fields that were provided
+      if (duration !== undefined) {
+        updatePayload.duration = parseInt(duration, 10);
+      }
+      
+      if (status) {
+        updatePayload.status = status;
+      }
+      
+      console.log(`[TEST_UPDATE_SID] Update payload:`, JSON.stringify(updatePayload, null, 2));
+      
+      let data, error;
+      
+      // First, try to find and update using the provided SID
+      if (callSid) {
+        console.log(`[TEST_UPDATE_SID] Attempting to update call with SID ${callSid}`);
+        
+        const result = await supabase
+          .from('calls')
+          .update(updatePayload)
+          .eq('call_sid', callSid)
+          .select();
+        
+        data = result.data;
+        error = result.error;
+        
+        if (error) {
+          console.error(`[TEST_UPDATE_SID] Error updating call by SID:`, error);
+        } else if (data && data.length > 0) {
+          console.log(`[TEST_UPDATE_SID] Successfully updated call with SID ${callSid}`);
+        } else {
+          console.log(`[TEST_UPDATE_SID] No calls found with SID ${callSid}`);
+        }
+      }
+      
+      // If parentCallSid was provided, try to update using that too
+      if (parentCallSid && (!data || data.length === 0)) {
+        console.log(`[TEST_UPDATE_SID] Attempting to update call with parent SID ${parentCallSid}`);
+        
+        const parentResult = await supabase
+          .from('calls')
+          .update(updatePayload)
+          .eq('call_sid', parentCallSid)
+          .select();
+        
+        if (parentResult.error) {
+          console.error(`[TEST_UPDATE_SID] Error updating call by parent SID:`, parentResult.error);
+          // Only update error if we haven't already had an error
+          if (!error) error = parentResult.error;
+        } else if (parentResult.data && parentResult.data.length > 0) {
+          console.log(`[TEST_UPDATE_SID] Successfully updated call with parent SID ${parentCallSid}`);
+          data = parentResult.data;
+        } else {
+          console.log(`[TEST_UPDATE_SID] No calls found with parent SID ${parentCallSid}`);
+        }
+      }
+      
+      // List all calls to help with debugging
+      console.log(`[TEST_UPDATE_SID] Listing all recent calls for reference:`);
+      const { data: allCalls } = await supabase
+        .from('calls')
+        .select('id, call_sid, status, duration, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      console.log(`[TEST_UPDATE_SID] Recent calls:`, JSON.stringify(allCalls, null, 2));
+      
+      if (error) {
+        return res.status(500).json({ message: "Error updating call", error: error.message, allCalls });
+      }
+      
+      if (!data || data.length === 0) {
+        return res.status(404).json({ message: "No matching call found", searchedSids: { callSid, parentCallSid }, allCalls });
+      }
+      
+      res.status(200).json({ message: "Call updated successfully", data, allCalls });
+    } catch (error: any) {
+      console.error(`[TEST_UPDATE_SID] Unexpected error:`, error);
+      res.status(500).json({ message: "Unexpected error", error: error.message });
+    }
+  });
+  console.log("Registered POST /api/test/update-call-by-sid route for testing call SID updates");
+  
   // New route for generating Twilio client tokens
   app.get("/api/twilio/token", generateTwilioToken);
   console.log("Registered GET /api/twilio/token route");
@@ -787,6 +884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const outboundCallSid = req.body.CallSid || 'UNKNOWN_SID';
     
     console.log(`[${outboundCallSid}] POST /api/twilio/outbound-voice-twiml - START - Request received`);
+    console.log(`[${outboundCallSid}] IMPORTANT: This is the PARENT LEG (client->Twilio) of a two-leg call`);
     console.log(`[${outboundCallSid}] Complete request body:`, JSON.stringify(req.body, null, 2));
 
     try {
@@ -798,7 +896,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[${outboundCallSid}] Extracted parameters:`);
       console.log(`[${outboundCallSid}] - To (destination): "${destinationNumber}"`);
       console.log(`[${outboundCallSid}] - From (client): "${clientIdentity}"`);
-      console.log(`[${outboundCallSid}] - CallSid: "${outboundCallSid}"`);
+      console.log(`[${outboundCallSid}] - CallSid (PARENT leg): "${outboundCallSid}"`);
       console.log(`[${outboundCallSid}] - Using caller ID from env: "${twilioPhoneNumber}"`);
 
       if (!twilioPhoneNumber) {
