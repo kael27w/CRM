@@ -879,21 +879,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || `${process.env.API_URL || ''}/api/twilio/status-callback`;
       console.log(`[${outboundCallSid}] Using status callback URL: ${statusCallbackUrl}`);
       
-      // Using a simpler, more explicit approach with the Twilio helper library 
-      // Create the <Dial> element with only the callerId attribute to start
-      const dial = twiml.dial({
-        callerId: twilioPhoneNumber || '' // Empty string if env var is missing
-      });
+      // Create the simplest possible <Dial> to establish a baseline of compatibility
+      // No status callbacks - we'll add those later once we confirm basic dialing works
+      const dialOptions = {
+        callerId: twilioPhoneNumber || '', // Empty string if env var is missing
+        // Removing statusCallback and statusCallbackEvent temporarily
+      };
       
-      // Add the phone number as a <Number> tag with the statusCallback attributes
-      // This ensures the statusCallback is associated with the number rather than the dial element
-      dial.number({
-        statusCallback: statusCallbackUrl,
-        statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
-      }, destinationNumber);
+      console.log(`[${outboundCallSid}] Using simple Dial TwiML with just callerId`);
+      console.log(`[${outboundCallSid}] Dial options:`, JSON.stringify(dialOptions, null, 2));
+      
+      // Simple dial without status callbacks
+      twiml.dial(dialOptions, destinationNumber);
       
       console.log(`[${outboundCallSid}] Generated TwiML:`, twiml.toString());
-
+      
       // 5. Set content type and send the TwiML response
       res.type('text/xml');
       res.send(twiml.toString());
