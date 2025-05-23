@@ -879,23 +879,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || `${process.env.API_URL || ''}/api/twilio/status-callback`;
       console.log(`[${outboundCallSid}] Using status callback URL: ${statusCallbackUrl}`);
       
-      // Add statusCallback and statusCallbackEvent to dial options
-      const dialOptions = { 
-        callerId: twilioPhoneNumber || '', // Empty string if env var is missing
-        statusCallback: statusCallbackUrl,
-        statusCallbackEvent: ['initiated', 'ringing', 'answered', 'in-progress', 'completed']
-      };
+      // Create separate dial element for more control
+      const dial = twiml.dial({
+        callerId: twilioPhoneNumber || '' // Empty string if env var is missing
+      });
       
-      console.log(`[${outboundCallSid}] Dial options:`, JSON.stringify(dialOptions, null, 2));
+      // Add statusCallback to the dial element
+      if (statusCallbackUrl) {
+        dial.setAttribute('statusCallback', statusCallbackUrl);
+        
+        // The statusCallbackEvent needs to be set as individual events per Twilio's schema requirements
+        dial.setAttribute('statusCallbackEvent', 'initiated ringing answered completed');
+      }
       
-      twiml.dial(dialOptions, destinationNumber);
+      // Add the destination number to dial
+      dial.append(destinationNumber);
       
-      const twimlString = twiml.toString();
-      console.log(`[${outboundCallSid}] Generated TwiML:`, twimlString);
+      console.log(`[${outboundCallSid}] Generated TwiML with corrected schema:`, twiml.toString());
 
       // 5. Set content type and send the TwiML response
       res.type('text/xml');
-      res.send(twimlString);
+      res.send(twiml.toString());
       console.log(`[${outboundCallSid}] TwiML response sent successfully`);
       console.log(`[${outboundCallSid}] POST /api/twilio/outbound-voice-twiml - END - Handler completed ` + 
                  (insertSuccess ? `(call logged, DB ID: ${dbRecordId})` : `(WARNING: call logging failed)`));
