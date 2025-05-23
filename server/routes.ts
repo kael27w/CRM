@@ -690,22 +690,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/twilio/voice", twilioWebhook(voiceWebhookUrl), handleVoiceWebhook);
   console.log("Registered POST /api/twilio/voice route");
 
+  // Get the status callback URL 
+  const statusCallbackUrl = process.env.TWILIO_STATUS_CALLBACK_URL || `${process.env.API_URL || ''}/api/twilio/status-callback`;
+  console.log(`Twilio STATUS CALLBACK URL for validation: ${statusCallbackUrl}`);
+
   // Old route with validation
   // app.post("/api/twilio/status-callback", twilioWebhook(statusCallbackUrl), handleStatusCallback);
 
-  // New route without validation - temporarily disabled to test if webhook validation is the issue
-  app.post("/api/twilio/status-callback", async (req: Request, res: Response) => {
-    console.log("DIRECT ENTRY POINT: /api/twilio/status-callback route hit without middleware");
+  // New route with pre-middleware logging 
+  app.post("/api/twilio/status-callback", (req: Request, res: Response, next: any) => {
+    console.log("[STATUS_CALLBACK_ROUTE] Request received at path /api/twilio/status-callback before middleware.");
+    console.log("[STATUS_CALLBACK_ROUTE] Request IP:", req.ip || 'unknown');
+    console.log("[STATUS_CALLBACK_ROUTE] Request headers:", JSON.stringify(req.headers, null, 2));
+    console.log("[STATUS_CALLBACK_ROUTE] Request body (raw):", JSON.stringify(req.body, null, 2));
+    next();
+  }, async (req: Request, res: Response) => {
+    console.log("[STATUS_CALLBACK_ROUTE] STATUS CALLBACK ROUTE HIT - DIRECT HANDLER");
     try {
       await handleStatusCallback(req, res);
     } catch (error: any) {
-      console.error("CRITICAL: Unhandled error in status-callback route:", error.message, error.stack);
+      console.error("[STATUS_CALLBACK_ROUTE] CRITICAL: Unhandled error in status-callback route:", error.message, error.stack);
       if (!res.headersSent) {
         res.status(500).send("Server error");
       }
     }
   });
-  console.log("Registered POST /api/twilio/status-callback route WITHOUT Twilio validation middleware");
+  console.log("Registered POST /api/twilio/status-callback route with pre-middleware logging");
+  
+  // Add a simple echo route to test if Twilio can reach the server
+  app.post("/api/twilio/echo-test", (req: Request, res: Response) => {
+    console.log("[ECHO_TEST] Echo test route hit. Headers:", JSON.stringify(req.headers, null, 2));
+    console.log("[ECHO_TEST] Echo test body:", JSON.stringify(req.body, null, 2));
+    res.status(200).json({
+      message: "Echo test successful",
+      receivedAt: new Date().toISOString(),
+      headers: req.headers,
+      body: req.body
+    });
+  });
+  console.log("Registered POST /api/twilio/echo-test route for connectivity testing");
   
   // New route for generating Twilio client tokens
   app.get("/api/twilio/token", generateTwilioToken);
@@ -883,10 +906,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // No status callbacks - we'll add those later once we confirm basic dialing works
       const dialOptions = {
         callerId: twilioPhoneNumber || '', // Empty string if env var is missing
-        // Removing statusCallback and statusCallbackEvent temporarily
+        // Restoring status callback attributes with proper formatting
+        statusCallback: statusCallbackUrl,
+        statusCallbackEvent: 'initiated ringing answered completed' // Space-separated string format
       };
       
-      console.log(`[${outboundCallSid}] Using simple Dial TwiML with just callerId`);
+      console.log(`[${outboundCallSid}] Adding back status callbacks to TwiML`);
       console.log(`[${outboundCallSid}] Dial options:`, JSON.stringify(dialOptions, null, 2));
       
       // Simple dial without status callbacks
