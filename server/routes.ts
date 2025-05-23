@@ -730,6 +730,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   console.log("Registered POST /api/twilio/echo-test route for connectivity testing");
   
+  // Add a test endpoint to manually update call duration
+  app.post("/api/test/update-call", async (req: Request, res: Response) => {
+    try {
+      const { callId, duration, status } = req.body;
+      
+      if (!callId) {
+        return res.status(400).json({ message: "callId is required" });
+      }
+      
+      console.log(`[TEST_UPDATE] Attempting to update call ID ${callId} with duration=${duration}, status=${status}`);
+      
+      // Create minimal update payload
+      const updatePayload: any = {
+        updated_at: new Date().toISOString()
+      };
+      
+      // Only add fields that were provided
+      if (duration !== undefined) {
+        updatePayload.duration = parseInt(duration, 10);
+      }
+      
+      if (status) {
+        updatePayload.status = status;
+      }
+      
+      console.log(`[TEST_UPDATE] Update payload:`, JSON.stringify(updatePayload, null, 2));
+      
+      // Attempt the update
+      const { data, error } = await supabase
+        .from('calls')
+        .update(updatePayload)
+        .eq('id', callId)
+        .select();
+      
+      if (error) {
+        console.error(`[TEST_UPDATE] Error updating call:`, error);
+        return res.status(500).json({ message: "Error updating call", error: error.message });
+      }
+      
+      console.log(`[TEST_UPDATE] Update successful. Response:`, JSON.stringify(data, null, 2));
+      res.status(200).json({ message: "Call updated successfully", data });
+    } catch (error: any) {
+      console.error(`[TEST_UPDATE] Unexpected error:`, error);
+      res.status(500).json({ message: "Unexpected error", error: error.message });
+    }
+  });
+  console.log("Registered POST /api/test/update-call route for testing call updates");
+  
   // New route for generating Twilio client tokens
   app.get("/api/twilio/token", generateTwilioToken);
   console.log("Registered GET /api/twilio/token route");

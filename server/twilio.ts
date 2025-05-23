@@ -367,12 +367,28 @@ export const handleStatusCallback = async (req: Request, res: Response) => {
           .select();
 
         if (updateError) {
-          console.error(`[STATUS_CALLBACK_HANDLER] Supabase error updating call: ${updateError.message}`);
+          console.error(`[STATUS_CALLBACK_HANDLER] Supabase error updating call by ID: ${updateError.message}`);
           console.error(`[STATUS_CALLBACK_HANDLER] Update error details: ${updateError.details || ''}`);
+          
+          // Try updating by call_sid as a fallback
+          console.log(`[STATUS_CALLBACK_HANDLER] Attempting fallback update by call_sid: ${existingCallData.call_sid}`);
+          const { data: sidUpdateData, error: sidUpdateError } = await supabase
+            .from('calls')
+            .update(updatePayload)
+            .eq('call_sid', existingCallData.call_sid)
+            .select();
+            
+          if (sidUpdateError) {
+            console.error(`[STATUS_CALLBACK_HANDLER] Fallback update also failed: ${sidUpdateError.message}`);
+          } else if (sidUpdateData && sidUpdateData.length > 0) {
+            console.log(`[STATUS_CALLBACK_HANDLER] Fallback update by call_sid successful! Updated records:`, JSON.stringify(sidUpdateData, null, 2));
+          } else {
+            console.warn(`[STATUS_CALLBACK_HANDLER] Fallback update didn't update any records.`);
+          }
         } else if (updateData && updateData.length > 0) {
           console.log(`[STATUS_CALLBACK_HANDLER] Successfully updated call DB ID ${existingCallData.id}. Update result:`, JSON.stringify(updateData, null, 2));
         } else {
-          console.warn(`[STATUS_CALLBACK_HANDLER] No rows updated. The record might have been deleted or ID changed.`);
+          console.warn(`[STATUS_CALLBACK_HANDLER] No rows updated by ID. The record might have been deleted or ID changed.`);
         }
       } catch (dbError: any) {
         console.error(`[STATUS_CALLBACK_HANDLER] Unexpected database error during update: ${dbError.message}`);
