@@ -61,6 +61,7 @@ export interface ContactEntry {
   phone: string;
   email?: string;
   company?: string;
+  status: string;
   [key: string]: any;
 }
 
@@ -84,7 +85,20 @@ export type NewContactData = {
   phone: string;
   email?: string;
   company?: string;
+  status: string; // Status field is required
   // Add other client-side originated fields here
+};
+
+/**
+ * Type for the data expected when updating a contact.
+ */
+export type ContactFormData = {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email?: string;
+  company?: string;
+  status?: string;
 };
 
 /**
@@ -339,9 +353,27 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
  * @returns Promise containing the newly created contact entry from the backend.
  */
 export async function createContactManually(contactData: NewContactData): Promise<ContactEntry> {
-  console.log("Creating contact:", contactData);
+  console.log('[API_CLIENT_CREATE_CONTACT] Received contactData:', JSON.stringify(contactData, null, 2));
+  console.log(`[API_CLIENT_CREATE_CONTACT] Status field: "${contactData.status}", Type: ${typeof contactData.status}`);
+  
+  // Ensure status is valid before sending to API
+  const validStatuses = ["Lead", "Prospect", "Active Client", "Inactive Client", "Client"];
+  
+  // Create a copy of the data to avoid mutating the original
+  const contactDataToSend = { ...contactData };
+  
+  // Only set a default if the status is missing or empty
+  if (!contactDataToSend.status || 
+      contactDataToSend.status === 'undefined' || 
+      contactDataToSend.status === '') {
+    console.log(`[API_CLIENT_CREATE_CONTACT] Invalid status detected: "${contactDataToSend.status}", defaulting to 'Lead'`);
+    contactDataToSend.status = "Lead";
+  }
+  
   const url = `${API_BASE_URL}/api/contacts`;
-  console.log("Creating contact at URL:", url);
+  console.log(`[API_CLIENT_CREATE_CONTACT] Sending to URL: ${url}`);
+  console.log('[API_CLIENT_CREATE_CONTACT] Final payload being sent to server:', JSON.stringify(contactDataToSend, null, 2));
+  console.log(`[API_CLIENT_CREATE_CONTACT] Final status value: "${contactDataToSend.status}", Type: ${typeof contactDataToSend.status}`);
 
   try {
     // Add timeout handling
@@ -353,7 +385,7 @@ export async function createContactManually(contactData: NewContactData): Promis
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(contactData),
+      body: JSON.stringify(contactDataToSend),
       signal: controller.signal
     });
     
@@ -364,7 +396,7 @@ export async function createContactManually(contactData: NewContactData): Promis
       let errorMessage = `API error: ${response.status} ${response.statusText}`;
       try {
         const errorData = await response.json();
-        console.log("Error response body:", errorData);
+        console.log("[API_CLIENT_CREATE_CONTACT] Error response body:", errorData);
         if (errorData && errorData.message) {
           errorMessage = `${errorMessage} - ${errorData.message}`;
         }
@@ -372,20 +404,21 @@ export async function createContactManually(contactData: NewContactData): Promis
         // Try to get raw text if JSON parsing fails
         try {
           const textError = await response.text();
-          console.error("Raw error response:", textError);
+          console.error("[API_CLIENT_CREATE_CONTACT] Raw error response:", textError);
           errorMessage = `${errorMessage} - Raw response: ${textError}`;
         } catch (textError) {
-          console.warn("Could not get error response text either");
+          console.warn("[API_CLIENT_CREATE_CONTACT] Could not get error response text either");
         }
       }
       throw new Error(errorMessage);
     }
     
     const data = await response.json();
-    console.log("Contact created successfully:", data);
+    console.log("[API_CLIENT_CREATE_CONTACT] Response data received:", JSON.stringify(data, null, 2));
+    console.log(`[API_CLIENT_CREATE_CONTACT] Status in response: "${data.status}", Type: ${typeof data.status}`);
     return data as ContactEntry;
   } catch (error) {
-    console.error('Error creating contact:', error);
+    console.error('[API_CLIENT_CREATE_CONTACT] Error creating contact:', error);
     
     // Check if this is an AbortError (timeout)
     if (error instanceof Error && error.name === 'AbortError') {
@@ -659,5 +692,67 @@ export async function fetchContactByPhone(phoneNumber: string): Promise<ContactE
   } catch (err) {
     console.error('fetchContactByPhone: Error fetching contact:', err);
     return null;
+  }
+}
+
+/**
+ * Fetches a contact by ID from the API
+ * @param contactId - The ID of the contact to fetch
+ * @returns Promise containing the contact entry
+ */
+export async function fetchContactById(contactId: string | number): Promise<ContactEntry> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/contacts/${contactId}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Contact with ID ${contactId} not found`);
+      }
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data as ContactEntry;
+  } catch (error) {
+    console.error(`Error fetching contact ${contactId}:`, error);
+    throw error instanceof Error ? error : new Error(`Unknown error fetching contact ${contactId}`);
+  }
+}
+
+/**
+ * Updates a contact via the API
+ * @param contactId - The ID of the contact to update
+ * @param contactData - The partial data to update
+ * @returns Promise containing the updated contact entry
+ */
+export async function updateContact(contactId: string | number, contactData: Partial<ContactFormData>): Promise<ContactEntry> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/contacts/${contactId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(contactData),
+    });
+
+    if (!response.ok) {
+      // Attempt to parse error response from the API if available
+      let errorMessage = `API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (parseError) {
+        // Ignore if response is not JSON or empty
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    return data as ContactEntry;
+  } catch (error) {
+    console.error(`Error updating contact ${contactId}:`, error);
+    throw error instanceof Error ? error : new Error(`Unknown error updating contact ${contactId}`);
   }
 } 

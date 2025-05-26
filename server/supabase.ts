@@ -26,7 +26,7 @@ export interface Contact {
   email?: string | null;
   job_title?: string | null;
   company?: string | null;
-  status?: string | null;
+  status: string;
   created_at?: string;
   updated_at?: string;
 }

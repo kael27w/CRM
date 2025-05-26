@@ -31,6 +31,20 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    // listen on all interfaces so ngrok can proxy in
+    host: true,
+    // force Vite to use the specified port
+    strictPort: true,
+    // allow ngrok domains to access the dev server
+    allowedHosts: ['*.ngrok-free.app'],
+    // disable host header validation
+    cors: true,
+    // ensure HMR callbacks work over the tunnel
+    hmr: {
+      protocol: 'wss',    // Use secure WebSockets
+      clientPort: 443,    // Port for client connections through ngrok
+      host: '0888-2600-1700-be6-7a00-dc41-3456-215f-d003.ngrok-free.app', // Your specific ngrok hostname
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

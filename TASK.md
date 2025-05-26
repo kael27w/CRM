@@ -68,6 +68,22 @@
         - [ ] Ensure form submission handler collects data, calls mutation, and provides debug logs.
         - [ ] Integrate the form into the UI, potentially using a Dialog.
 
+10. [x] **Implement "Add Contact" Functionality (Today's Date)**
+    - [x] Created AddContactDialog.tsx component with React Hook Form integration
+    - [x] Updated contacts.tsx page to include "Add Contact" button
+    - [x] Modified POST /api/contacts endpoint in server/routes.ts to handle status field
+    - [x] Updated GET /api/contacts/list endpoint to include status in response
+    - [x] Added status column to contacts table with appropriate styling
+
+11. [x] **Implement "Full Contact Detail View & Edit" Functionality (05/25/2025)**
+    - [x] Created GET /api/contacts/:id endpoint in server/routes.ts
+    - [x] Enhanced existing PATCH /api/contacts/:id endpoint
+    - [x] Added fetchContactById and updateContact functions to client/src/lib/api.ts
+    - [x] Updated contact links in contacts.tsx to navigate to detail page
+    - [x] Enhanced ContactDetailPage.tsx to display contact information
+    - [x] Created EditContactDialog.tsx component with form validation
+    - [x] Added route for /contacts/:id in App.tsx
+
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)

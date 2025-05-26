@@ -167,17 +167,3 @@ The application currently has a functioning structure with:
      - Ensure consistent data display across Calendar, Tasks, Events, and Calls tabs
      - Fix mock data integration issues
 
-## Next Development Focus
-
-Based on the progress so far and what needs to be done, the immediate tasks involve:
-
-1. **Dashboard:** Complete component addition functionality to allow users to customize their dashboard views.
-
-2. **Records Management:** Implement custom field creation, bulk actions, and row selection features for all record tables.
-
-3. **Activities Page:** Fix data consistency issues and ensure proper integration between calendar and list views.
-
-4. **Backend Integration Preparation:** Prepare components to transition from mock data to real API endpoints when backend is ready.
-
-A detailed breakdown of the recent Pipelines page improvements can be found in `Pipelines_Update.md`.
-

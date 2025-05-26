@@ -6,39 +6,45 @@ import { createServer } from "http";
 
 const app = express();
 
+// ===============================================
+// 1. GLOBAL CORS MIDDLEWARE - MUST BE FIRST!
+// ===============================================
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Allow ngrok domains and localhost for development
+    if (origin.includes('ngrok-free.app') || origin.startsWith('http://localhost')) {
+      return callback(null, true);
+    }
+    
+    // Log and reject other origins
+    console.warn(`CORS blocked request from origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
+}));
+
+// ===============================================
+// 2. ALL OTHER MIDDLEWARE AFTER CORS
+// ===============================================
+
 // Enhanced request logging
 app.use((req, res, next) => {
   log(`${req.method} ${req.url} - Incoming request`);
   next();
 });
 
-// --- CORS Configuration ---
-const allowedOrigins = [
-  'http://localhost:5173', // For local client development
-  // TODO: Add your production client domain here later if it's different
-  // e.g., 'https://your-deployed-client.onrender.com'
-];
-
-app.use(cors({
-  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `CORS policy: The origin '${origin}' is not allowed access.`;
-      console.warn(msg); // Log the blocked origin
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true, // Allow cookies and authorization headers to be sent and received
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], // Specify allowed HTTP methods
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'] // Specify allowed headers
-}));
-
-// Body parsers - make sure these are after CORS and before any route handlers
+// Body parsers - after CORS but before routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Response time logger middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -154,7 +160,16 @@ app.get("/api/debug/supabase", async (req, res) => {
     next();
   });
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  // ===============================================
+  // 3. GLOBAL ERROR HANDLER - ALSO SETS CORS HEADERS
+  // ===============================================
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    // Ensure CORS headers are set even for errors
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    
     console.error('GLOBAL_ERROR_HANDLER_CAUGHT_ERROR: ', err.message, err.stack);
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

@@ -2,7 +2,8 @@ import React from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "./components/ui/toaster";
+import { Toaster as ShadcnToaster } from "./components/ui/toaster";
+import { Toaster } from "sonner";
 import { ThemeProvider } from "./lib/context/app-context";
 import NotFound from "./pages/not-found";
 import MainLayout from "./components/layouts/main-layout";
@@ -15,7 +16,7 @@ import CompaniesPage from "./pages/companies";
 import ProductsPage from "./pages/products";
 import ActivitiesPage from "./pages/activities";
 import PipelinesPage from "./pages/pipelines";
-import { ContactDetailPage } from "./pages/ContactDetailPage";
+import ContactDetailPage from "./pages/ContactDetailPage";
 
 // For pages we haven't created yet
 const PlaceholderPage: React.FC<{title: string}> = ({title}) => (
@@ -37,6 +38,9 @@ function Router() {
       <Route path="/dashboard/:type" component={Dashboard} />
       <Route path="/pipelines" component={PipelinesPage} />
       <Route path="/contacts" component={ContactsPage} />
+      <Route path="/contacts/:id">
+        {(params) => <ContactDetailPage contactId={params.id} />}
+      </Route>
       <Route path="/companies" component={CompaniesPage} />
       <Route path="/products" component={ProductsPage} />
       <Route path="/activities" component={ActivitiesPage} />
@@ -61,7 +65,8 @@ function App() {
         <MainLayout>
           <Router />
         </MainLayout>
-        <Toaster />
+        <ShadcnToaster />
+        <Toaster position="top-right" richColors />
       </ThemeProvider>
     </QueryClientProvider>
   );

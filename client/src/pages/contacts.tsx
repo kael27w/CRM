@@ -1,5 +1,5 @@
-import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   Table,
@@ -12,6 +12,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+
+import AddContactDialog from "@/components/contacts/AddContactDialog";
 
 // Define the type for a contact object
 interface Contact {
@@ -29,7 +33,6 @@ interface Contact {
  */
 const fetchContacts = async (): Promise<Contact[]> => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
-  console.log("Fetching contacts from:", `${apiBaseUrl}/api/contacts/list`);
   
   const response = await fetch(`${apiBaseUrl}/api/contacts/list`);
   
@@ -37,13 +40,18 @@ const fetchContacts = async (): Promise<Contact[]> => {
     throw new Error(`Error fetching contacts: ${response.status} ${response.statusText}`);
   }
   
-  return response.json();
+  // Handle both array response and object with contacts property
+  const responseData = await response.json();
+  return Array.isArray(responseData) ? responseData : (responseData.contacts || []);
 };
 
 /**
  * ContactsPage component that displays a table of all contacts
  */
 const ContactsPage: React.FC = () => {
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
+  
   const {
     data: contacts,
     isLoading,
@@ -55,8 +63,6 @@ const ContactsPage: React.FC = () => {
     staleTime: 60000, // 1 minute
   });
 
-  console.log("ContactsPage - Contacts data:", contacts);
-  
   // Loading state
   if (isLoading) {
     return (
@@ -100,12 +106,22 @@ const ContactsPage: React.FC = () => {
   if (!contacts || contacts.length === 0) {
     return (
       <div className="space-y-4 p-4">
-        <h1 className="text-2xl font-bold">Contacts</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Contacts</h1>
+          <Button onClick={() => setAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Contact
+          </Button>
+        </div>
         <Card>
           <CardContent className="pt-6 text-center">
             <p className="text-gray-500">No contacts found.</p>
           </CardContent>
         </Card>
+        
+        <AddContactDialog 
+          open={addDialogOpen} 
+          onOpenChange={setAddDialogOpen} 
+        />
       </div>
     );
   }
@@ -113,8 +129,13 @@ const ContactsPage: React.FC = () => {
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Contacts</h1>
-        <Badge variant="outline">{contacts.length} Contacts</Badge>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Contacts</h1>
+          <Badge variant="outline">{contacts.length} Contacts</Badge>
+        </div>
+        <Button onClick={() => setAddDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Add Contact
+        </Button>
       </div>
       
       <Card>
@@ -129,25 +150,32 @@ const ContactsPage: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {contacts.map((contact) => (
-                <TableRow key={contact.id}>
-                  <TableCell>
-                    <Link 
-                      href={`/contact-detail/${contact.id}`}
-                      className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      {contact.first_name} {contact.last_name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{contact.phone || "—"}</TableCell>
-                  <TableCell>{contact.email || "—"}</TableCell>
-                  <TableCell>{contact.company || "—"}</TableCell>
-                </TableRow>
-              ))}
+              {contacts.map((contact) => {
+                return (
+                  <TableRow key={contact.id}>
+                    <TableCell>
+                      <Link 
+                        href={`/contacts/${contact.id}`}
+                        className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        {contact.first_name} {contact.last_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{contact.phone || "—"}</TableCell>
+                    <TableCell>{contact.email || "—"}</TableCell>
+                    <TableCell>{contact.company || "—"}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+      
+      <AddContactDialog 
+        open={addDialogOpen} 
+        onOpenChange={setAddDialogOpen} 
+      />
     </div>
   );
 };

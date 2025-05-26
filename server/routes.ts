@@ -75,50 +75,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/contacts/list", async (req: Request, res: Response) => {
     try {
-      console.log("GET /api/contacts/list - Fetching all contacts");
+      console.log("GET /api/contacts/list - Request received");
       
-      // Extract optional sort parameter from query string
-      const { sort = 'created_at' } = req.query;
-      let orderBy: string = 'created_at';
-      let ascending: boolean = false;
-      
-      // Handle different sort options
-      if (sort === 'name') {
-        // Order by last_name, then first_name
-        orderBy = 'last_name';
-        ascending = true;
-      }
-      
-      console.log(`GET /api/contacts/list - Sorting by ${orderBy} ${ascending ? 'ascending' : 'descending'}`);
-      
-      const { data: contacts, error } = await supabase
+      // Simple query to fetch all contacts
+      const { data: contactsData, error } = await supabase
         .from('contacts')
-        .select('id, first_name, last_name, phone, email, company, created_at')
-        .order(orderBy, { ascending })
-        // If sorting by last_name, add secondary sort by first_name
-        .order(orderBy === 'last_name' ? 'first_name' : 'id', { ascending: true });
+        .select('*')
+        .order('created_at', { ascending: false });
       
       if (error) {
-        console.error("GET /api/contacts/list - Supabase error:", error);
-        return res.status(500).json({ message: "Database error fetching contacts" });
+        console.error("GET /api/contacts/list - Supabase query error:", error);
+        return res.status(500).json({ message: "Error fetching contacts" });
       }
       
-      if (!contacts || contacts.length === 0) {
-        console.log("GET /api/contacts/list - No contacts found");
-        return res.status(200).json([]);
+      if (!contactsData) {
+        console.log("GET /api/contacts/list - No contacts found in database");
+        return res.json([]);
       }
       
-      console.log(`GET /api/contacts/list - Successfully fetched ${contacts.length} contacts`);
-      res.status(200).json(contacts);
+      console.log(`GET /api/contacts/list - Found ${contactsData.length} contacts`);
+      
+      // Return the contacts as a simple array
+      res.json(contactsData);
     } catch (error: any) {
-      console.error("GET /api/contacts/list - Error fetching contacts:", error.message, error.stack);
-      res.status(500).json({ message: "Error fetching contacts" });
+      console.error("GET /api/contacts/list - Error:", error.message);
+      res.status(500).json({ message: "Server error fetching contacts" });
+    }
+  });
+
+  // Get a single contact by ID
+  app.get("/api/contacts/:id", async (req: Request, res: Response) => {
+    try {
+      const contactId = req.params.id;
+      
+      if (!contactId || isNaN(Number(contactId))) {
+        console.error(`GET /api/contacts/${contactId} - Invalid contact ID`);
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      
+      console.log(`GET /api/contacts/${contactId} - Fetching contact`);
+      
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, phone, email, company, created_at, updated_at, status')
+        .eq('id', contactId)
+        .single();
+      
+      if (error) {
+        console.error(`GET /api/contacts/${contactId} - Supabase error:`, error);
+        
+        if (error.code === 'PGRST116') {
+          return res.status(404).json({ message: "Contact not found" });
+        }
+        
+        return res.status(500).json({ message: "Error fetching contact" });
+      }
+      
+      if (!data) {
+        console.log(`GET /api/contacts/${contactId} - Contact not found`);
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      
+      console.log(`GET /api/contacts/${contactId} - Contact found:`, data);
+      res.json(data);
+    } catch (error) {
+      console.error(`GET /api/contacts/:id - Error:`, error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Server error fetching contact" });
+    }
+  });
+
+  // Add PATCH route for updating individual contacts
+  app.patch("/api/contacts/:contactId", async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const updates = req.body;
+      
+      console.log(`PATCH /api/contacts/${contactId} - Request received. Body:`, updates);
+      
+      // Validate contactId
+      if (!contactId || isNaN(Number(contactId))) {
+        console.error(`PATCH /api/contacts/${contactId} - Invalid contactId`);
+        return res.status(400).json({ message: "Invalid contact ID" });
+      }
+      
+      // Validate that there are fields to update
+      if (!updates || Object.keys(updates).length === 0) {
+        console.error(`PATCH /api/contacts/${contactId} - No update fields provided`);
+        return res.status(400).json({ message: "No update fields provided" });
+      }
+      
+      // Add updated_at timestamp
+      const updatesWithTimestamp = {
+        ...updates,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Update the contact
+      const { data, error } = await supabase
+        .from('contacts')
+        .update(updatesWithTimestamp)
+        .eq('id', contactId)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error(`PATCH /api/contacts/${contactId} - Supabase error:`, error);
+        
+        // Check for common error types
+        if (error.code === 'PGRST204') { // No rows selected
+          return res.status(404).json({ message: `Contact with ID ${contactId} not found` });
+        }
+        
+        return res.status(500).json({ message: "Database error updating contact" });
+      }
+      
+      if (!data) {
+        console.error(`PATCH /api/contacts/${contactId} - No data returned after update`);
+        return res.status(404).json({ message: `Contact with ID ${contactId} not found` });
+      }
+      
+      console.log(`PATCH /api/contacts/${contactId} - Contact updated successfully:`, data);
+      res.status(200).json(data);
+    } catch (error: any) {
+      console.error(`PATCH /api/contacts/${req.params.contactId} - Error updating contact:`, error.message, error.stack);
+      res.status(500).json({ message: "Error updating contact" });
     }
   });
 
   app.post("/api/contacts", async (req: Request, res: Response) => {
     try {
-      console.log("POST /api/contacts - Request received. Body:", req.body);
+      console.log("POST /api/contacts - Request received:", req.body);
       
       // Extract fields from request body
       const { first_name, last_name, phone, email, company } = req.body;
@@ -151,9 +237,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingContacts && existingContacts.length > 0) {
         console.log("POST /api/contacts - Contact with this phone number already exists:", existingContacts[0]);
         
-        // Even for existing contacts, attempt to link any unassigned calls with this phone number
+        // Link any unassigned calls with this phone number
         const existingContactId = existingContacts[0].id;
-        console.log(`POST /api/contacts - Attempting to link historical calls for phone: ${normalizedPhone} to existing contact ID: ${existingContactId}`);
+        console.log(`POST /api/contacts - Linking calls to existing contact ID: ${existingContactId}`);
         
         try {
           const { data: updatedCalls, error: updateError } = await supabase
@@ -166,16 +252,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .is('contact_id', null);
           
           if (updateError) {
-            console.error(`POST /api/contacts - Error linking historical calls to existing contact:`, updateError);
+            console.error(`POST /api/contacts - Error linking calls:`, updateError);
           } else {
             const rowsAffected = updatedCalls ? (updatedCalls as any[]).length : 0;
-            console.log(`POST /api/contacts - Successfully linked historical calls to existing contact. Rows affected: ${rowsAffected}`);
+            console.log(`POST /api/contacts - Linked ${rowsAffected} calls to existing contact`);
           }
         } catch (linkError) {
-          console.error(`POST /api/contacts - Unexpected error linking historical calls to existing contact:`, linkError);
+          console.error(`POST /api/contacts - Error linking calls:`, linkError);
         }
         
-        return res.status(200).json(existingContacts[0]); // Return existing contact instead of an error
+        return res.status(200).json(existingContacts[0]); // Return existing contact
       }
       
       // Prepare contact data with timestamps
@@ -189,8 +275,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updated_at: new Date().toISOString()
       };
       
-      console.log("POST /api/contacts - Inserting contact with data:", contactData);
-      
       // Insert into contacts table
       const { data, error } = await supabase
         .from('contacts')
@@ -199,12 +283,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .single();
       
       if (error) {
-        console.error("POST /api/contacts - Supabase error:", error);
-        console.error("POST /api/contacts - Error details:", error.details, error.hint, error.message);
+        console.error("POST /api/contacts - Supabase insert error:", error);
         
-        // Check for specific error types
         if (error.code === '23505') { // unique constraint violation
-          console.log("POST /api/contacts - Unique constraint violation (duplicate contact)");
+          console.log("POST /api/contacts - Duplicate contact");
           return res.status(409).json({ message: "Contact with this information already exists" });
         }
         
@@ -216,9 +298,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to create contact (no data returned)" });
       }
       
-      // Successfully created contact, now link historical calls
+      // Link historical calls
       const newContactId = data.id;
-      console.log(`POST /api/contacts - Attempting to link historical calls for phone: ${normalizedPhone} to new contact ID: ${newContactId}`);
+      console.log(`POST /api/contacts - Linking calls to new contact ID: ${newContactId}`);
       
       try {
         const { data: updatedCalls, error: updateError } = await supabase
@@ -231,20 +313,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .is('contact_id', null);
         
         if (updateError) {
-          console.error(`POST /api/contacts - Error linking historical calls to new contact:`, updateError);
+          console.error(`POST /api/contacts - Error linking calls:`, updateError);
         } else {
           const rowsAffected = updatedCalls ? (updatedCalls as any[]).length : 0;
-          console.log(`POST /api/contacts - Successfully linked historical calls to new contact. Rows affected: ${rowsAffected}`);
+          console.log(`POST /api/contacts - Linked ${rowsAffected} calls to new contact`);
         }
       } catch (linkError) {
-        console.error(`POST /api/contacts - Unexpected error linking historical calls to new contact:`, linkError);
-        // We'll still return success for the contact creation even if linking fails
+        console.error(`POST /api/contacts - Error linking calls:`, linkError);
       }
       
       console.log("POST /api/contacts - Contact created successfully:", data);
       res.status(201).json(data);
     } catch (error: any) {
-      console.error("POST /api/contacts - Error creating contact:", error.message, error.stack);
+      console.error("POST /api/contacts - Error:", error.message);
       res.status(500).json({ message: "Error creating contact" });
     }
   });
@@ -681,7 +762,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-
 
   // =========== TWILIO ROUTES ===========
   console.log("Registering Twilio routes...");
