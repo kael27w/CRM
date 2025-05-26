@@ -84,6 +84,16 @@
     - [x] Created EditContactDialog.tsx component with form validation
     - [x] Added route for /contacts/:id in App.tsx
 
+12. [x] **Enhance Contact Detail Page with Note Management (05/26/2025)**
+    - [x] Fixed immediate UI update after contact editing using queryClient.setQueryData
+    - [x] Removed status field from contact viewing and editing
+    - [x] Created DELETE /api/activities/:id endpoint in server/routes.ts
+    - [x] Enhanced PATCH /api/activities/:id endpoint for note updates
+    - [x] Added updateActivity and deleteActivity functions to client/src/lib/api.ts
+    - [x] Created NoteItem.tsx component with inline editing capability
+    - [x] Implemented note deletion with confirmation dialog
+    - [x] Integrated note editing and deletion into ContactDetailPage activity feed
+
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)

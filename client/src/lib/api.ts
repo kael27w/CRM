@@ -102,6 +102,34 @@ export type ContactFormData = {
 };
 
 /**
+ * Type for activity data (notes, tasks, etc.)
+ */
+export interface ActivityData {
+  id: number;
+  title?: string;
+  description?: string;
+  type: 'note' | 'task' | 'call';
+  contact_id: number;
+  created_at: string;
+  updated_at: string;
+  // Include other fields as needed
+  completed?: boolean;
+  status?: string;
+  due_date?: string;
+}
+
+/**
+ * Type for updating an activity
+ */
+export type ActivityUpdateData = {
+  title?: string;
+  description?: string;
+  completed?: boolean;
+  status?: string;
+  due_date?: string;
+};
+
+/**
  * Fetches call logs from the API
  * @returns Promise containing an array of call log entries
  */
@@ -754,5 +782,77 @@ export async function updateContact(contactId: string | number, contactData: Par
   } catch (error) {
     console.error(`Error updating contact ${contactId}:`, error);
     throw error instanceof Error ? error : new Error(`Unknown error updating contact ${contactId}`);
+  }
+}
+
+/**
+ * Updates an activity (note, task, etc.)
+ * @param activityId - The ID of the activity to update
+ * @param updateData - The data to update
+ * @returns Promise containing the updated activity
+ */
+export async function updateActivity(activityId: string | number, updateData: ActivityUpdateData): Promise<ActivityData> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/activities/${activityId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
+    });
+
+    if (!response.ok) {
+      let errorMessage = `API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (parseError) {
+        // Ignore if response is not JSON or empty
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    return data as ActivityData;
+  } catch (error) {
+    console.error(`Error updating activity ${activityId}:`, error);
+    throw error instanceof Error ? error : new Error(`Unknown error updating activity ${activityId}`);
+  }
+}
+
+/**
+ * Deletes an activity (note, task, etc.)
+ * @param activityId - The ID of the activity to delete
+ * @returns Promise containing a success message
+ */
+export async function deleteActivity(activityId: string | number): Promise<{ message: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/activities/${activityId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      let errorMessage = `API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (parseError) {
+        // Ignore if response is not JSON or empty
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    return data as { message: string };
+  } catch (error) {
+    console.error(`Error deleting activity ${activityId}:`, error);
+    throw error instanceof Error ? error : new Error(`Unknown error deleting activity ${activityId}`);
   }
 } 

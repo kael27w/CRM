@@ -593,6 +593,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/activities/:id - Delete an activity
+  app.delete("/api/activities/:id", async (req: Request, res: Response) => {
+    const { id } = req.params;
+    console.log(`DELETE /api/activities/${id} - Request received.`);
+
+    if (!id) {
+      console.warn("DELETE /api/activities/:id - Missing ID parameter.");
+      return res.status(400).json({ message: "Activity ID parameter is required" });
+    }
+
+    try {
+      // First, check if the activity exists
+      const { data: existingActivity, error: checkError } = await supabase
+        .from('activities')
+        .select('id, type')
+        .eq('id', id)
+        .single();
+      
+      if (checkError) {
+        console.error(`DELETE /api/activities/${id} - Supabase error checking activity existence:`, checkError.message);
+        if (checkError.code === 'PGRST116') { // Not found
+          return res.status(404).json({ message: `Activity with ID ${id} not found` });
+        }
+        return res.status(500).json({ message: "Database error checking activity existence", error: checkError.message });
+      }
+      
+      if (!existingActivity) {
+        console.warn(`DELETE /api/activities/${id} - Activity not found.`);
+        return res.status(404).json({ message: `Activity with ID ${id} not found` });
+      }
+      
+      console.log(`DELETE /api/activities/${id} - Found activity of type: ${existingActivity.type}. Proceeding with deletion.`);
+      
+      // Delete the activity
+      const { error: deleteError } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) {
+        console.error(`DELETE /api/activities/${id} - Supabase error deleting activity:`, deleteError.message, deleteError.details);
+        return res.status(500).json({ message: "Database error deleting activity", error: deleteError.message });
+      }
+
+      console.log(`DELETE /api/activities/${id} - Activity deleted successfully.`);
+      res.status(200).json({ message: `Activity with ID ${id} deleted successfully` });
+    } catch (error: any) {
+      console.error(`DELETE /api/activities/${id} - Unexpected error in handler:`, error.message, error.stack);
+      res.status(500).json({ message: "Internal server error deleting activity", details: error.message });
+    }
+  });
+
   // You might need POST /api/activities (or /api/tasks if preferred) to create tasks
   // Example for POST /api/activities (can be adapted for tasks)
   app.post("/api/activities", async (req: Request, res: Response) => {

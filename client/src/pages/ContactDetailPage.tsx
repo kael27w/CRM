@@ -22,6 +22,7 @@ import {
 } from "../components/ui/dialog";
 import { AddNoteForm } from "../components/contacts/AddNoteForm";
 import { PlusCircle, Phone, Mail, Briefcase, PenLine, Clock } from "lucide-react"; // Import additional icons
+import { NoteItem } from "../components/contacts/NoteItem";
 
 // Import EditContactDialog directly
 import EditContactDialog from "@/components/contacts/EditContactDialog";
@@ -273,49 +274,52 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
             </Card>
           ) : (
             activities.map((activity: UnifiedActivityEntry) => (
-              <Card key={activity.id} className="w-full">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      {activity.summary}
-                      <Badge
-                        variant={getBadgeVariant(activity.type)}
-                        className="ml-2"
-                      >
-                        {activity.type === "call" ? "Call" : 
-                         activity.type === "task" ? "Task" : "Note"}
-                      </Badge>
-                    </CardTitle>
-                  </div>
-                  <CardDescription>
-                    {formatTimestamp(activity.timestamp)}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {activity.type === "call" && (
-                    <div>
-                      <p>Direction: {activity.details.direction}</p>
-                      <p>Duration: {formatDuration(activity.details.duration)}</p>
-                      <p>Status: {activity.details.status}</p>
+              // Use the NoteItem component for notes
+              activity.type === "note" ? (
+                <NoteItem 
+                  key={activity.id}
+                  note={activity}
+                  contactId={contactId}
+                />
+              ) : (
+                <Card key={activity.id} className="w-full">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        {activity.summary}
+                        <Badge
+                          variant={getBadgeVariant(activity.type)}
+                          className="ml-2"
+                        >
+                          {activity.type === "call" ? "Call" : "Task"}
+                        </Badge>
+                      </CardTitle>
                     </div>
-                  )}
-                  {activity.type === "task" && (
-                    <div>
-                      <p>{activity.details.description || "No description provided"}</p>
-                      {activity.details.due_date && (
-                        <p className="text-sm text-gray-500 mt-2">
-                          Due: {formatTimestamp(activity.details.due_date)}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {activity.type === "note" && (
-                    <div>
-                      <p>{activity.details.description || "No content provided"}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    <CardDescription>
+                      {formatTimestamp(activity.timestamp)}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {activity.type === "call" && (
+                      <div>
+                        <p>Direction: {activity.details.direction}</p>
+                        <p>Duration: {formatDuration(activity.details.duration)}</p>
+                        <p>Status: {activity.details.status}</p>
+                      </div>
+                    )}
+                    {activity.type === "task" && (
+                      <div>
+                        <p>{activity.details.description || "No description provided"}</p>
+                        {activity.details.due_date && (
+                          <p className="text-sm text-gray-500 mt-2">
+                            Due: {formatTimestamp(activity.details.due_date)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )
             ))
           )}
         </div>

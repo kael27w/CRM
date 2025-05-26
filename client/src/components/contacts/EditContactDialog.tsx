@@ -88,6 +88,9 @@ export default function EditContactDialog({
       queryClient.invalidateQueries({ queryKey: ["contact", contact.id] });
       queryClient.invalidateQueries({ queryKey: ["contactsList"] });
       
+      // Direct update of the cache for immediate UI update
+      queryClient.setQueryData(["contact", contact.id], updatedContact);
+      
       // Show success toast
       toast.success("Contact updated successfully");
     },
