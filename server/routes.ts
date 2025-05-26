@@ -117,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { data, error } = await supabase
         .from('contacts')
-        .select('id, first_name, last_name, phone, email, company, created_at, updated_at, status')
+        .select('id, first_name, last_name, phone, email, company, created_at, updated_at')
         .eq('id', contactId)
         .single();
       

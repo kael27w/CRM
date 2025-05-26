@@ -61,7 +61,8 @@ export interface ContactEntry {
   phone: string;
   email?: string;
   company?: string;
-  status: string;
+  created_at?: string;
+  updated_at?: string;
   [key: string]: any;
 }
 
@@ -98,7 +99,6 @@ export type ContactFormData = {
   phone: string;
   email?: string;
   company?: string;
-  status?: string;
 };
 
 /**

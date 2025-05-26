@@ -23,23 +23,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 import { ContactEntry, ContactFormData, updateContact } from "@/lib/api";
-
-// Contact statuses
-const CONTACT_STATUSES = [
-  "Lead",
-  "Prospect",
-  "Active Client",
-  "Inactive Client",
-] as const;
 
 // Form validation schema
 const contactFormSchema = z.object({
@@ -60,9 +45,6 @@ const contactFormSchema = z.object({
     ),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   company: z.string().optional().or(z.literal("")),
-  status: z.enum(CONTACT_STATUSES, {
-    required_error: "Please select a status",
-  }),
 });
 
 type ContactFormValues = z.infer<typeof contactFormSchema>;
@@ -92,7 +74,6 @@ export default function EditContactDialog({
       phone: contact.phone,
       email: contact.email || "",
       company: contact.company || "",
-      status: (contact.status as any) || "Lead",
     },
   });
 
@@ -205,34 +186,6 @@ export default function EditContactDialog({
                   <FormControl>
                     <Input placeholder="Acme Inc." {...field} />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status*</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {CONTACT_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

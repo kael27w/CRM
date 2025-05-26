@@ -23,7 +23,8 @@ import {
 import { AddNoteForm } from "../components/contacts/AddNoteForm";
 import { PlusCircle, Phone, Mail, Briefcase, PenLine, Clock } from "lucide-react"; // Import additional icons
 
-import EditContactDialog from "../components/contacts/EditContactDialog";
+// Import EditContactDialog directly
+import EditContactDialog from "@/components/contacts/EditContactDialog";
 
 // Used for direct component usage
 interface ContactDetailPageProps {
@@ -161,7 +162,8 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
   }
 
   // Format date for display
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'Not available';
     try {
       return format(new Date(dateString), 'MMM d, yyyy');
     } catch (e) {
@@ -170,11 +172,12 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
   };
 
   // Helper function to format the timestamp
-  const formatTimestamp = (timestamp: string) => {
+  const formatTimestamp = (timestamp: string | undefined) => {
+    if (!timestamp) return 'Not available';
     try {
       return format(new Date(timestamp), "MMM d, yyyy 'at' h:mm a");
     } catch (e) {
-      return timestamp;
+      return 'Invalid date';
     }
   };
 
@@ -193,19 +196,6 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
       case 'task': return "secondary";
       case 'note': return "outline";
       default: return "default";
-    }
-  };
-
-  // Get contact status badge variant
-  const getStatusBadgeVariant = (status: string | undefined) => {
-    if (!status) return "outline";
-    
-    switch (status.toLowerCase()) {
-      case 'lead': return "default";
-      case 'prospect': return "secondary";
-      case 'active client': return "outline";
-      case 'inactive client': return "destructive";
-      default: return "outline";
     }
   };
 
@@ -237,14 +227,7 @@ export function ContactDetailPage({ contactId: propContactId }: ContactDetailPag
       {contact && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl">{contact.first_name} {contact.last_name}</CardTitle>
-              {contact.status && (
-                <Badge variant={getStatusBadgeVariant(contact.status)}>
-                  {contact.status}
-                </Badge>
-              )}
-            </div>
+            <CardTitle className="text-xl">{contact.first_name} {contact.last_name}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
