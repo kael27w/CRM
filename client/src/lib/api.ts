@@ -611,7 +611,8 @@ export type NewNoteData = {
   type: 'note';
   title?: string;
   description: string;
-  call_sid?: string; // Optional field to associate the note with a call
+  owner_id?: number; // Required by database schema, will default to 1 if not provided
+  // Removed call_sid since the database doesn't support it yet
 };
 
 /**

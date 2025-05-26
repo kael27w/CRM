@@ -480,20 +480,22 @@ const Softphone: React.FC = () => {
     mutationFn: (noteData: {
       contact_id: number;
       description: string;
-      call_sid?: string;
+      call_sid?: string; // Keep this for logging but don't send to API
     }) => {
       console.log(`[SAVE_MUTATION] Starting mutation with noteData:`, noteData);
       
       // Create a data object that matches the NewNoteData type
+      // Note: call_sid is not included since the database doesn't support it yet
       const notePayload: NewNoteData = {
         contact_id: noteData.contact_id,
         type: 'note',
         description: noteData.description,
         title: `Call Note - ${new Date().toLocaleString()}`,
-        call_sid: noteData.call_sid // Include the call_sid if provided
+        owner_id: 1 // Default to user ID 1, could be made dynamic later
+        // call_sid removed since database doesn't support it
       };
       
-      console.log(`[SAVE_MUTATION] Final payload being sent:`, notePayload);
+      console.log(`[SAVE_MUTATION] Final payload being sent (without call_sid):`, notePayload);
       
       return createNoteActivity(notePayload);
     },

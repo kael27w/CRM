@@ -704,8 +704,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: 'task',      // Ensure type is explicitly 'task'
         };
       } else if (activityPayload.type === 'note') {
-        // For notes, handle call_sid if provided (for call notes)
-        console.log("Creating note activity. Call SID:", activityPayload.call_sid || 'Not provided');
+        // For notes, just log that we're creating a note
+        console.log("Creating note activity for contact:", activityPayload.contact_id);
+        // Remove call_sid if present since database doesn't support it
+        if (activityPayload.call_sid) {
+          console.log("Note: call_sid provided but not stored in database:", activityPayload.call_sid);
+          delete activityPayload.call_sid;
+        }
       } else if (!activityPayload.type) {
         // If type is not specified at all by the client, and this endpoint is generic,
         // this could be an issue. For creating a TASK specifically, client MUST send type: 'task'.
