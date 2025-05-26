@@ -611,8 +611,7 @@ export type NewNoteData = {
   type: 'note';
   title?: string;
   description: string;
-  owner_id?: number; // Required by database schema, will default to 1 if not provided
-  // Removed call_sid since the database doesn't support it yet
+  // Removed owner_id since it's causing database errors and may not be required
 };
 
 /**

@@ -490,9 +490,8 @@ const Softphone: React.FC = () => {
         contact_id: noteData.contact_id,
         type: 'note',
         description: noteData.description,
-        title: `Call Note - ${new Date().toLocaleString()}`,
-        owner_id: 1 // Default to user ID 1, could be made dynamic later
-        // call_sid removed since database doesn't support it
+        title: `Call Note - ${new Date().toLocaleString()}`
+        // Removed owner_id since it's causing database errors
       };
       
       console.log(`[SAVE_MUTATION] Final payload being sent (without call_sid):`, notePayload);
