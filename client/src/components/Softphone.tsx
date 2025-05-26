@@ -241,24 +241,24 @@ const Softphone: React.FC = () => {
         // @ts-ignore
         const phone = (connection as any).parameters?.From;
         if (phone) {
-          console.log('Looking up contact for incoming call from:', phone);
+          console.log(`[INCOMING_CALL] Looking up contact for incoming call from: ${phone}`);
           try {
             const contact = await fetchContactByPhone(phone);
             if (contact) {
+              console.log(`[INCOMING_CALL] Contact found for incoming call:`, contact);
               setActiveContactId(contact.id);
               setCallerInfo(`${contact.first_name} ${contact.last_name} (${phone})`);
-              console.log('Contact found for incoming call:', contact);
             } else {
+              console.log(`[INCOMING_CALL] No contact found for incoming call from: ${phone}`);
               setActiveContactId(null);
-              console.log('No contact found for incoming call from:', phone);
             }
           } catch (error) {
-            console.error('Error looking up contact:', error);
+            console.error(`[INCOMING_CALL] Error looking up contact:`, error);
             setActiveContactId(null);
           }
         } else {
           setActiveContactId(null);
-          console.log('No From parameter for incoming call');
+          console.log(`[INCOMING_CALL] No From parameter for incoming call`);
         }
       })();
       
@@ -348,27 +348,36 @@ const Softphone: React.FC = () => {
       
       setStatus('connected');
       
-      // For outbound calls, try to associate with a contact
+      // For outbound calls, try to associate with a contact if we don't already have one
+      console.log(`[ACCEPT_EVENT] Current activeContactId: ${activeContactId}`);
       if (activeContactId === null) {
         (async () => {
           // Check if this is an outbound call (To parameter is present)
           const toNumber = connection.parameters?.To;
+          console.log(`[ACCEPT_EVENT] Checking for outbound call. To parameter: ${toNumber}`);
           if (toNumber) {
-            console.log('Looking up contact for outbound call to:', toNumber);
+            console.log(`[ACCEPT_EVENT] Looking up contact for outbound call to: ${toNumber}`);
             try {
               const contact = await fetchContactByPhone(toNumber);
               if (contact) {
+                console.log(`[ACCEPT_EVENT] Contact found for outbound call:`, contact);
                 setActiveContactId(contact.id);
-                setCallerInfo(`${contact.first_name} ${contact.last_name} (${toNumber})`);
-                console.log('Contact found for outbound call:', contact);
+                setCallerInfo(`Connected with ${contact.first_name} ${contact.last_name} (${toNumber})`);
+                toast.success(`Connected with ${contact.first_name} ${contact.last_name}`);
               } else {
-                console.log('No contact found for outbound call to:', toNumber);
+                console.log(`[ACCEPT_EVENT] No contact found for outbound call to: ${toNumber}`);
+                setCallerInfo(`Connected with ${toNumber}`);
               }
             } catch (error) {
-              console.error('Error looking up contact for outbound call:', error);
+              console.error(`[ACCEPT_EVENT] Error looking up contact for outbound call:`, error);
+              setCallerInfo(`Connected with ${toNumber}`);
             }
+          } else {
+            console.log(`[ACCEPT_EVENT] No To parameter found, might be an inbound call`);
           }
         })();
+      } else {
+        console.log(`[ACCEPT_EVENT] Already have activeContactId: ${activeContactId}, skipping lookup`);
       }
     });
     
@@ -473,6 +482,8 @@ const Softphone: React.FC = () => {
       description: string;
       call_sid?: string;
     }) => {
+      console.log(`[SAVE_MUTATION] Starting mutation with noteData:`, noteData);
+      
       // Create a data object that matches the NewNoteData type
       const notePayload: NewNoteData = {
         contact_id: noteData.contact_id,
@@ -482,9 +493,13 @@ const Softphone: React.FC = () => {
         call_sid: noteData.call_sid // Include the call_sid if provided
       };
       
+      console.log(`[SAVE_MUTATION] Final payload being sent:`, notePayload);
+      
       return createNoteActivity(notePayload);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log(`[SAVE_MUTATION] Note saved successfully:`, data);
+      
       // Clear the text area
       setNoteText('');
       
@@ -497,24 +512,35 @@ const Softphone: React.FC = () => {
       toast.success("Your call note has been saved successfully.");
     },
     onError: (error) => {
-      console.error('Error saving note:', error);
+      console.error(`[SAVE_MUTATION] Error saving note:`, error);
       toast.error(error instanceof Error ? error.message : "Failed to save note");
     },
   });
 
   // Handler for saving the note
   const handleSaveNote = () => {
+    console.log(`[SAVE_NOTE] Save note button clicked`);
+    console.log(`[SAVE_NOTE] Current state - activeContactId: ${activeContactId}, noteText: "${noteText}", activeCallSid: ${activeCallSid}`);
+    
     if (!activeContactId) {
       // If no contact ID, show an error
+      console.log(`[SAVE_NOTE] No activeContactId, showing error`);
       toast.error("No contact is associated with this call. Please link or create a contact first.");
       return;
     }
     
     if (!noteText.trim()) {
       // If note is empty, show a warning
+      console.log(`[SAVE_NOTE] Note text is empty, showing warning`);
       toast.warning("Please enter some text before saving.");
       return;
     }
+    
+    console.log(`[SAVE_NOTE] Executing mutation with data:`, {
+      contact_id: activeContactId,
+      description: noteText,
+      call_sid: activeCallSid || undefined,
+    });
     
     // Execute the mutation with the note data
     saveMutation.mutate({
@@ -543,6 +569,24 @@ const Softphone: React.FC = () => {
     setCallerInfo('');
     setActiveContactId(null);
     setNoteText('');
+    
+    // Immediately look up contact for the number we're about to call
+    console.log(`[OUTBOUND_CALL] Looking up contact for number: ${numberToDial}`);
+    try {
+      const contact = await fetchContactByPhone(numberToDial);
+      if (contact) {
+        console.log(`[OUTBOUND_CALL] Contact found immediately:`, contact);
+        setActiveContactId(contact.id);
+        setCallerInfo(`Calling ${contact.first_name} ${contact.last_name} (${numberToDial})`);
+        toast.success(`Calling ${contact.first_name} ${contact.last_name}`);
+      } else {
+        console.log(`[OUTBOUND_CALL] No contact found for number: ${numberToDial}`);
+        setCallerInfo(`Calling ${numberToDial}`);
+      }
+    } catch (error) {
+      console.error(`[OUTBOUND_CALL] Error looking up contact:`, error);
+      setCallerInfo(`Calling ${numberToDial}`);
+    }
     
     try {
       const params = { To: numberToDial };
@@ -706,9 +750,17 @@ const Softphone: React.FC = () => {
           
           {/* Debug display for active call info */}
           {status === 'connected' && (
-            <div>
-              <p className="text-xs">Active Call SID: {activeCallSid || 'N/A'}</p>
-              <p className="text-xs">Active Contact ID: {activeContactId || 'N/A'}</p>
+            <div className="space-y-1">
+              <p className="text-xs text-gray-600">Call SID: {activeCallSid || 'N/A'}</p>
+              <p className="text-xs text-gray-600">
+                Contact: {activeContactId ? `ID ${activeContactId}` : 'Not linked'}
+              </p>
+              {activeContactId && (
+                <p className="text-xs text-green-600">✓ Contact linked - notes can be saved</p>
+              )}
+              {!activeContactId && (
+                <p className="text-xs text-yellow-600">⚠ No contact linked - notes cannot be saved</p>
+              )}
             </div>
           )}
         </CardContent>
