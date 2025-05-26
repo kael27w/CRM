@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Device, Call as TwilioCall } from '@twilio/voice-sdk';
-import { fetchTwilioToken, fetchContactByPhone } from '@/lib/api';
+import { fetchTwilioToken, fetchContactByPhone, createNoteActivity, NewNoteData } from '@/lib/api';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { PhoneIcon, PhoneOffIcon, PhoneIncomingIcon, XIcon, VolumeIcon } from 'lucide-react';
+import { PhoneIcon, PhoneOffIcon, PhoneIncomingIcon, XIcon, VolumeIcon, Save } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 
@@ -37,6 +39,10 @@ const Softphone: React.FC = () => {
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [activeCallSid, setActiveCallSid] = useState<string | null>(null);
   const [activeContactId, setActiveContactId] = useState<number | null>(null);
+  
+  // Note-taking state
+  const [noteContent, setNoteContent] = useState('');
+  const queryClient = useQueryClient();
 
   // Initialize AudioContext
   const initializeAudio = () => {
@@ -275,6 +281,8 @@ const Softphone: React.FC = () => {
       connectionRef.current = null;
       setStatus('disconnected');
       setCallerInfo('');
+      // Clear note content when call ends
+      setNoteContent('');
     });
     
     deviceRef.current.on('offline', () => {
@@ -353,6 +361,8 @@ const Softphone: React.FC = () => {
       connectionRef.current = null;
       setActiveCallSid(null);
       setActiveContactId(null);
+      // Clear note content when call ends
+      setNoteContent('');
     });
     
     // Called when there's a warning or transition state
@@ -419,6 +429,73 @@ const Softphone: React.FC = () => {
 
   const statusDetails = getStatusDetails();
 
+  // Mutation for saving notes
+  const saveNoteMutation = useMutation({
+    mutationFn: (noteData: NewNoteData) => createNoteActivity(noteData),
+    onSuccess: (data) => {
+      toast({
+        title: 'Note Saved',
+        description: 'Your note has been saved successfully',
+        variant: 'default',
+      });
+      
+      // Clear note content after successful save
+      setNoteContent('');
+      
+      // Invalidate related queries
+      if (activeContactId) {
+        queryClient.invalidateQueries({ queryKey: ['contactActivities', activeContactId] });
+      }
+      
+      console.log('Note saved successfully:', data);
+    },
+    onError: (error) => {
+      console.error('Error saving note:', error);
+      toast({
+        title: 'Error Saving Note',
+        description: error instanceof Error ? error.message : 'Unknown error saving note',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Handle saving a note
+  const handleSaveNote = () => {
+    if (!noteContent.trim()) {
+      toast({
+        title: 'Note Empty',
+        description: 'Please enter some content for your note',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (!activeContactId) {
+      toast({
+        title: 'No Contact',
+        description: 'Cannot save note: No contact associated with this call',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Create note data object
+    const noteData: NewNoteData = {
+      contact_id: activeContactId,
+      type: 'note',
+      title: 'In-call note',
+      description: noteContent,
+    };
+    
+    // Add call_sid if available (as part of the description)
+    if (activeCallSid) {
+      noteData.description = `${noteData.description}\n\nCall SID: ${activeCallSid}`;
+    }
+    
+    console.log('Saving note:', noteData);
+    saveNoteMutation.mutate(noteData);
+  };
+
   // Minimized view of the softphone
   if (minimized) {
     return (
@@ -475,7 +552,22 @@ const Softphone: React.FC = () => {
       if (callInstance && typeof callInstance.on === 'function') {
         connectionRef.current = callInstance;
         registerConnectionEvents(callInstance);
-        setActiveContactId(null); // Outbound: set to null for now
+        
+        // For outbound calls, try to look up contact by phone number
+        try {
+          const contact = await fetchContactByPhone(numberToDial);
+          if (contact) {
+            setActiveContactId(contact.id);
+            setCallerInfo(`${contact.first_name} ${contact.last_name} (${numberToDial})`);
+            console.log('Contact found for outbound call:', contact);
+          } else {
+            setActiveContactId(null);
+            console.log('No contact found for outbound call to:', numberToDial);
+          }
+        } catch (lookupError) {
+          console.error('Error looking up contact for outbound call:', lookupError);
+          setActiveContactId(null);
+        }
       } else {
         setError('Failed to properly initiate call connection object.');
         setStatus('error');
@@ -513,6 +605,8 @@ const Softphone: React.FC = () => {
     }
     setStatus('disconnected');
     setCallerInfo('');
+    // Clear note content when call ends
+    setNoteContent('');
   };
 
   // Full softphone view
@@ -583,11 +677,35 @@ const Softphone: React.FC = () => {
               </Button>
             </div>
           )}
+          
           {/* Debug display for active call info */}
           {status === 'connected' && (
-            <div>
-              <p className="text-xs">Active Call SID: {activeCallSid || 'N/A'}</p>
-              <p className="text-xs">Active Contact ID: {activeContactId || 'N/A'}</p>
+            <div className="text-xs text-gray-500 mb-2">
+              <p>Call SID: {activeCallSid || 'N/A'}</p>
+              <p>Contact ID: {activeContactId || 'N/A'}</p>
+            </div>
+          )}
+          
+          {/* Note-taking area - only show during active calls */}
+          {status === 'connected' && (
+            <div className="space-y-2">
+              <Textarea
+                placeholder="Type call notes here..."
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                rows={4}
+                className="w-full resize-none"
+              />
+              <Button
+                onClick={handleSaveNote}
+                disabled={!noteContent.trim() || !activeContactId || saveNoteMutation.isPending}
+                size="sm"
+                className="w-full"
+                variant="outline"
+              >
+                <Save className="h-4 w-4 mr-1" />
+                {saveNoteMutation.isPending ? 'Saving...' : 'Save Note'}
+              </Button>
             </div>
           )}
         </CardContent>

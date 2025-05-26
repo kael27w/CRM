@@ -94,6 +94,16 @@
     - [x] Implemented note deletion with confirmation dialog
     - [x] Integrated note editing and deletion into ContactDetailPage activity feed
 
+13. [x] **Implement In-Call Note-Taking Feature (05/27/2025)**
+    - [x] Enhanced Softphone.tsx to add note-taking UI during active calls
+    - [x] Added state management for note content
+    - [x] Integrated with existing createNoteActivity API function
+    - [x] Implemented immediate UI feedback with toast notifications
+    - [x] Added proper error handling for cases when contact ID is not available
+    - [x] Included Call SID in note content for call reference
+    - [x] Improved contact lookup for outbound calls to support note-taking
+    - [x] Ensured proper cleanup of note state when calls end
+
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)
