@@ -611,6 +611,7 @@ export type NewNoteData = {
   type: 'note';
   title?: string;
   description: string;
+  call_sid?: string; // Optional field to associate the note with a call
 };
 
 /**
@@ -703,20 +704,23 @@ export async function fetchTwilioToken(): Promise<TwilioTokenResponse> {
  */
 export async function fetchContactByPhone(phoneNumber: string): Promise<ContactEntry | null> {
   try {
-    const res = await fetch(`/api/contacts?phone=${encodeURIComponent(phoneNumber)}`);
-    if (!res.ok) {
-      console.warn('fetchContactByPhone: Non-200 response', res.status);
+    console.log(`Fetching contact by phone: ${phoneNumber}`);
+    
+    // Use the dedicated endpoint for phone number lookups
+    const response = await fetch(`${API_BASE_URL}/api/contacts/lookup-by-phone?phone=${encodeURIComponent(phoneNumber)}`);
+    
+    if (response.status === 404) {
+      console.log('No contact found with this phone number');
       return null;
     }
-    const data = await res.json();
-    if (!data) return null;
-    if (Array.isArray(data)) {
-      return data.length > 0 ? data[0] : null;
+    
+    if (!response.ok) {
+      console.warn('fetchContactByPhone: Non-200 response', response.status);
+      return null;
     }
-    if (typeof data === 'object' && data.id) {
-      return data;
-    }
-    return null;
+    
+    const data = await response.json();
+    return data as ContactEntry;
   } catch (err) {
     console.error('fetchContactByPhone: Error fetching contact:', err);
     return null;

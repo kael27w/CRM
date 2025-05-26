@@ -58,7 +58,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const contact = contactsData[0];
       const contactResponse = {
-        contact_id: contact.id.toString(),
+        id: contact.id,
         first_name: contact.first_name,
         last_name: contact.last_name,
         phone: contact.phone,
@@ -69,6 +69,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(contactResponse);
     } catch (error: any) {
       console.error("GET /api/contacts - Error in contact lookup:", error.message, error.stack);
+      res.status(500).json({ message: "Error looking up contact" });
+    }
+  });
+  
+  // Dedicated endpoint for looking up contacts by phone
+  app.get("/api/contacts/lookup-by-phone", async (req: Request, res: Response) => {
+    try {
+      const { phone } = req.query;
+      if (!phone || typeof phone !== 'string') {
+        return res.status(400).json({ message: "Phone parameter is required" });
+      }
+      
+      console.log(`GET /api/contacts/lookup-by-phone - Looking up contact with phone: ${phone}`);
+      const normalizedPhone = normalizePhone(phone);
+      
+      // Search with normalized and original phone for flexibility
+      const { data: contactsData, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phone}%`);
+
+      if (error) {
+        console.error("GET /api/contacts/lookup-by-phone - Supabase error:", error);
+        return res.status(500).json({ message: "Database error looking up contact" });
+      }
+      
+      if (!contactsData || contactsData.length === 0) {
+        console.log("GET /api/contacts/lookup-by-phone - No contacts found");
+        return res.status(404).json({ message: "No contact found with this phone number" });
+      }
+      
+      const contact = contactsData[0];
+      console.log("GET /api/contacts/lookup-by-phone - Contact found:", contact);
+      
+      res.status(200).json(contact);
+    } catch (error: any) {
+      console.error("GET /api/contacts/lookup-by-phone - Error in contact lookup:", error.message, error.stack);
       res.status(500).json({ message: "Error looking up contact" });
     }
   });
@@ -666,6 +703,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...activityPayload, // Client-provided values will override defaults if present
           type: 'task',      // Ensure type is explicitly 'task'
         };
+      } else if (activityPayload.type === 'note') {
+        // For notes, handle call_sid if provided (for call notes)
+        console.log("Creating note activity. Call SID:", activityPayload.call_sid || 'Not provided');
       } else if (!activityPayload.type) {
         // If type is not specified at all by the client, and this endpoint is generic,
         // this could be an issue. For creating a TASK specifically, client MUST send type: 'task'.

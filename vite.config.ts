@@ -35,15 +35,28 @@ export default defineConfig({
     host: true,
     // force Vite to use the specified port
     strictPort: true,
+    port: 5173, // Explicitly set the port
     // allow ngrok domains to access the dev server
     allowedHosts: ['*.ngrok-free.app'],
     // disable host header validation
     cors: true,
-    // ensure HMR callbacks work over the tunnel
+    // Configure file watching to ignore noisy files
+    watch: {
+      ignored: [
+        '**/node_modules/**',
+        '**/mockServiceWorker.js',
+        '**/.git/**',
+        '**/.DS_Store',
+      ],
+      usePolling: false, // Set to true only if regular watching doesn't work
+    },
+    // Fix HMR configuration for local development
     hmr: {
-      protocol: 'wss',    // Use secure WebSockets
-      clientPort: 443,    // Port for client connections through ngrok
-      host: '0888-2600-1700-be6-7a00-dc41-3456-215f-d003.ngrok-free.app', // Your specific ngrok hostname
+      protocol: 'ws',    // Use standard WebSockets for local dev
+      host: 'localhost', // Use localhost for local development
+      clientPort: 5173,  // Match the port Vite is serving on
+      // Comment out the ngrok-specific host when developing locally
+      // host: '0888-2600-1700-be6-7a00-dc41-3456-215f-d003.ngrok-free.app',
     },
     proxy: {
       '/api': {

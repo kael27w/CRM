@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Device, Call as TwilioCall } from '@twilio/voice-sdk';
 import { fetchTwilioToken, fetchContactByPhone, createNoteActivity, NewNoteData } from '@/lib/api';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { PhoneIcon, PhoneOffIcon, PhoneIncomingIcon, XIcon, VolumeIcon, Save } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 /**
  * Status values for the Softphone
@@ -39,9 +39,10 @@ const Softphone: React.FC = () => {
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [activeCallSid, setActiveCallSid] = useState<string | null>(null);
   const [activeContactId, setActiveContactId] = useState<number | null>(null);
+  // New state for in-call note-taking
+  const [noteText, setNoteText] = useState('');
   
-  // Note-taking state
-  const [noteContent, setNoteContent] = useState('');
+  // Initialize React Query client
   const queryClient = useQueryClient();
 
   // Initialize AudioContext
@@ -138,11 +139,7 @@ const Softphone: React.FC = () => {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Twilio Device';
       console.error('Error initializing Twilio Device:', err);
       setError(errorMessage);
-      toast({
-        title: 'Softphone Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      toast.error(errorMessage);
     }
   };
 
@@ -211,11 +208,7 @@ const Softphone: React.FC = () => {
       
       setError(`Twilio error: ${twilioError.message || 'Unknown error'}`);
       setStatus('error');
-      toast({
-        title: 'Softphone Error',
-        description: twilioError.message || 'An error occurred with the phone connection',
-        variant: 'destructive',
-      });
+      toast.error(twilioError.message || 'An error occurred with the phone connection');
     });
     
     // Called when there's an incoming call
@@ -231,26 +224,37 @@ const Softphone: React.FC = () => {
         document.body.style.backgroundColor = '';
       }, 5000); // Reset after 5 seconds
       
+      // Set the connection reference so we can accept/reject it
+      connectionRef.current = connection;
+      
       // @ts-ignore
       const from = (connection as any).parameters?.From || 'Unknown caller';
       setCallerInfo(from);
       setStatus('incoming');
+      
       // Set active call SID
       // @ts-ignore
       setActiveCallSid((connection as any).parameters?.CallSid || null);
+      
       // Lookup contact by phone number
       (async () => {
+        // @ts-ignore
         const phone = (connection as any).parameters?.From;
         if (phone) {
           console.log('Looking up contact for incoming call from:', phone);
-          const contact = await fetchContactByPhone(phone);
-          if (contact) {
-            setActiveContactId(contact.id);
-            setCallerInfo(`${contact.first_name} ${contact.last_name} (${phone})`);
-            console.log('Contact found for incoming call:', contact);
-          } else {
+          try {
+            const contact = await fetchContactByPhone(phone);
+            if (contact) {
+              setActiveContactId(contact.id);
+              setCallerInfo(`${contact.first_name} ${contact.last_name} (${phone})`);
+              console.log('Contact found for incoming call:', contact);
+            } else {
+              setActiveContactId(null);
+              console.log('No contact found for incoming call from:', phone);
+            }
+          } catch (error) {
+            console.error('Error looking up contact:', error);
             setActiveContactId(null);
-            console.log('No contact found for incoming call from:', phone);
           }
         } else {
           setActiveContactId(null);
@@ -258,11 +262,7 @@ const Softphone: React.FC = () => {
         }
       })();
       
-      toast({
-        title: 'Incoming Call',
-        description: `Call from ${from}`,
-        variant: 'default',
-      });
+      toast(`Call from ${from}`);
       
       // Handle connection events
       console.log('Registering connection event handlers for incoming call');
@@ -281,8 +281,6 @@ const Softphone: React.FC = () => {
       connectionRef.current = null;
       setStatus('disconnected');
       setCallerInfo('');
-      // Clear note content when call ends
-      setNoteContent('');
     });
     
     deviceRef.current.on('offline', () => {
@@ -349,6 +347,29 @@ const Softphone: React.FC = () => {
       }
       
       setStatus('connected');
+      
+      // For outbound calls, try to associate with a contact
+      if (activeContactId === null) {
+        (async () => {
+          // Check if this is an outbound call (To parameter is present)
+          const toNumber = connection.parameters?.To;
+          if (toNumber) {
+            console.log('Looking up contact for outbound call to:', toNumber);
+            try {
+              const contact = await fetchContactByPhone(toNumber);
+              if (contact) {
+                setActiveContactId(contact.id);
+                setCallerInfo(`${contact.first_name} ${contact.last_name} (${toNumber})`);
+                console.log('Contact found for outbound call:', contact);
+              } else {
+                console.log('No contact found for outbound call to:', toNumber);
+              }
+            } catch (error) {
+              console.error('Error looking up contact for outbound call:', error);
+            }
+          }
+        })();
+      }
     });
     
     // Called when a call is disconnected
@@ -361,8 +382,6 @@ const Softphone: React.FC = () => {
       connectionRef.current = null;
       setActiveCallSid(null);
       setActiveContactId(null);
-      // Clear note content when call ends
-      setNoteContent('');
     });
     
     // Called when there's a warning or transition state
@@ -397,11 +416,7 @@ const Softphone: React.FC = () => {
       
       setError(`Twilio error: ${error.message || 'Unknown error'}`);
       setStatus('error');
-      toast({
-        title: 'Softphone Error',
-        description: error.message || 'An error occurred with the phone connection',
-        variant: 'destructive',
-      });
+      toast.error(error.message || 'An error occurred with the phone connection');
     });
   };
   
@@ -429,73 +444,6 @@ const Softphone: React.FC = () => {
 
   const statusDetails = getStatusDetails();
 
-  // Mutation for saving notes
-  const saveNoteMutation = useMutation({
-    mutationFn: (noteData: NewNoteData) => createNoteActivity(noteData),
-    onSuccess: (data) => {
-      toast({
-        title: 'Note Saved',
-        description: 'Your note has been saved successfully',
-        variant: 'default',
-      });
-      
-      // Clear note content after successful save
-      setNoteContent('');
-      
-      // Invalidate related queries
-      if (activeContactId) {
-        queryClient.invalidateQueries({ queryKey: ['contactActivities', activeContactId] });
-      }
-      
-      console.log('Note saved successfully:', data);
-    },
-    onError: (error) => {
-      console.error('Error saving note:', error);
-      toast({
-        title: 'Error Saving Note',
-        description: error instanceof Error ? error.message : 'Unknown error saving note',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  // Handle saving a note
-  const handleSaveNote = () => {
-    if (!noteContent.trim()) {
-      toast({
-        title: 'Note Empty',
-        description: 'Please enter some content for your note',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    if (!activeContactId) {
-      toast({
-        title: 'No Contact',
-        description: 'Cannot save note: No contact associated with this call',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    // Create note data object
-    const noteData: NewNoteData = {
-      contact_id: activeContactId,
-      type: 'note',
-      title: 'In-call note',
-      description: noteContent,
-    };
-    
-    // Add call_sid if available (as part of the description)
-    if (activeCallSid) {
-      noteData.description = `${noteData.description}\n\nCall SID: ${activeCallSid}`;
-    }
-    
-    console.log('Saving note:', noteData);
-    saveNoteMutation.mutate(noteData);
-  };
-
   // Minimized view of the softphone
   if (minimized) {
     return (
@@ -518,19 +466,84 @@ const Softphone: React.FC = () => {
     );
   }
 
+  // Mutation for saving notes
+  const saveMutation = useMutation({
+    mutationFn: (noteData: {
+      contact_id: number;
+      description: string;
+      call_sid?: string;
+    }) => {
+      // Create a data object that matches the NewNoteData type
+      const notePayload: NewNoteData = {
+        contact_id: noteData.contact_id,
+        type: 'note',
+        description: noteData.description,
+        title: `Call Note - ${new Date().toLocaleString()}`,
+        call_sid: noteData.call_sid // Include the call_sid if provided
+      };
+      
+      return createNoteActivity(notePayload);
+    },
+    onSuccess: () => {
+      // Clear the text area
+      setNoteText('');
+      
+      // Invalidate queries to update any related data
+      if (activeContactId) {
+        queryClient.invalidateQueries({ queryKey: ['contactActivities', activeContactId] });
+      }
+      
+      // Show success message using sonner toast
+      toast.success("Your call note has been saved successfully.");
+    },
+    onError: (error) => {
+      console.error('Error saving note:', error);
+      toast.error(error instanceof Error ? error.message : "Failed to save note");
+    },
+  });
+
+  // Handler for saving the note
+  const handleSaveNote = () => {
+    if (!activeContactId) {
+      // If no contact ID, show an error
+      toast.error("No contact is associated with this call. Please link or create a contact first.");
+      return;
+    }
+    
+    if (!noteText.trim()) {
+      // If note is empty, show a warning
+      toast.warning("Please enter some text before saving.");
+      return;
+    }
+    
+    // Execute the mutation with the note data
+    saveMutation.mutate({
+      contact_id: activeContactId,
+      description: noteText,
+      call_sid: activeCallSid || undefined, // Include the call SID if available
+    });
+  };
+
   // Handler for making an outbound call
   const handleMakeCall = async () => {
     const audioInit = initializeAudio();
     if (!audioInit) {
-      toast({ title: "Audio Error", description: "Could not initialize audio for call.", variant: "destructive" });
+      toast.error("Could not initialize audio for call.");
       return;
     }
     if (!deviceRef.current || !phoneNumber.trim()) {
-      toast({ title: "Call Error", description: "Softphone not ready or no number entered.", variant: "destructive" });
+      toast.error("Softphone not ready or no number entered.");
       return;
     }
+    
     const numberToDial = phoneNumber.trim();
+    
+    // Reset call-related state for a new outbound call
     setStatus('connecting');
+    setCallerInfo('');
+    setActiveContactId(null);
+    setNoteText('');
+    
     try {
       const params = { To: numberToDial };
       console.log("Starting call to:", numberToDial, "with params:", params);
@@ -552,36 +565,16 @@ const Softphone: React.FC = () => {
       if (callInstance && typeof callInstance.on === 'function') {
         connectionRef.current = callInstance;
         registerConnectionEvents(callInstance);
-        
-        // For outbound calls, try to look up contact by phone number
-        try {
-          const contact = await fetchContactByPhone(numberToDial);
-          if (contact) {
-            setActiveContactId(contact.id);
-            setCallerInfo(`${contact.first_name} ${contact.last_name} (${numberToDial})`);
-            console.log('Contact found for outbound call:', contact);
-          } else {
-            setActiveContactId(null);
-            console.log('No contact found for outbound call to:', numberToDial);
-          }
-        } catch (lookupError) {
-          console.error('Error looking up contact for outbound call:', lookupError);
-          setActiveContactId(null);
-        }
       } else {
         setError('Failed to properly initiate call connection object.');
         setStatus('error');
-        toast({ title: "Call Setup Error", description: "Could not set up call events.", variant: "destructive"});
+        toast.error("Could not set up call events.");
       }
     } catch (err: any) {
       console.error("Error in handleMakeCall:", err);
       setError(`Error placing call: ${err?.message || 'Unknown SDK error'}`);
       setStatus('error');
-      toast({
-        title: 'Outbound Call Error',
-        description: err?.message || `Could not place call to ${numberToDial}.`,
-        variant: 'destructive',
-      });
+      toast.error(err?.message || `Could not place call to ${numberToDial}.`);
     }
   };
 
@@ -605,8 +598,6 @@ const Softphone: React.FC = () => {
     }
     setStatus('disconnected');
     setCallerInfo('');
-    // Clear note content when call ends
-    setNoteContent('');
   };
 
   // Full softphone view
@@ -678,34 +669,46 @@ const Softphone: React.FC = () => {
             </div>
           )}
           
-          {/* Debug display for active call info */}
+          {/* In-call note-taking UI - Only show when on active call */}
           {status === 'connected' && (
-            <div className="text-xs text-gray-500 mb-2">
-              <p>Call SID: {activeCallSid || 'N/A'}</p>
-              <p>Contact ID: {activeContactId || 'N/A'}</p>
+            <div className="space-y-2 mt-2">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Call Notes</div>
+                <Button 
+                  onClick={handleSaveNote} 
+                  size="sm" 
+                  variant="outline"
+                  disabled={!noteText.trim() || !activeContactId || saveMutation.isPending}
+                >
+                  <Save className="h-3 w-3 mr-1" />
+                  {saveMutation.isPending ? "Saving..." : "Save Note"}
+                </Button>
+              </div>
+              <Textarea
+                placeholder="Type your call notes here..."
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                rows={3}
+                className="w-full resize-none"
+              />
+              {!activeContactId && (
+                <div className="text-xs text-yellow-600">
+                  Note: Link this call to a contact to save notes.
+                </div>
+              )}
+              {activeContactId && (
+                <div className="text-xs text-green-600">
+                  Note will be saved to the associated contact record.
+                </div>
+              )}
             </div>
           )}
           
-          {/* Note-taking area - only show during active calls */}
+          {/* Debug display for active call info */}
           {status === 'connected' && (
-            <div className="space-y-2">
-              <Textarea
-                placeholder="Type call notes here..."
-                value={noteContent}
-                onChange={(e) => setNoteContent(e.target.value)}
-                rows={4}
-                className="w-full resize-none"
-              />
-              <Button
-                onClick={handleSaveNote}
-                disabled={!noteContent.trim() || !activeContactId || saveNoteMutation.isPending}
-                size="sm"
-                className="w-full"
-                variant="outline"
-              >
-                <Save className="h-4 w-4 mr-1" />
-                {saveNoteMutation.isPending ? 'Saving...' : 'Save Note'}
-              </Button>
+            <div>
+              <p className="text-xs">Active Call SID: {activeCallSid || 'N/A'}</p>
+              <p className="text-xs">Active Contact ID: {activeContactId || 'N/A'}</p>
             </div>
           )}
         </CardContent>
