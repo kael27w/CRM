@@ -26,9 +26,13 @@ import {
   createDeal, 
   updateDeal, 
   deleteDeal,
+  fetchCompanies,
+  fetchContacts,
   type DBPipeline, 
   type Pipeline as APIPipeline,
-  type NewDealData 
+  type NewDealData,
+  type Company,
+  type ContactEntry
 } from '../lib/api';
 import { 
   Card, 
@@ -127,8 +131,8 @@ interface Pipeline {
 interface AddDealFormData {
   name: string;
   amount: number;
-  company: string;
-  contact: string;
+  company_id: number | null;
+  contact_id: number | null;
   closingDate: string;
   probability: number;
   stageId: string;
@@ -261,8 +265,8 @@ const PipelinesPage: React.FC = () => {
   const [addDealForm, setAddDealForm] = useState<AddDealFormData>({
     name: '',
     amount: 0,
-    company: '',
-    contact: '',
+    company_id: null,
+    contact_id: null,
     closingDate: new Date().toISOString().split('T')[0],
     probability: 20,
     stageId: ''
@@ -277,6 +281,18 @@ const PipelinesPage: React.FC = () => {
     queryFn: fetchPipelines,
   });
 
+  // Fetch companies for dropdowns
+  const { data: companiesList, isLoading: companiesLoading } = useQuery({
+    queryKey: ['companies'],
+    queryFn: fetchCompanies,
+  });
+
+  // Fetch contacts for dropdowns
+  const { data: contactsList, isLoading: contactsLoading } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: fetchContacts,
+  });
+
   // Fetch the active pipeline data
   const { data: currentPipelineData, isLoading: pipelineLoading, error: pipelineError } = useQuery({
     queryKey: ['pipeline', activePipeline],
@@ -288,17 +304,11 @@ const PipelinesPage: React.FC = () => {
   const createDealMutation = useMutation({
     mutationFn: createDeal,
     onSuccess: () => {
+      // Targeted cache invalidation - only invalidate the specific pipeline data
       queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
       setIsAddDealOpen(false);
-      setAddDealForm({
-        name: '',
-        amount: 0,
-        company: '',
-        contact: '',
-        closingDate: new Date().toISOString().split('T')[0],
-        probability: 20,
-        stageId: ''
-      });
+      // Reset form state immediately
+      resetFormState();
       toast({
         title: "Success",
         description: "Deal created successfully!",
@@ -311,6 +321,10 @@ const PipelinesPage: React.FC = () => {
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      // Ensure form is always reset even if there's an error
+      resetFormState();
+    }
   });
 
   // Mutation for updating a deal
@@ -318,19 +332,12 @@ const PipelinesPage: React.FC = () => {
     mutationFn: ({ dealId, dealData }: { dealId: number; dealData: Partial<any> }) => 
       updateDeal(dealId, dealData),
     onSuccess: () => {
+      // Targeted cache invalidation - only invalidate the specific pipeline data
       queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
       setIsEditDealOpen(false);
       setCurrentDealId(null);
-      // Reset form to prevent state issues
-      setAddDealForm({
-        name: '',
-        amount: 0,
-        company: '',
-        contact: '',
-        closingDate: new Date().toISOString().split('T')[0],
-        probability: 20,
-        stageId: ''
-      });
+      // Reset form state immediately
+      resetFormState();
       toast({
         title: "Success",
         description: "Deal updated successfully!",
@@ -343,25 +350,24 @@ const PipelinesPage: React.FC = () => {
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      // Ensure form is always reset and dialogs closed
+      setIsEditDealOpen(false);
+      setCurrentDealId(null);
+      resetFormState();
+    }
   });
 
   // Mutation for deleting a deal
   const deleteDealMutation = useMutation({
     mutationFn: deleteDeal,
     onSuccess: () => {
+      // Targeted cache invalidation - only invalidate the specific pipeline data
       queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
       setIsDeleteDialogOpen(false);
       setDealToDelete(null);
-      // Reset form to prevent state issues
-      setAddDealForm({
-        name: '',
-        amount: 0,
-        company: '',
-        contact: '',
-        closingDate: new Date().toISOString().split('T')[0],
-        probability: 20,
-        stageId: ''
-      });
+      // Reset form state immediately
+      resetFormState();
       toast({
         title: "Success",
         description: "Deal deleted successfully!",
@@ -374,6 +380,12 @@ const PipelinesPage: React.FC = () => {
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      // Ensure dialogs are always closed and state reset
+      setIsDeleteDialogOpen(false);
+      setDealToDelete(null);
+      resetFormState();
+    }
   });
 
   // Fallback to mock data if API fails or is not available
@@ -746,6 +758,7 @@ const PipelinesPage: React.FC = () => {
     
     // Only update if the deal was moved to a different stage
     if (currentDeal && currentStageId && currentStageId !== newStageId) {
+      // Use the same mutation with targeted cache invalidation
       updateDealMutation.mutate({
         dealId,
         dealData: { stage_id: newStageId }
@@ -796,12 +809,16 @@ const PipelinesPage: React.FC = () => {
     }
     
     if (dealToEdit) {
+      // Find company_id and contact_id by matching names
+      const companyId = companiesList?.find(c => c.company_name === dealToEdit!.company)?.id || null;
+      const contactId = contactsList?.find(c => `${c.first_name} ${c.last_name}` === dealToEdit!.contact)?.id || null;
+      
       // Set up the form with the deal's current data
       setAddDealForm({
         name: dealToEdit.name,
         amount: dealToEdit.amount,
-        company: dealToEdit.company,
-        contact: dealToEdit.contact,
+        company_id: companyId,
+        contact_id: contactId,
         closingDate: dealToEdit.closingDate.split('T')[0], // Convert to YYYY-MM-DD format
         probability: dealToEdit.probability,
         stageId: dealToEdit.stageId
@@ -816,12 +833,12 @@ const PipelinesPage: React.FC = () => {
   const handleSaveEdit = () => {
     if (!currentDealId) return;
     
-    // Prepare the update data
-    // Note: Company and contact fields are currently read-only as they require foreign key relationships
-    // TODO: Implement company and contact lookup functionality
+    // Prepare the update data with company_id and contact_id
     const updateData = {
       name: addDealForm.name,
       amount: addDealForm.amount,
+      company_id: addDealForm.company_id,
+      contact_id: addDealForm.contact_id,
       closing_date: addDealForm.closingDate,
       probability: addDealForm.probability,
       stage_id: addDealForm.stageId
@@ -876,7 +893,7 @@ const PipelinesPage: React.FC = () => {
   };
   
   // Handle form field changes
-  const handleFormChange = (field: keyof AddDealFormData, value: string | number) => {
+  const handleFormChange = (field: keyof AddDealFormData, value: string | number | null) => {
     setAddDealForm(prev => ({
       ...prev,
       [field]: value
@@ -898,8 +915,8 @@ const PipelinesPage: React.FC = () => {
     const dealData: NewDealData = {
       name: addDealForm.name,
       amount: addDealForm.amount,
-      company_id: null, // We'll handle company lookup later
-      contact_id: null, // We'll handle contact lookup later
+      company_id: addDealForm.company_id,
+      contact_id: addDealForm.contact_id,
       closing_date: addDealForm.closingDate || undefined,
       stage_id: addDealForm.stageId,
       pipeline_id: activePipeline,
@@ -943,6 +960,19 @@ const PipelinesPage: React.FC = () => {
       document.removeEventListener('click', handleClick);
     };
   }, [activePipeline]);
+  
+  // Reset form state
+  const resetFormState = () => {
+    setAddDealForm({
+      name: '',
+      amount: 0,
+      company_id: null,
+      contact_id: null,
+      closingDate: new Date().toISOString().split('T')[0],
+      probability: 20,
+      stageId: ''
+    });
+  };
   
   return (
     <div className="flex flex-col h-full">
@@ -1075,24 +1105,44 @@ const PipelinesPage: React.FC = () => {
               <Label htmlFor="company" className="text-right">
                 Company
               </Label>
-              <Input
-                id="company"
-                className="col-span-3"
-                value={addDealForm.company}
-                onChange={(e) => handleFormChange('company', e.target.value)}
-              />
+              <Select 
+                value={addDealForm.company_id?.toString() || ""} 
+                onValueChange={(value) => handleFormChange('company_id', value ? parseInt(value) : null)}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a company" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No company</SelectItem>
+                  {companiesList?.map(company => (
+                    <SelectItem key={company.id} value={company.id.toString()}>
+                      {company.company_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="contact" className="text-right">
                 Contact
               </Label>
-              <Input
-                id="contact"
-                className="col-span-3"
-                value={addDealForm.contact}
-                onChange={(e) => handleFormChange('contact', e.target.value)}
-              />
+              <Select 
+                value={addDealForm.contact_id?.toString() || ""} 
+                onValueChange={(value) => handleFormChange('contact_id', value ? parseInt(value) : null)}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a contact" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No contact</SelectItem>
+                  {contactsList?.map(contact => (
+                    <SelectItem key={contact.id} value={contact.id.toString()}>
+                      {contact.first_name} {contact.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
@@ -1193,29 +1243,47 @@ const PipelinesPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-company" className="text-right text-muted-foreground">
+              <Label htmlFor="edit-company" className="text-right">
                 Company
               </Label>
-              <Input
-                id="edit-company"
-                className="col-span-3 bg-muted"
-                value={addDealForm.company}
-                disabled
-                placeholder="Company editing not yet implemented"
-              />
+              <Select 
+                value={addDealForm.company_id?.toString() || ""} 
+                onValueChange={(value) => handleFormChange('company_id', value ? parseInt(value) : null)}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a company" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No company</SelectItem>
+                  {companiesList?.map(company => (
+                    <SelectItem key={company.id} value={company.id.toString()}>
+                      {company.company_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-contact" className="text-right text-muted-foreground">
+              <Label htmlFor="edit-contact" className="text-right">
                 Contact
               </Label>
-              <Input
-                id="edit-contact"
-                className="col-span-3 bg-muted"
-                value={addDealForm.contact}
-                disabled
-                placeholder="Contact editing not yet implemented"
-              />
+              <Select 
+                value={addDealForm.contact_id?.toString() || ""} 
+                onValueChange={(value) => handleFormChange('contact_id', value ? parseInt(value) : null)}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a contact" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No contact</SelectItem>
+                  {contactsList?.map(contact => (
+                    <SelectItem key={contact.id} value={contact.id.toString()}>
+                      {contact.first_name} {contact.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">

@@ -2091,18 +2091,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all deals for this pipeline
       console.log(`GET /api/pipelines/${pipelineId} - Querying deals table for pipeline_id: ${pipelineId}`);
       
-      // First try with joins, if that fails, try without joins
+      // Query with joins to get company and contact names
       let dealsData, dealsError;
       try {
         const result = await supabase
-                  .from('deals')
-        .select(`
-          id, name, amount, company_id, contact_id, company, contact, closing_date, 
-          stage_id, pipeline_id, probability, status, created_at, updated_at,
-          companies(id, company_name),
-          contacts(id, first_name, last_name)
-        `)
-        .eq('pipeline_id', pipelineId);
+          .from('deals')
+          .select(`
+            id, name, amount, company_id, contact_id, closing_date, 
+            stage_id, pipeline_id, probability, status, created_at, updated_at,
+            companies(id, company_name),
+            contacts(id, first_name, last_name)
+          `)
+          .eq('pipeline_id', pipelineId);
         
         dealsData = result.data;
         dealsError = result.error;
@@ -2141,8 +2141,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: deal.id,
             name: deal.name,
             amount: deal.amount || 0,
-            company: (deal as any).company || (deal as any).companies?.company_name || '',
-            contact: (deal as any).contact || ((deal as any).contacts ? `${(deal as any).contacts.first_name} ${(deal as any).contacts.last_name}` : ''),
+            company: (deal as any).companies?.company_name || '',
+            contact: (deal as any).contacts ? `${(deal as any).contacts.first_name} ${(deal as any).contacts.last_name}` : '',
+            company_id: deal.company_id,
+            contact_id: deal.contact_id,
             closingDate: deal.closing_date || '',
             stageId: deal.stage_id,
             probability: deal.probability || 0,
@@ -2177,14 +2179,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Prepare deal data for insertion
+      // Prepare deal data for insertion - ONLY IDs, no text fields
       const newDeal = {
         name: dealData.name,
         amount: dealData.amount || 0,
         company_id: dealData.company_id || null,
         contact_id: dealData.contact_id || null,
-        company: dealData.company || null,
-        contact: dealData.contact || null,
         closing_date: dealData.closing_date || null,
         stage_id: dealData.stage_id,
         pipeline_id: dealData.pipeline_id,
@@ -2198,7 +2198,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from('deals')
         .insert([newDeal])
         .select(`
-          id, name, amount, company_id, contact_id, company, contact, closing_date, 
+          id, name, amount, company_id, contact_id, closing_date, 
           stage_id, pipeline_id, probability, status, created_at, updated_at,
           companies(id, company_name),
           contacts(id, first_name, last_name)
@@ -2215,8 +2215,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: insertedDeal.id,
         name: insertedDeal.name,
         amount: insertedDeal.amount || 0,
-        company: (insertedDeal as any).company || (insertedDeal.companies as any)?.company_name || '',
-        contact: (insertedDeal as any).contact || ((insertedDeal.contacts as any) ? `${(insertedDeal.contacts as any).first_name} ${(insertedDeal.contacts as any).last_name}` : ''),
+        company: (insertedDeal.companies as any)?.company_name || '',
+        contact: (insertedDeal.contacts as any) ? `${(insertedDeal.contacts as any).first_name} ${(insertedDeal.contacts as any).last_name}` : '',
         closingDate: insertedDeal.closing_date || '',
         stageId: insertedDeal.stage_id,
         probability: insertedDeal.probability || 0,
@@ -2248,13 +2248,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updated_at: new Date().toISOString()
       };
       
-      // Only include fields that are provided
+      // Only include fields that are provided - ONLY IDs, no text fields
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.amount !== undefined) updateData.amount = updates.amount;
       if (updates.company_id !== undefined) updateData.company_id = updates.company_id;
       if (updates.contact_id !== undefined) updateData.contact_id = updates.contact_id;
-      if (updates.company !== undefined) updateData.company = updates.company;
-      if (updates.contact !== undefined) updateData.contact = updates.contact;
       if (updates.closing_date !== undefined) updateData.closing_date = updates.closing_date;
       if (updates.stage_id !== undefined) updateData.stage_id = updates.stage_id;
       if (updates.probability !== undefined) updateData.probability = updates.probability;
@@ -2265,7 +2263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .update(updateData)
         .eq('id', dealId)
         .select(`
-          id, name, amount, company_id, contact_id, company, contact, closing_date, 
+          id, name, amount, company_id, contact_id, closing_date, 
           stage_id, pipeline_id, probability, status, created_at, updated_at,
           companies(id, company_name),
           contacts(id, first_name, last_name)
@@ -2285,8 +2283,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: updatedDeal.id,
         name: updatedDeal.name,
         amount: updatedDeal.amount || 0,
-        company: (updatedDeal as any).company || (updatedDeal.companies as any)?.company_name || '',
-        contact: (updatedDeal as any).contact || ((updatedDeal.contacts as any) ? `${(updatedDeal.contacts as any).first_name} ${(updatedDeal.contacts as any).last_name}` : ''),
+        company: (updatedDeal.companies as any)?.company_name || '',
+        contact: (updatedDeal.contacts as any) ? `${(updatedDeal.contacts as any).first_name} ${(updatedDeal.contacts as any).last_name}` : '',
         closingDate: updatedDeal.closing_date || '',
         stageId: updatedDeal.stage_id,
         probability: updatedDeal.probability || 0,
