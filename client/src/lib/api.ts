@@ -1207,4 +1207,257 @@ export async function deleteProduct(productId: string | number): Promise<{ messa
     
     throw error instanceof Error ? error : new Error('Unknown error deleting product');
   }
+}
+
+/**
+ * Interface representing a company entry from the API
+ */
+export interface Company {
+  id: number;
+  company_name: string;
+  industry: string | null;
+  phone: string | null;
+  website: string | null;
+  status: string; // 'active' or 'inactive'
+  company_owner: string | null;
+  tags: string | null;
+  created_at: string; // ISO date string
+  updated_at: string; // ISO date string
+}
+
+/**
+ * Type for the data expected when creating a new company
+ */
+export type NewCompanyData = {
+  company_name: string;
+  industry?: string;
+  phone?: string;
+  website?: string;
+  status: string; // 'active' or 'inactive'
+  company_owner?: string;
+  tags?: string;
+};
+
+/**
+ * Fetches all companies from the API
+ * @returns Promise containing an array of company entries
+ */
+export async function fetchCompanies(): Promise<Company[]> {
+  const fullUrl = `${API_BASE_URL}/api/companies`;
+  console.log("Fetching companies from:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error fetching companies: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Failed to fetch companies: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Successfully fetched ${data.length} companies`);
+    return data as Company[];
+  } catch (error) {
+    console.error('Error fetching companies:', error);
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection.');
+    }
+    
+    throw error instanceof Error ? error : new Error('Unknown error fetching companies');
+  }
+}
+
+/**
+ * Creates a new company
+ * @param companyData - The company data to create
+ * @returns Promise containing the created company
+ */
+export async function createCompany(companyData: NewCompanyData): Promise<Company> {
+  const fullUrl = `${API_BASE_URL}/api/companies`;
+  console.log("Creating company at:", fullUrl, "with data:", companyData);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(companyData),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error creating company: ${response.status} ${response.statusText}`, errorText);
+      
+      // Try to parse error message from response
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.message || `Failed to create company: ${response.status} ${response.statusText}`);
+      } catch {
+        throw new Error(`Failed to create company: ${response.status} ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log("Successfully created company:", data);
+    return data as Company;
+  } catch (error) {
+    console.error('Error creating company:', error);
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection.');
+    }
+    
+    throw error instanceof Error ? error : new Error('Unknown error creating company');
+  }
+}
+
+/**
+ * Fetches a single company by ID
+ * @param companyId - The ID of the company to fetch
+ * @returns Promise containing the company data
+ */
+export async function fetchCompanyById(companyId: string | number): Promise<Company> {
+  const fullUrl = `${API_BASE_URL}/api/companies/${companyId}`;
+  console.log("Fetching company by ID from:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error fetching company: ${response.status} ${response.statusText}`, errorText);
+      
+      if (response.status === 404) {
+        throw new Error(`Company with ID ${companyId} not found`);
+      }
+      
+      throw new Error(`Failed to fetch company: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log("Successfully fetched company:", data);
+    return data as Company;
+  } catch (error) {
+    console.error('Error fetching company by ID:', error);
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection.');
+    }
+    
+    throw error instanceof Error ? error : new Error('Unknown error fetching company');
+  }
+}
+
+/**
+ * Updates a company by ID
+ * @param companyId - The ID of the company to update
+ * @param companyData - The partial company data to update
+ * @returns Promise containing the updated company
+ */
+export async function updateCompany(companyId: string | number, companyData: Partial<NewCompanyData>): Promise<Company> {
+  const fullUrl = `${API_BASE_URL}/api/companies/${companyId}`;
+  console.log("Updating company at:", fullUrl, "with data:", companyData);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(companyData),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error updating company: ${response.status} ${response.statusText}`, errorText);
+      
+      // Try to parse error message from response
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.message || `Failed to update company: ${response.status} ${response.statusText}`);
+      } catch {
+        if (response.status === 404) {
+          throw new Error(`Company with ID ${companyId} not found`);
+        }
+        throw new Error(`Failed to update company: ${response.status} ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log("Successfully updated company:", data);
+    return data as Company;
+  } catch (error) {
+    console.error('Error updating company:', error);
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection.');
+    }
+    
+    throw error instanceof Error ? error : new Error('Unknown error updating company');
+  }
+}
+
+/**
+ * Deletes a company by ID
+ * @param companyId - The ID of the company to delete
+ * @returns Promise containing the deletion confirmation message
+ */
+export async function deleteCompany(companyId: string | number): Promise<{ message: string }> {
+  const fullUrl = `${API_BASE_URL}/api/companies/${companyId}`;
+  console.log("Deleting company at:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error deleting company: ${response.status} ${response.statusText}`, errorText);
+      
+      // Try to parse error message from response
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.message || `Failed to delete company: ${response.status} ${response.statusText}`);
+      } catch {
+        if (response.status === 404) {
+          throw new Error(`Company with ID ${companyId} not found`);
+        }
+        throw new Error(`Failed to delete company: ${response.status} ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log("Successfully deleted company:", data);
+    return data as { message: string };
+  } catch (error) {
+    console.error('Error deleting company:', error);
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection.');
+    }
+    
+    throw error instanceof Error ? error : new Error('Unknown error deleting company');
+  }
 } 

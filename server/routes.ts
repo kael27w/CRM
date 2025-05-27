@@ -1265,6 +1265,300 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // === COMPANIES ROUTES ===
+  app.get("/api/companies", async (req: Request, res: Response) => {
+    try {
+      console.log("GET /api/companies - Request received");
+      
+      // Fetch all companies from the database
+      const { data: companiesData, error } = await supabase
+        .from('companies')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("GET /api/companies - Supabase query error:", error);
+        return res.status(500).json({ message: "Error fetching companies" });
+      }
+      
+      if (!companiesData) {
+        console.log("GET /api/companies - No companies found in database");
+        return res.json([]);
+      }
+      
+      console.log(`GET /api/companies - Found ${companiesData.length} companies`);
+      
+      // Return the companies as a simple array
+      res.json(companiesData);
+    } catch (error: any) {
+      console.error("GET /api/companies - Error:", error.message);
+      res.status(500).json({ message: "Server error fetching companies" });
+    }
+  });
+
+  app.post("/api/companies", async (req: Request, res: Response) => {
+    try {
+      console.log("POST /api/companies - Request received. Body:", req.body);
+      
+      // Extract fields from request body
+      const { company_name, industry, phone, website, status, company_owner, tags } = req.body;
+      
+      // Validate required fields
+      if (!company_name || !status) {
+        console.error("POST /api/companies - Missing required fields");
+        return res.status(400).json({ 
+          message: "Missing required fields: company_name and status are required" 
+        });
+      }
+      
+      // Validate status is one of the expected values
+      const validStatuses = ['active', 'inactive'];
+      if (!validStatuses.includes(status)) {
+        console.error("POST /api/companies - Invalid status value");
+        return res.status(400).json({ 
+          message: `Status must be one of: ${validStatuses.join(', ')}` 
+        });
+      }
+      
+      // Normalize phone number if provided
+      const normalizedPhone = phone ? normalizePhone(phone) : null;
+      
+      // Prepare company data with timestamps
+      const companyData = {
+        company_name: company_name.trim(),
+        industry: industry ? industry.trim() : null,
+        phone: normalizedPhone,
+        website: website ? website.trim() : null,
+        status,
+        company_owner: company_owner ? company_owner.trim() : null,
+        tags: tags || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Insert into companies table
+      const { data, error } = await supabase
+        .from('companies')
+        .insert([companyData])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("POST /api/companies - Supabase insert error:", error);
+        
+        if (error.code === '23505') { // unique constraint violation
+          console.log("POST /api/companies - Duplicate company");
+          return res.status(409).json({ message: "Company with this information already exists" });
+        }
+        
+        return res.status(500).json({ message: "Database error creating company" });
+      }
+      
+      if (!data) {
+        console.error("POST /api/companies - No data returned after insert");
+        return res.status(500).json({ message: "Failed to create company (no data returned)" });
+      }
+      
+      console.log("POST /api/companies - Company created successfully:", data);
+      res.status(201).json(data);
+    } catch (error: any) {
+      console.error("POST /api/companies - Error:", error.message);
+      res.status(500).json({ message: "Error creating company" });
+    }
+  });
+
+  // Get a single company by ID
+  app.get("/api/companies/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      console.log(`GET /api/companies/${id} - Request received`);
+      
+      // Validate company ID
+      if (!id || isNaN(Number(id))) {
+        console.error(`GET /api/companies/${id} - Invalid company ID`);
+        return res.status(400).json({ message: "Invalid company ID" });
+      }
+      
+      // Fetch the company from the database
+      const { data, error } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        console.error(`GET /api/companies/${id} - Supabase error:`, error);
+        
+        if (error.code === 'PGRST116') { // Not found
+          return res.status(404).json({ message: `Company with ID ${id} not found` });
+        }
+        
+        return res.status(500).json({ message: "Database error fetching company" });
+      }
+      
+      if (!data) {
+        console.warn(`GET /api/companies/${id} - Company not found`);
+        return res.status(404).json({ message: `Company with ID ${id} not found` });
+      }
+      
+      console.log(`GET /api/companies/${id} - Company found:`, data);
+      res.status(200).json(data);
+    } catch (error: any) {
+      console.error(`GET /api/companies/${req.params.id} - Error:`, error.message);
+      res.status(500).json({ message: "Error fetching company" });
+    }
+  });
+
+  // Update a company by ID
+  app.patch("/api/companies/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { company_name, industry, phone, website, status, company_owner, tags } = req.body;
+      
+      console.log(`PATCH /api/companies/${id} - Request received. Body:`, req.body);
+      
+      // Validate company ID
+      if (!id || isNaN(Number(id))) {
+        console.error(`PATCH /api/companies/${id} - Invalid company ID`);
+        return res.status(400).json({ message: "Invalid company ID" });
+      }
+      
+      // Validate that there are fields to update
+      if (!req.body || Object.keys(req.body).length === 0) {
+        console.error(`PATCH /api/companies/${id} - No update fields provided`);
+        return res.status(400).json({ message: "No update fields provided" });
+      }
+      
+      // Build update object with only provided fields
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      };
+      
+      if (company_name !== undefined) {
+        if (!company_name.trim()) {
+          return res.status(400).json({ message: "Company name cannot be empty" });
+        }
+        updateData.company_name = company_name.trim();
+      }
+      
+      if (industry !== undefined) {
+        updateData.industry = industry ? industry.trim() : null;
+      }
+      
+      if (phone !== undefined) {
+        updateData.phone = phone ? normalizePhone(phone) : null;
+      }
+      
+      if (website !== undefined) {
+        updateData.website = website ? website.trim() : null;
+      }
+      
+      if (status !== undefined) {
+        const validStatuses = ['active', 'inactive'];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ 
+            message: `Status must be one of: ${validStatuses.join(', ')}` 
+          });
+        }
+        updateData.status = status;
+      }
+      
+      if (company_owner !== undefined) {
+        updateData.company_owner = company_owner ? company_owner.trim() : null;
+      }
+      
+      if (tags !== undefined) {
+        updateData.tags = tags || null;
+      }
+      
+      console.log(`PATCH /api/companies/${id} - Update data:`, updateData);
+      
+      // Update the company in the database
+      const { data, error } = await supabase
+        .from('companies')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error(`PATCH /api/companies/${id} - Supabase error updating company:`, error);
+        
+        if (error.code === 'PGRST116') { // Not found
+          return res.status(404).json({ message: `Company with ID ${id} not found` });
+        }
+        
+        return res.status(500).json({ message: "Database error updating company" });
+      }
+      
+      if (!data) {
+        console.error(`PATCH /api/companies/${id} - No data returned after update`);
+        return res.status(404).json({ message: `Company with ID ${id} not found` });
+      }
+      
+      console.log(`PATCH /api/companies/${id} - Company updated successfully:`, data);
+      res.status(200).json(data);
+    } catch (error: any) {
+      console.error(`PATCH /api/companies/${req.params.id} - Error updating company:`, error.message, error.stack);
+      res.status(500).json({ message: "Error updating company" });
+    }
+  });
+
+  // Delete a company by ID
+  app.delete("/api/companies/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      console.log(`DELETE /api/companies/${id} - Request received`);
+      
+      // Validate company ID
+      if (!id || isNaN(Number(id))) {
+        console.error(`DELETE /api/companies/${id} - Invalid company ID`);
+        return res.status(400).json({ message: "Invalid company ID" });
+      }
+      
+      // First, check if the company exists
+      const { data: existingCompany, error: checkError } = await supabase
+        .from('companies')
+        .select('id, company_name')
+        .eq('id', id)
+        .single();
+      
+      if (checkError) {
+        console.error(`DELETE /api/companies/${id} - Supabase error checking company existence:`, checkError);
+        if (checkError.code === 'PGRST116') { // Not found
+          return res.status(404).json({ message: `Company with ID ${id} not found` });
+        }
+        return res.status(500).json({ message: "Database error checking company existence" });
+      }
+      
+      if (!existingCompany) {
+        console.warn(`DELETE /api/companies/${id} - Company not found`);
+        return res.status(404).json({ message: `Company with ID ${id} not found` });
+      }
+      
+      console.log(`DELETE /api/companies/${id} - Found company: ${existingCompany.company_name}. Proceeding with deletion.`);
+      
+      // Delete the company
+      const { error: deleteError } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', id);
+      
+      if (deleteError) {
+        console.error(`DELETE /api/companies/${id} - Supabase error deleting company:`, deleteError);
+        return res.status(500).json({ message: "Database error deleting company" });
+      }
+      
+      console.log(`DELETE /api/companies/${id} - Company deleted successfully`);
+      res.status(200).json({ message: `Company "${existingCompany.company_name}" deleted successfully` });
+    } catch (error: any) {
+      console.error(`DELETE /api/companies/${req.params.id} - Error deleting company:`, error.message, error.stack);
+      res.status(500).json({ message: "Error deleting company" });
+    }
+  });
+
   // =========== TWILIO ROUTES ===========
   console.log("Registering Twilio routes...");
   const voiceWebhookUrl = process.env.TWILIO_WEBHOOK_BASE_URL || (process.env.API_URL ? `${process.env.API_URL}/api/twilio/voice` : '');
