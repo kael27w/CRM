@@ -860,6 +860,241 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // === LINK CALL TO CONTACT ROUTE ===
+  app.patch("/api/calls/:callId/link-contact", async (req: Request, res: Response) => {
+    try {
+      const { callId } = req.params;
+      const { contact_id } = req.body;
+      
+      console.log(`PATCH /api/calls/${callId}/link-contact - Request received. Body:`, req.body);
+      
+      // Validate callId
+      if (!callId || isNaN(Number(callId))) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Invalid callId`);
+        return res.status(400).json({ message: "Invalid call ID" });
+      }
+      
+      // Validate contact_id 
+      if (!contact_id || isNaN(Number(contact_id))) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Invalid or missing contact_id`);
+        return res.status(400).json({ message: "contact_id is required and must be a valid number" });
+      }
+      
+      const callIdNum = Number(callId);
+      const contactIdNum = Number(contact_id);
+      
+      // First check if call exists
+      const { data: existingCall, error: checkError } = await supabase
+        .from('calls')
+        .select('id, from_number') // Also get from_number for later use
+        .eq('id', callIdNum)
+        .single();
+      
+      if (checkError || !existingCall) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Call not found:`, checkError);
+        return res.status(404).json({ message: `Call with ID ${callId} not found` });
+      }
+      
+      // Store the from_number for historical linking
+      const fromNumberToLink = existingCall.from_number;
+      
+      // Check if contact exists
+      const { data: existingContact, error: contactCheckError } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('id', contactIdNum)
+        .single();
+      
+      if (contactCheckError || !existingContact) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Contact not found:`, contactCheckError);
+        return res.status(404).json({ message: `Contact with ID ${contact_id} not found` });
+      }
+      
+      // Update the call with the contact_id
+      const { data, error } = await supabase
+        .from('calls')
+        .update({ 
+          contact_id: contactIdNum,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', callIdNum)
+        .select('*, contacts(first_name, last_name)')
+        .single();
+      
+      if (error) {
+        console.error(`PATCH /api/calls/${callId}/link-contact - Update error:`, error);
+        return res.status(500).json({ message: "Error updating call with contact ID" });
+      }
+      
+      console.log(`PATCH /api/calls/${callId}/link-contact - Call updated successfully:`, data);
+      
+      // Now update other historical calls with the same phone number
+      if (fromNumberToLink) {
+        console.log(`PATCH /api/calls/${callId}/link-contact - Attempting to link other historical calls with phone: ${fromNumberToLink} to contact ID: ${contactIdNum}`);
+        
+        try {
+          const { data: updatedCalls, error: bulkUpdateError } = await supabase
+            .from('calls')
+            .update({
+              contact_id: contactIdNum,
+              updated_at: new Date().toISOString()
+            })
+            .eq('from_number', fromNumberToLink)
+            .is('contact_id', null)
+            .neq('id', callIdNum); // Exclude the call we just updated
+          
+          if (bulkUpdateError) {
+            console.error(`PATCH /api/calls/${callId}/link-contact - Error linking other historical calls:`, bulkUpdateError);
+          } else {
+            const rowsAffected = updatedCalls ? (updatedCalls as any[]).length : 0;
+            console.log(`PATCH /api/calls/${callId}/link-contact - Successfully linked other historical calls. Rows affected: ${rowsAffected}`);
+          }
+        } catch (linkError) {
+          console.error(`PATCH /api/calls/${callId}/link-contact - Unexpected error linking other historical calls:`, linkError);
+          // We'll still return success for the primary call update even if bulk linking fails
+        }
+      } else {
+        console.log(`PATCH /api/calls/${callId}/link-contact - No from_number available for historical linking`);
+      }
+      
+      // Transform the data to match the expected format
+      const responseData = {
+        ...data,
+        contact_first_name: data.contacts ? data.contacts.first_name : null,
+        contact_last_name: data.contacts ? data.contacts.last_name : null
+      };
+      
+      res.status(200).json(responseData);
+    } catch (error: any) {
+      console.error(`PATCH /api/calls/:callId/link-contact - Unexpected error:`, error.message, error.stack);
+      res.status(500).json({ message: "Server error processing link contact request" });
+    }
+  });
+
+  // === PRODUCTS ROUTES ===
+  app.get("/api/products", async (req: Request, res: Response) => {
+    try {
+      console.log("GET /api/products - Request received");
+      
+      // Fetch all products from the database
+      const { data: productsData, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("GET /api/products - Supabase query error:", error);
+        return res.status(500).json({ message: "Error fetching products" });
+      }
+      
+      if (!productsData) {
+        console.log("GET /api/products - No products found in database");
+        return res.json([]);
+      }
+      
+      console.log(`GET /api/products - Found ${productsData.length} products`);
+      
+      // Return the products as a simple array
+      res.json(productsData);
+    } catch (error: any) {
+      console.error("GET /api/products - Error:", error.message);
+      res.status(500).json({ message: "Server error fetching products" });
+    }
+  });
+
+  app.post("/api/products", async (req: Request, res: Response) => {
+    try {
+      console.log("POST /api/products - Request received. Body:", req.body);
+      
+      // Extract fields from request body
+      const { product_name, sku_code, category, price, status, description } = req.body;
+      
+      // Validate required fields
+      if (!product_name || !category || price === undefined || price === null || !status) {
+        console.error("POST /api/products - Missing required fields");
+        return res.status(400).json({ 
+          message: "Missing required fields: product_name, category, price, and status are required" 
+        });
+      }
+      
+      // Validate price is a number
+      const numericPrice = parseFloat(price);
+      if (isNaN(numericPrice)) {
+        console.error("POST /api/products - Invalid price format");
+        return res.status(400).json({ message: "Price must be a valid number" });
+      }
+      
+      // Validate status is one of the expected values
+      const validStatuses = ['active', 'inactive'];
+      if (!validStatuses.includes(status)) {
+        console.error("POST /api/products - Invalid status value");
+        return res.status(400).json({ 
+          message: `Status must be one of: ${validStatuses.join(', ')}` 
+        });
+      }
+      
+      // Check if SKU code already exists (if provided)
+      if (sku_code) {
+        const { data: existingProduct, error: checkError } = await supabase
+          .from('products')
+          .select('id')
+          .eq('sku_code', sku_code)
+          .limit(1);
+        
+        if (checkError) {
+          console.error("POST /api/products - Error checking for existing SKU:", checkError);
+          return res.status(500).json({ message: "Database error checking for existing SKU" });
+        }
+        
+        if (existingProduct && existingProduct.length > 0) {
+          console.log("POST /api/products - SKU code already exists:", sku_code);
+          return res.status(409).json({ message: "A product with this SKU code already exists" });
+        }
+      }
+      
+      // Prepare product data with timestamps
+      const productData = {
+        product_name,
+        sku_code: sku_code || null,
+        category,
+        price: numericPrice,
+        status,
+        description: description || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Insert into products table
+      const { data, error } = await supabase
+        .from('products')
+        .insert([productData])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("POST /api/products - Supabase insert error:", error);
+        
+        if (error.code === '23505') { // unique constraint violation
+          console.log("POST /api/products - Duplicate product");
+          return res.status(409).json({ message: "Product with this information already exists" });
+        }
+        
+        return res.status(500).json({ message: "Database error creating product" });
+      }
+      
+      if (!data) {
+        console.error("POST /api/products - No data returned after insert");
+        return res.status(500).json({ message: "Failed to create product (no data returned)" });
+      }
+      
+      console.log("POST /api/products - Product created successfully:", data);
+      res.status(201).json(data);
+    } catch (error: any) {
+      console.error("POST /api/products - Error:", error.message);
+      res.status(500).json({ message: "Error creating product" });
+    }
+  });
+
   // =========== TWILIO ROUTES ===========
   console.log("Registering Twilio routes...");
   const voiceWebhookUrl = process.env.TWILIO_WEBHOOK_BASE_URL || (process.env.API_URL ? `${process.env.API_URL}/api/twilio/voice` : '');
@@ -1277,117 +1512,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test routes (consider removing for production or securing them)
   // app.post("/api/test/twilio/voice", handleVoiceWebhook);
   // app.post("/api/test/twilio/status-callback", handleStatusCallback);
-
-  // === LINK CALL TO CONTACT ROUTE ===
-  app.patch("/api/calls/:callId/link-contact", async (req: Request, res: Response) => {
-    try {
-      const { callId } = req.params;
-      const { contact_id } = req.body;
-      
-      console.log(`PATCH /api/calls/${callId}/link-contact - Request received. Body:`, req.body);
-      
-      // Validate callId
-      if (!callId || isNaN(Number(callId))) {
-        console.error(`PATCH /api/calls/${callId}/link-contact - Invalid callId`);
-        return res.status(400).json({ message: "Invalid call ID" });
-      }
-      
-      // Validate contact_id 
-      if (!contact_id || isNaN(Number(contact_id))) {
-        console.error(`PATCH /api/calls/${callId}/link-contact - Invalid or missing contact_id`);
-        return res.status(400).json({ message: "contact_id is required and must be a valid number" });
-      }
-      
-      const callIdNum = Number(callId);
-      const contactIdNum = Number(contact_id);
-      
-      // First check if call exists
-      const { data: existingCall, error: checkError } = await supabase
-        .from('calls')
-        .select('id, from_number') // Also get from_number for later use
-        .eq('id', callIdNum)
-        .single();
-      
-      if (checkError || !existingCall) {
-        console.error(`PATCH /api/calls/${callId}/link-contact - Call not found:`, checkError);
-        return res.status(404).json({ message: `Call with ID ${callId} not found` });
-      }
-      
-      // Store the from_number for historical linking
-      const fromNumberToLink = existingCall.from_number;
-      
-      // Check if contact exists
-      const { data: existingContact, error: contactCheckError } = await supabase
-        .from('contacts')
-        .select('id')
-        .eq('id', contactIdNum)
-        .single();
-      
-      if (contactCheckError || !existingContact) {
-        console.error(`PATCH /api/calls/${callId}/link-contact - Contact not found:`, contactCheckError);
-        return res.status(404).json({ message: `Contact with ID ${contact_id} not found` });
-      }
-      
-      // Update the call with the contact_id
-      const { data, error } = await supabase
-        .from('calls')
-        .update({ 
-          contact_id: contactIdNum,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', callIdNum)
-        .select('*, contacts(first_name, last_name)')
-        .single();
-      
-      if (error) {
-        console.error(`PATCH /api/calls/${callId}/link-contact - Update error:`, error);
-        return res.status(500).json({ message: "Error updating call with contact ID" });
-      }
-      
-      console.log(`PATCH /api/calls/${callId}/link-contact - Call updated successfully:`, data);
-      
-      // Now update other historical calls with the same phone number
-      if (fromNumberToLink) {
-        console.log(`PATCH /api/calls/${callId}/link-contact - Attempting to link other historical calls with phone: ${fromNumberToLink} to contact ID: ${contactIdNum}`);
-        
-        try {
-          const { data: updatedCalls, error: bulkUpdateError } = await supabase
-            .from('calls')
-            .update({
-              contact_id: contactIdNum,
-              updated_at: new Date().toISOString()
-            })
-            .eq('from_number', fromNumberToLink)
-            .is('contact_id', null)
-            .neq('id', callIdNum); // Exclude the call we just updated
-          
-          if (bulkUpdateError) {
-            console.error(`PATCH /api/calls/${callId}/link-contact - Error linking other historical calls:`, bulkUpdateError);
-          } else {
-            const rowsAffected = updatedCalls ? (updatedCalls as any[]).length : 0;
-            console.log(`PATCH /api/calls/${callId}/link-contact - Successfully linked other historical calls. Rows affected: ${rowsAffected}`);
-          }
-        } catch (linkError) {
-          console.error(`PATCH /api/calls/${callId}/link-contact - Unexpected error linking other historical calls:`, linkError);
-          // We'll still return success for the primary call update even if bulk linking fails
-        }
-      } else {
-        console.log(`PATCH /api/calls/${callId}/link-contact - No from_number available for historical linking`);
-      }
-      
-      // Transform the data to match the expected format
-      const responseData = {
-        ...data,
-        contact_first_name: data.contacts ? data.contacts.first_name : null,
-        contact_last_name: data.contacts ? data.contacts.last_name : null
-      };
-      
-      res.status(200).json(responseData);
-    } catch (error: any) {
-      console.error(`PATCH /api/calls/:callId/link-contact - Unexpected error:`, error.message, error.stack);
-      res.status(500).json({ message: "Server error processing link contact request" });
-    }
-  });
 
   const httpServer = createServer(app);
   console.log("All routes registered successfully");

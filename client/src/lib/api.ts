@@ -78,6 +78,33 @@ export interface UnifiedActivityEntry {
 }
 
 /**
+ * Interface representing a product entry from the API
+ */
+export interface Product {
+  id: number;
+  product_name: string;
+  sku_code: string | null;
+  category: string;
+  price: number;
+  status: string; // 'active' or 'inactive'
+  description: string | null;
+  created_at: string; // ISO date string
+  updated_at: string; // ISO date string
+}
+
+/**
+ * Type for the data expected when creating a new product
+ */
+export type NewProductData = {
+  product_name: string;
+  sku_code?: string;
+  category: string;
+  price: number;
+  status: string; // 'active' or 'inactive'
+  description?: string;
+};
+
+/**
  * Type for the data expected by createContactManually.
  */
 export type NewContactData = {
@@ -859,4 +886,140 @@ export async function deleteActivity(activityId: string | number): Promise<{ mes
     console.error(`Error deleting activity ${activityId}:`, error);
     throw error instanceof Error ? error : new Error(`Unknown error deleting activity ${activityId}`);
   }
+}
+
+/**
+ * Fetches products from the API
+ * @returns Promise containing an array of product entries
+ */
+export async function fetchProducts(): Promise<Product[]> {
+  const fullUrl = `${API_BASE_URL}/api/products`;
+  console.log("Fetching products from:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data as Product[];
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    throw error instanceof Error ? error : new Error('Unknown error fetching products');
+  }
+}
+
+/**
+ * Creates a new product via the API
+ * @param productData - The data for the new product
+ * @returns Promise containing the newly created product entry
+ */
+export async function createProduct(productData: NewProductData): Promise<Product> {
+  console.log("createProduct API function called with payload:", productData);
+  
+  const apiUrl = `${API_BASE_URL}/api/products`;
+  console.log("Making API request to:", apiUrl);
+  
+  // Setup for retries
+  const maxRetries = 3;
+  const timeout = 5000; // 5 seconds
+  let retryCount = 0;
+  
+  // Retry loop
+  while (retryCount < maxRetries) {
+    try {
+      console.log(`Attempt ${retryCount + 1}/${maxRetries}: Sending POST request to: ${apiUrl}`);
+      
+      // Use AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+        signal: controller.signal,
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      console.log("API response received:", response.status, response.statusText);
+
+      if (!response.ok) {
+        let errorMessage = `API error: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          console.log("Error response body:", errorData);
+          if (errorData && errorData.message) {
+            errorMessage = `${errorMessage} - ${errorData.message}`;
+          }
+          if (errorData && errorData.details) {
+            errorMessage = `${errorMessage} (Details: ${JSON.stringify(errorData.details)})`;
+          }
+        } catch (parseError) {
+          // Try to get the raw text if JSON parsing fails
+          try {
+            const textError = await response.text();
+            console.error("Raw error response:", textError);
+            errorMessage = `${errorMessage} - Raw response: ${textError}`;
+          } catch (textError) {
+            console.warn("Could not get error response text either");
+          }
+          
+          console.warn("Could not parse error response from API or error structure was unexpected:", parseError);
+        }
+        
+        // Only retry on server errors (5xx) or network issues
+        if (response.status >= 500) {
+          console.error(`Server error (${response.status}), will retry...`);
+          retryCount++;
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+        
+        // For client errors (4xx), don't retry
+        console.error("Error details for createProduct:", errorMessage, "Payload sent:", productData);
+        throw new Error(errorMessage);
+      }
+
+      const createdProduct = await response.json();
+      console.log("Product created successfully:", createdProduct);
+      return createdProduct as Product;
+      
+    } catch (error) {
+      // Check if it's a timeout or network error
+      if (
+        error instanceof Error && 
+        (error.name === 'AbortError' || 
+         error.message.includes('Failed to fetch') ||
+         error.message.includes('NetworkError') ||
+         error.message.includes('ECONNREFUSED') ||
+         error.message.includes('Connection refused'))
+      ) {
+        console.error(`Network error on attempt ${retryCount + 1}:`, error.message);
+        retryCount++;
+        if (retryCount < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+      }
+      
+      // For other errors or if we've exhausted retries
+      console.error('Error creating product:', error, "Payload attempted:", productData);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Unknown error creating product');
+    }
+  }
+  
+  // If we get here, we've exhausted all retries
+  throw new Error(`Failed to create product after ${maxRetries} attempts. Please check your network connection and server status.`);
 } 

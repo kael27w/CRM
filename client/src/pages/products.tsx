@@ -3,82 +3,31 @@ import { useQuery } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/shared/data-table';
 import { Badge } from '@/components/ui/badge';
-import { apiRequest } from '@/lib/queryClient';
-
-// This will be replaced with the actual Product type from schema.ts
-// when we update the backend
-interface Product {
-  id: number;
-  name: string;
-  code: string;
-  category: string;
-  price: number;
-  status: string;
-  description: string;
-}
+import { fetchProducts, Product } from '@/lib/api';
 
 const ProductsPage: React.FC = () => {
-  // Sample data - this will be replaced with actual API data
-  const sampleProducts: Product[] = [
-    {
-      id: 1,
-      name: "Term Life 10",
-      code: "TL-10",
-      category: "Life Insurance",
-      price: 500,
-      status: "active",
-      description: "10-year term life insurance policy"
-    },
-    {
-      id: 2,
-      name: "Term Life 20",
-      code: "TL-20",
-      category: "Life Insurance",
-      price: 750,
-      status: "active",
-      description: "20-year term life insurance policy"
-    },
-    {
-      id: 3,
-      name: "Whole Life Basic",
-      code: "WL-B",
-      category: "Life Insurance",
-      price: 1200,
-      status: "active",
-      description: "Basic whole life insurance policy"
-    },
-    {
-      id: 4,
-      name: "Whole Life Premium",
-      code: "WL-P",
-      category: "Life Insurance",
-      price: 2000,
-      status: "inactive",
-      description: "Premium whole life insurance with investment component"
-    },
-    {
-      id: 5,
-      name: "Critical Illness",
-      code: "CI-STD",
-      category: "Health Insurance",
-      price: 350,
-      status: "active",
-      description: "Critical illness coverage"
-    }
-  ];
+  // Fetch products from the API using React Query
+  const { data: products = [], isLoading, error } = useQuery({
+    queryKey: ['products'],
+    queryFn: fetchProducts,
+  });
 
   // Define columns for the data table
   const columns: ColumnDef<Product>[] = [
     {
-      accessorKey: "name",
+      accessorKey: "product_name",
       header: "Product Name",
       cell: ({ row }) => (
-        <div className="font-medium">{row.getValue("name")}</div>
+        <div className="font-medium">{row.getValue("product_name")}</div>
       ),
     },
     {
-      accessorKey: "code",
+      accessorKey: "sku_code",
       header: "SKU/Code",
+      cell: ({ row }) => {
+        const skuCode = row.getValue("sku_code") as string | null;
+        return <div>{skuCode || '-'}</div>;
+      },
     },
     {
       accessorKey: "category",
@@ -116,21 +65,15 @@ const ProductsPage: React.FC = () => {
       accessorKey: "description",
       header: "Description",
       cell: ({ row }) => {
-        const description = row.getValue("description") as string;
+        const description = row.getValue("description") as string | null;
         return (
-          <div className="max-w-[300px] truncate" title={description}>
-            {description}
+          <div className="max-w-[300px] truncate" title={description || ''}>
+            {description || '-'}
           </div>
         );
       },
     },
   ];
-
-  // For now we'll use the sample data. Later this will be replaced with actual API data
-  // const { data: products = [], isLoading, error } = useQuery({
-  //   queryKey: ['/api/products'],
-  //   queryFn: () => apiRequest('/api/products'),
-  // });
 
   const handleRowClick = (row: any) => {
     console.log('Product clicked:', row.original);
@@ -142,10 +85,30 @@ const ProductsPage: React.FC = () => {
     // This will be expanded to allow adding custom fields
   };
 
+  // Handle loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg">Loading products...</div>
+      </div>
+    );
+  }
+
+  // Handle error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-lg text-red-600">
+          Error loading products: {error instanceof Error ? error.message : 'Unknown error'}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <DataTable
       columns={columns}
-      data={sampleProducts}
+      data={products}
       title="Products"
       description="Manage your product catalog"
       searchPlaceholder="Search products..."
