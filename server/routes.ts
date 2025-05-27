@@ -1975,6 +1975,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === PIPELINE ROUTES ===
   
+  // DEBUG: Test pipeline database structure
+  app.get("/api/debug/pipelines", async (req: Request, res: Response) => {
+    try {
+      console.log("DEBUG: Testing pipeline database structure");
+      
+      // Test pipelines table
+      const { data: pipelinesTest, error: pipelinesError } = await supabase
+        .from('pipelines')
+        .select('*')
+        .limit(5);
+      
+      // Test pipeline_stages table
+      const { data: stagesTest, error: stagesError } = await supabase
+        .from('pipeline_stages')
+        .select('*')
+        .limit(5);
+      
+      // Test deals table
+      const { data: dealsTest, error: dealsError } = await supabase
+        .from('deals')
+        .select('*')
+        .limit(5);
+      
+      const debugInfo = {
+        pipelines: {
+          error: pipelinesError,
+          count: pipelinesTest?.length || 0,
+          sample: pipelinesTest
+        },
+        stages: {
+          error: stagesError,
+          count: stagesTest?.length || 0,
+          sample: stagesTest
+        },
+        deals: {
+          error: dealsError,
+          count: dealsTest?.length || 0,
+          sample: dealsTest
+        }
+      };
+      
+      console.log("DEBUG: Pipeline database test results:", JSON.stringify(debugInfo, null, 2));
+      res.json(debugInfo);
+    } catch (error: any) {
+      console.error("DEBUG: Error testing pipeline database:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+  
   // GET /api/pipelines - Fetch all pipelines (for sidebar)
   app.get("/api/pipelines", async (req: Request, res: Response) => {
     try {
@@ -2005,6 +2054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`GET /api/pipelines/${pipelineId} - Fetching pipeline with stages and deals`);
       
       // First, get the pipeline
+      console.log(`GET /api/pipelines/${pipelineId} - Querying pipelines table for ID: ${pipelineId}`);
       const { data: pipelineData, error: pipelineError } = await supabase
         .from('pipelines')
         .select('id, name, created_at, updated_at')
@@ -2013,13 +2063,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (pipelineError) {
         console.error(`GET /api/pipelines/${pipelineId} - Pipeline error:`, pipelineError);
+        console.error(`GET /api/pipelines/${pipelineId} - Pipeline error code:`, pipelineError.code);
+        console.error(`GET /api/pipelines/${pipelineId} - Pipeline error details:`, pipelineError.details);
+        console.error(`GET /api/pipelines/${pipelineId} - Pipeline error message:`, pipelineError.message);
         if (pipelineError.code === 'PGRST116') {
           return res.status(404).json({ message: "Pipeline not found" });
         }
-        return res.status(500).json({ message: "Error fetching pipeline" });
+        return res.status(500).json({ message: "Error fetching pipeline", error: pipelineError.message });
       }
       
       // Get the stages for this pipeline
+      console.log(`GET /api/pipelines/${pipelineId} - Querying pipeline_stages table for pipeline_id: ${pipelineId}`);
       const { data: stagesData, error: stagesError } = await supabase
         .from('pipeline_stages')
         .select('id, name, order, created_at, updated_at')
@@ -2028,23 +2082,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (stagesError) {
         console.error(`GET /api/pipelines/${pipelineId} - Stages error:`, stagesError);
-        return res.status(500).json({ message: "Error fetching pipeline stages" });
+        console.error(`GET /api/pipelines/${pipelineId} - Stages error code:`, stagesError.code);
+        console.error(`GET /api/pipelines/${pipelineId} - Stages error details:`, stagesError.details);
+        console.error(`GET /api/pipelines/${pipelineId} - Stages error message:`, stagesError.message);
+        return res.status(500).json({ message: "Error fetching pipeline stages", error: stagesError.message });
       }
       
       // Get all deals for this pipeline
-      const { data: dealsData, error: dealsError } = await supabase
-        .from('deals')
-        .select(`
-          id, name, amount, company_id, contact_id, closing_date, 
-          stage_id, pipeline_id, probability, status, created_at, updated_at,
-          companies(id, company_name),
-          contacts(id, first_name, last_name)
-        `)
-        .eq('pipeline_id', pipelineId);
+      console.log(`GET /api/pipelines/${pipelineId} - Querying deals table for pipeline_id: ${pipelineId}`);
+      
+      // First try with joins, if that fails, try without joins
+      let dealsData, dealsError;
+      try {
+        const result = await supabase
+          .from('deals')
+          .select(`
+            id, name, amount, company_id, contact_id, closing_date, 
+            stage_id, pipeline_id, probability, status, created_at, updated_at,
+            companies(id, company_name),
+            contacts(id, first_name, last_name)
+          `)
+          .eq('pipeline_id', pipelineId);
+        
+        dealsData = result.data;
+        dealsError = result.error;
+      } catch (joinError) {
+        console.log(`GET /api/pipelines/${pipelineId} - Join query failed, trying without joins:`, joinError);
+        
+        // Fallback: query without joins
+        const fallbackResult = await supabase
+          .from('deals')
+          .select(`
+            id, name, amount, company_id, contact_id, closing_date, 
+            stage_id, pipeline_id, probability, status, created_at, updated_at
+          `)
+          .eq('pipeline_id', pipelineId);
+        
+        dealsData = fallbackResult.data;
+        dealsError = fallbackResult.error;
+      }
       
       if (dealsError) {
         console.error(`GET /api/pipelines/${pipelineId} - Deals error:`, dealsError);
-        return res.status(500).json({ message: "Error fetching deals" });
+        console.error(`GET /api/pipelines/${pipelineId} - Deals error code:`, dealsError.code);
+        console.error(`GET /api/pipelines/${pipelineId} - Deals error details:`, dealsError.details);
+        console.error(`GET /api/pipelines/${pipelineId} - Deals error message:`, dealsError.message);
+        return res.status(500).json({ message: "Error fetching deals", error: dealsError.message });
       }
       
       // Organize deals by stage
@@ -2058,8 +2141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: deal.id,
             name: deal.name,
             amount: deal.amount || 0,
-            company: (deal.companies as any)?.company_name || '',
-            contact: (deal.contacts as any) ? `${(deal.contacts as any).first_name} ${(deal.contacts as any).last_name}` : '',
+            company: (deal as any).companies?.company_name || '',
+            contact: (deal as any).contacts ? `${(deal as any).contacts.first_name} ${(deal as any).contacts.last_name}` : '',
             closingDate: deal.closing_date || '',
             stageId: deal.stage_id,
             probability: deal.probability || 0,
