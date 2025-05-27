@@ -54,9 +54,12 @@ import {
   Trash2,
   Mail,
   MoreHorizontal,
+  Check,
+  X,
 } from 'lucide-react';
 import AddFieldDialog, { CustomField } from './add-field-dialog';
 import { Badge } from '../ui/badge';
+import { toast } from 'sonner';
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -69,6 +72,9 @@ interface DataTableProps<TData, TValue> {
   onAddField?: () => void;
   onNewItem?: () => void; // Handler for the "New [Item]" button
   pageType?: 'contacts' | 'companies' | 'products'; // To determine which bulk actions to show
+  actionsColumn?: ColumnDef<TData, TValue>; // Actions column to be positioned correctly
+  onBulkUpdate?: (selectedIds: string[], updates: any) => Promise<void>; // Bulk update handler
+  onBulkDelete?: (selectedIds: string[]) => Promise<void>; // Bulk delete handler
 }
 
 export function DataTable<TData, TValue>({
@@ -82,6 +88,9 @@ export function DataTable<TData, TValue>({
   onAddField,
   onNewItem,
   pageType = 'contacts',
+  actionsColumn,
+  onBulkUpdate,
+  onBulkDelete,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -92,6 +101,20 @@ export function DataTable<TData, TValue>({
   // State for adding new field
   const [isAddingField, setIsAddingField] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+  // State for custom field data and editing
+  const [customFieldData, setCustomFieldData] = useState<Record<string, Record<string, any>>>({});
+  const [editingCell, setEditingCell] = useState<{ rowId: string; fieldId: string } | null>(null);
+  const [editingValue, setEditingValue] = useState<string>('');
+
+  // State for tags
+  const [itemTags, setItemTags] = useState<Record<string, string[]>>({});
+
+  // State for bulk actions dialogs
+  const [showOwnerDialog, setShowOwnerDialog] = useState(false);
+  const [showTagsDialog, setShowTagsDialog] = useState(false);
+  const [showUpdateFieldDialog, setShowUpdateFieldDialog] = useState(false);
+  const [bulkActionType, setBulkActionType] = useState<'add' | 'remove'>('add');
 
   // Load custom fields from localStorage on component mount
   useEffect(() => {
@@ -105,6 +128,30 @@ export function DataTable<TData, TValue>({
         console.error('Error parsing saved custom fields:', error);
       }
     }
+
+    // Load custom field data
+    const dataKey = `customFieldData_${pageType}`;
+    const savedData = localStorage.getItem(dataKey);
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        setCustomFieldData(parsedData);
+      } catch (error) {
+        console.error('Error parsing saved custom field data:', error);
+      }
+    }
+
+    // Load tags data
+    const tagsKey = `itemTags_${pageType}`;
+    const savedTags = localStorage.getItem(tagsKey);
+    if (savedTags) {
+      try {
+        const parsedTags = JSON.parse(savedTags);
+        setItemTags(parsedTags);
+      } catch (error) {
+        console.error('Error parsing saved tags:', error);
+      }
+    }
   }, [pageType]);
 
   // Save custom fields to localStorage whenever they change
@@ -112,6 +159,18 @@ export function DataTable<TData, TValue>({
     const storageKey = `customFields_${pageType}`;
     localStorage.setItem(storageKey, JSON.stringify(customFields));
   }, [customFields, pageType]);
+
+  // Save custom field data to localStorage whenever it changes
+  useEffect(() => {
+    const dataKey = `customFieldData_${pageType}`;
+    localStorage.setItem(dataKey, JSON.stringify(customFieldData));
+  }, [customFieldData, pageType]);
+
+  // Save tags to localStorage whenever they change
+  useEffect(() => {
+    const tagsKey = `itemTags_${pageType}`;
+    localStorage.setItem(tagsKey, JSON.stringify(itemTags));
+  }, [itemTags, pageType]);
   
   // Define additional columns based on custom fields
   const customColumns = useMemo(() => {
@@ -119,66 +178,258 @@ export function DataTable<TData, TValue>({
       accessorKey: field.id,
       header: field.name,
       cell: ({ row }) => {
-        const value = row.getValue(field.id);
+        const rowId = (row.original as any).id?.toString() || row.id;
+        const value = customFieldData[rowId]?.[field.id] || '';
+        const isEditing = editingCell?.rowId === rowId && editingCell?.fieldId === field.id;
         
-        // Format value based on field type
-        if (field.type === 'boolean' && typeof value === 'boolean') {
-          return value ? 'Yes' : 'No';
+        if (isEditing) {
+          return (
+            <div className="flex items-center space-x-2">
+              <Input
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                className="h-8 w-full"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveCustomField(rowId, field.id, editingValue);
+                  } else if (e.key === 'Escape') {
+                    setEditingCell(null);
+                    setEditingValue('');
+                  }
+                }}
+                autoFocus
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleSaveCustomField(rowId, field.id, editingValue)}
+                className="h-8 w-8 p-0"
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setEditingCell(null);
+                  setEditingValue('');
+                }}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          );
         }
         
-        if (field.type === 'select' && typeof value === 'string' && field.options) {
-          return <Badge variant="outline">{value}</Badge>;
-        }
-        
-        return value || '-';
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-100 p-1 rounded min-h-[24px] flex items-center"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingCell({ rowId, fieldId: field.id });
+              setEditingValue(value?.toString() || '');
+            }}
+          >
+            {field.type === 'boolean' && typeof value === 'boolean' ? (
+              value ? 'Yes' : 'No'
+            ) : field.type === 'select' && typeof value === 'string' && field.options ? (
+              <Badge variant="outline">{value}</Badge>
+            ) : (
+              value || <span className="text-gray-400">Click to edit</span>
+            )}
+          </div>
+        );
       },
     }));
-  }, [customFields]);
+  }, [customFields, customFieldData, editingCell, editingValue]);
+
+  // Add tags column
+  const tagsColumn: ColumnDef<TData, TValue> = {
+    id: "tags",
+    header: "Tags",
+    cell: ({ row }) => {
+      const rowId = (row.original as any).id?.toString() || row.id;
+      const tags = itemTags[rowId] || [];
+      
+      return (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag, index) => (
+            <Badge key={index} variant="secondary" className="text-xs">
+              {tag}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeTag(rowId, tag);
+                }}
+                className="ml-1 hover:text-red-500"
+              >
+                ×
+              </button>
+            </Badge>
+          ))}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              const newTag = prompt('Enter tag name:');
+              if (newTag && newTag.trim()) {
+                addTag(rowId, newTag.trim());
+              }
+            }}
+            className="h-5 w-5 p-0 text-xs"
+          >
+            +
+          </Button>
+        </div>
+      );
+    },
+  };
   
   // Function to handle adding a new custom field
   const handleAddCustomField = (field: CustomField) => {
     setCustomFields(prev => [...prev, field]);
-    
-    // Add the field to all existing data rows with a default value
-    // This would normally be handled by a backend update
     console.log(`Added new field: ${field.name} (${field.type})`);
   };
 
+  // Function to save custom field value
+  const handleSaveCustomField = (rowId: string, fieldId: string, value: string) => {
+    setCustomFieldData(prev => ({
+      ...prev,
+      [rowId]: {
+        ...prev[rowId],
+        [fieldId]: value
+      }
+    }));
+    setEditingCell(null);
+    setEditingValue('');
+    toast.success('Field updated successfully');
+  };
+
+  // Tag management functions
+  const addTag = (rowId: string, tag: string) => {
+    setItemTags(prev => ({
+      ...prev,
+      [rowId]: [...(prev[rowId] || []), tag]
+    }));
+  };
+
+  const removeTag = (rowId: string, tagToRemove: string) => {
+    setItemTags(prev => ({
+      ...prev,
+      [rowId]: (prev[rowId] || []).filter(tag => tag !== tagToRemove)
+    }));
+  };
+
   // Handle bulk actions
-  const handleChangeOwner = () => {
+  const handleChangeOwner = async () => {
     const selectedRows = table.getSelectedRowModel().rows;
-    alert(`Change owner for ${selectedRows.length} items`);
-    // This would connect to API in real implementation
+    const newOwner = prompt('Enter new owner name:');
+    if (newOwner && onBulkUpdate) {
+      try {
+        const selectedIds = selectedRows.map(row => (row.original as any).id?.toString());
+        await onBulkUpdate(selectedIds, { owner: newOwner });
+        toast.success(`Owner changed for ${selectedRows.length} items`);
+        setRowSelection({});
+      } catch (error) {
+        toast.error('Failed to change owner');
+      }
+    }
   };
   
-  const handleAddTags = () => {
+  const handleAddTags = async () => {
     const selectedRows = table.getSelectedRowModel().rows;
-    alert(`Add tags to ${selectedRows.length} items`);
-    // This would connect to API in real implementation
+    const newTag = prompt('Enter tag to add:');
+    if (newTag && newTag.trim()) {
+      selectedRows.forEach(row => {
+        const rowId = (row.original as any).id?.toString() || row.id;
+        addTag(rowId, newTag.trim());
+      });
+      toast.success(`Tag "${newTag}" added to ${selectedRows.length} items`);
+      setRowSelection({});
+    }
   };
   
-  const handleRemoveTags = () => {
+  const handleRemoveTags = async () => {
     const selectedRows = table.getSelectedRowModel().rows;
-    alert(`Remove tags from ${selectedRows.length} items`);
-    // This would connect to API in real implementation
+    const tagToRemove = prompt('Enter tag to remove:');
+    if (tagToRemove && tagToRemove.trim()) {
+      selectedRows.forEach(row => {
+        const rowId = (row.original as any).id?.toString() || row.id;
+        removeTag(rowId, tagToRemove.trim());
+      });
+      toast.success(`Tag "${tagToRemove}" removed from ${selectedRows.length} items`);
+      setRowSelection({});
+    }
   };
   
-  const handleUpdateField = () => {
+  const handleUpdateField = async () => {
     const selectedRows = table.getSelectedRowModel().rows;
-    alert(`Update field for ${selectedRows.length} items`);
-    // This would connect to API in real implementation
+    if (customFields.length === 0) {
+      toast.error('No custom fields available to update');
+      return;
+    }
+    
+    const fieldOptions = customFields.map(f => `${f.name} (${f.id})`).join('\n');
+    const fieldChoice = prompt(`Choose field to update:\n${fieldOptions}\n\nEnter field name:`);
+    if (!fieldChoice) return;
+    
+    const field = customFields.find(f => f.name === fieldChoice || f.id === fieldChoice);
+    if (!field) {
+      toast.error('Field not found');
+      return;
+    }
+    
+    const newValue = prompt(`Enter new value for ${field.name}:`);
+    if (newValue !== null) {
+      selectedRows.forEach(row => {
+        const rowId = (row.original as any).id?.toString() || row.id;
+        setCustomFieldData(prev => ({
+          ...prev,
+          [rowId]: {
+            ...prev[rowId],
+            [field.id]: newValue
+          }
+        }));
+      });
+      toast.success(`Field "${field.name}" updated for ${selectedRows.length} items`);
+      setRowSelection({});
+    }
   };
   
-  const handleDelete = () => {
+  const handleDelete = async () => {
     const selectedRows = table.getSelectedRowModel().rows;
-    alert(`Delete ${selectedRows.length} items`);
-    // This would connect to API in real implementation
+    if (window.confirm(`Are you sure you want to delete ${selectedRows.length} items? This action cannot be undone.`)) {
+      if (onBulkDelete) {
+        try {
+          const selectedIds = selectedRows.map(row => (row.original as any).id?.toString());
+          await onBulkDelete(selectedIds);
+          toast.success(`${selectedRows.length} items deleted successfully`);
+          setRowSelection({});
+        } catch (error) {
+          toast.error('Failed to delete items');
+        }
+      } else {
+        toast.error('Delete functionality not implemented');
+      }
+    }
   };
   
   const handleSendEmail = () => {
     const selectedRows = table.getSelectedRowModel().rows;
-    alert(`Send email to ${selectedRows.length} contacts`);
-    // This would connect to API in real implementation
+    const emails = selectedRows
+      .map(row => (row.original as any).email)
+      .filter(email => email);
+    
+    if (emails.length === 0) {
+      toast.error('No email addresses found for selected contacts');
+      return;
+    }
+    
+    const emailList = emails.join(';');
+    window.open(`mailto:${emailList}`);
+    toast.success(`Email client opened with ${emails.length} recipients`);
   };
 
   // Add selection column to start of columns and create field at the end
@@ -209,9 +460,15 @@ export function DataTable<TData, TValue>({
       },
       ...columns,
       ...customColumns,
+      tagsColumn,
     ];
     
-    // Add "Create Field" column
+    // Add actions column if provided (before Create Field)
+    if (actionsColumn) {
+      baseColumns.push(actionsColumn);
+    }
+    
+    // Add "Create Field" column at the very end
     baseColumns.push({
       id: "createField",
       header: () => (
@@ -229,7 +486,7 @@ export function DataTable<TData, TValue>({
     } as ColumnDef<TData, TValue>);
     
     return baseColumns as ColumnDef<TData, TValue>[];
-  }, [columns, customColumns]);
+  }, [columns, customColumns, actionsColumn, tagsColumn]);
 
   const table = useReactTable({
     data,

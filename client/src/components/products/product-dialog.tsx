@@ -18,7 +18,9 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { Badge } from "../ui/badge";
 import { Product, NewProductData } from '@/lib/api';
+import { CustomField } from '../shared/add-field-dialog';
 
 interface ProductDialogProps {
   open: boolean;
@@ -53,6 +55,26 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
     description: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Custom fields state
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState('');
+
+  // Load custom fields from localStorage
+  useEffect(() => {
+    const storageKey = 'customFields_products';
+    const savedFields = localStorage.getItem(storageKey);
+    if (savedFields) {
+      try {
+        const parsedFields = JSON.parse(savedFields);
+        setCustomFields(parsedFields);
+      } catch (error) {
+        console.error('Error parsing saved custom fields:', error);
+      }
+    }
+  }, []);
 
   // Populate form when editing an existing product
   useEffect(() => {
@@ -65,6 +87,32 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
         status: product.status,
         description: product.description || ''
       });
+
+      // Load custom field data for this product
+      const dataKey = 'customFieldData_products';
+      const savedData = localStorage.getItem(dataKey);
+      if (savedData) {
+        try {
+          const parsedData = JSON.parse(savedData);
+          const productData = parsedData[product.id.toString()] || {};
+          setCustomFieldValues(productData);
+        } catch (error) {
+          console.error('Error parsing saved custom field data:', error);
+        }
+      }
+
+      // Load tags for this product
+      const tagsKey = 'itemTags_products';
+      const savedTags = localStorage.getItem(tagsKey);
+      if (savedTags) {
+        try {
+          const parsedTags = JSON.parse(savedTags);
+          const productTags = parsedTags[product.id.toString()] || [];
+          setTags(productTags);
+        } catch (error) {
+          console.error('Error parsing saved tags:', error);
+        }
+      }
     } else {
       // Reset form for new product
       setFormData({
@@ -75,8 +123,11 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
         status: 'active',
         description: ''
       });
+      setCustomFieldValues({});
+      setTags([]);
     }
     setErrors({});
+    setNewTag('');
   }, [product, open]);
 
   // Common product categories
@@ -129,16 +180,32 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
 
     try {
       // Clean up the data before sending
-             const cleanedData: NewProductData = {
-         ...formData,
-         product_name: formData.product_name.trim(),
-         sku_code: formData.sku_code?.trim() || undefined,
-         category: formData.category.trim(),
-         description: formData.description?.trim() || undefined,
-         price: Number(formData.price)
-       };
+      const cleanedData: NewProductData = {
+        ...formData,
+        product_name: formData.product_name.trim(),
+        sku_code: formData.sku_code?.trim() || undefined,
+        category: formData.category.trim(),
+        description: formData.description?.trim() || undefined,
+        price: Number(formData.price)
+      };
 
       await onSave(cleanedData);
+
+      // Save custom field data and tags after successful product save
+      if (product) {
+        // For existing products, save custom field data
+        const dataKey = 'customFieldData_products';
+        const existingData = JSON.parse(localStorage.getItem(dataKey) || '{}');
+        existingData[product.id.toString()] = customFieldValues;
+        localStorage.setItem(dataKey, JSON.stringify(existingData));
+
+        // Save tags
+        const tagsKey = 'itemTags_products';
+        const existingTags = JSON.parse(localStorage.getItem(tagsKey) || '{}');
+        existingTags[product.id.toString()] = tags;
+        localStorage.setItem(tagsKey, JSON.stringify(existingTags));
+      }
+
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving product:', error);
@@ -155,6 +222,9 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
       status: 'active',
       description: ''
     });
+    setCustomFieldValues({});
+    setTags([]);
+    setNewTag('');
     setErrors({});
     onOpenChange(false);
   };
@@ -167,9 +237,27 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
     }
   };
 
+  const handleCustomFieldChange = (fieldId: string, value: any) => {
+    setCustomFieldValues(prev => ({
+      ...prev,
+      [fieldId]: value
+    }));
+  };
+
+  const handleAddTag = () => {
+    if (newTag.trim() && !tags.includes(newTag.trim())) {
+      setTags(prev => [...prev, newTag.trim()]);
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(prev => prev.filter(tag => tag !== tagToRemove));
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>
@@ -304,6 +392,111 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
                   placeholder="Optional product description..."
                   rows={3}
                 />
+              </div>
+            </div>
+
+            {/* Custom Fields */}
+            {customFields.length > 0 && (
+              <>
+                <div className="col-span-4 border-t pt-4">
+                  <h3 className="text-lg font-medium mb-4">Custom Fields</h3>
+                </div>
+                {customFields.map((field) => (
+                  <div key={field.id} className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor={field.id} className="text-right">
+                      {field.name}
+                    </Label>
+                    <div className="col-span-3">
+                      {field.type === 'text' && (
+                        <Input
+                          id={field.id}
+                          value={customFieldValues[field.id] || ''}
+                          onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                          placeholder={`Enter ${field.name.toLowerCase()}`}
+                        />
+                      )}
+                      {field.type === 'number' && (
+                        <Input
+                          id={field.id}
+                          type="number"
+                          value={customFieldValues[field.id] || ''}
+                          onChange={(e) => handleCustomFieldChange(field.id, parseFloat(e.target.value) || 0)}
+                          placeholder={`Enter ${field.name.toLowerCase()}`}
+                        />
+                      )}
+                      {field.type === 'select' && field.options && (
+                        <Select
+                          value={customFieldValues[field.id] || ''}
+                          onValueChange={(value) => handleCustomFieldChange(field.id, value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {field.type === 'boolean' && (
+                        <Select
+                          value={customFieldValues[field.id]?.toString() || 'false'}
+                          onValueChange={(value) => handleCustomFieldChange(field.id, value === 'true')}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="true">Yes</SelectItem>
+                            <SelectItem value="false">No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Tags */}
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label className="text-right mt-2">
+                Tags
+              </Label>
+              <div className="col-span-3">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {tags.map((tag, index) => (
+                    <Badge key={index} variant="secondary" className="text-xs">
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        className="ml-1 hover:text-red-500"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    placeholder="Add a tag..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
+                  />
+                  <Button type="button" onClick={handleAddTag} variant="outline">
+                    Add
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

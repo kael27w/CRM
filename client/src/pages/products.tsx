@@ -66,7 +66,7 @@ const ProductsPage: React.FC = () => {
     },
   });
 
-  // Define columns for the data table
+  // Define main columns for the data table (without actions)
   const columns: ColumnDef<Product>[] = [
     {
       accessorKey: "product_name",
@@ -127,38 +127,40 @@ const ProductsPage: React.FC = () => {
         );
       },
     },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: ({ row }) => {
-        const product = row.original;
-        
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleEditProduct(product)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => handleDeleteProduct(product)}
-                className="text-red-600"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-    },
   ];
+
+  // Define actions column separately
+  const actionsColumn: ColumnDef<Product> = {
+    id: "actions",
+    header: "Actions",
+    cell: ({ row }) => {
+      const product = row.original;
+      
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Open menu</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleEditProduct(product)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => handleDeleteProduct(product)}
+              className="text-red-600"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    },
+  };
 
   // Event handlers
   const handleRowClick = (row: any) => {
@@ -202,6 +204,28 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Bulk action handlers
+  const handleBulkUpdate = async (selectedIds: string[], updates: any) => {
+    console.log('Bulk update:', selectedIds, updates);
+    // For now, just show a success message
+    // In a real app, you'd call an API endpoint to update multiple products
+    toast.success(`Bulk update would be applied to ${selectedIds.length} products`);
+  };
+
+  const handleBulkDelete = async (selectedIds: string[]) => {
+    console.log('Bulk delete:', selectedIds);
+    // For now, just show a success message
+    // In a real app, you'd call an API endpoint to delete multiple products
+    for (const id of selectedIds) {
+      try {
+        await deleteProduct(parseInt(id));
+      } catch (error) {
+        console.error(`Failed to delete product ${id}:`, error);
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+  };
+
   // Handle loading state
   if (isLoading) {
     return (
@@ -234,6 +258,9 @@ const ProductsPage: React.FC = () => {
         onRowClick={handleRowClick}
         onAddField={handleAddField}
         onNewItem={handleNewProduct}
+        actionsColumn={actionsColumn}
+        onBulkUpdate={handleBulkUpdate}
+        onBulkDelete={handleBulkDelete}
       />
       
       <ProductDialog
