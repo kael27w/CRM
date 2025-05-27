@@ -1680,3 +1680,32 @@ export async function deleteDeal(dealId: string | number): Promise<void> {
     throw error instanceof Error ? error : new Error('Unknown error deleting deal');
   }
 }
+
+/**
+ * Fetch all contacts from the API
+ */
+export async function fetchContacts(): Promise<ContactEntry[]> {
+  try {
+    console.log("Fetching all contacts from API...");
+    
+    const response = await fetch(`${API_BASE_URL}/api/contacts/list`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Failed to fetch contacts. Status: ${response.status}, Response: ${errorText}`);
+      throw new Error(`Failed to fetch contacts: ${response.status} ${response.statusText}`);
+    }
+
+    const contacts: ContactEntry[] = await response.json();
+    console.log(`Successfully fetched ${contacts.length} contacts`);
+    return contacts;
+  } catch (error) {
+    console.error("Error fetching contacts:", error);
+    throw error;
+  }
+}

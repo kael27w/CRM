@@ -2091,7 +2091,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all deals for this pipeline
       console.log(`GET /api/pipelines/${pipelineId} - Querying deals table for pipeline_id: ${pipelineId}`);
       
-      // First try with joins, if that fails, try without joins
+      // Query with joins to get company and contact names
       let dealsData, dealsError;
       try {
         const result = await supabase
@@ -2143,6 +2143,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             amount: deal.amount || 0,
             company: (deal as any).companies?.company_name || '',
             contact: (deal as any).contacts ? `${(deal as any).contacts.first_name} ${(deal as any).contacts.last_name}` : '',
+            company_id: deal.company_id,
+            contact_id: deal.contact_id,
             closingDate: deal.closing_date || '',
             stageId: deal.stage_id,
             probability: deal.probability || 0,
@@ -2177,7 +2179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Prepare deal data for insertion
+      // Prepare deal data for insertion - ONLY IDs, no text fields
       const newDeal = {
         name: dealData.name,
         amount: dealData.amount || 0,
@@ -2246,7 +2248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updated_at: new Date().toISOString()
       };
       
-      // Only include fields that are provided
+      // Only include fields that are provided - ONLY IDs, no text fields
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.amount !== undefined) updateData.amount = updates.amount;
       if (updates.company_id !== undefined) updateData.company_id = updates.company_id;
