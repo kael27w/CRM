@@ -1,18 +1,69 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '@/components/shared/data-table';
 import { Badge } from '@/components/ui/badge';
-import { fetchProducts, Product } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
+import { fetchProducts, Product, NewProductData, createProduct, updateProduct, deleteProduct } from '@/lib/api';
+import ProductDialog from '@/components/products/product-dialog';
+import { toast } from 'sonner';
 
 const ProductsPage: React.FC = () => {
-  // State for managing new product creation
-  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  // State for managing product dialogs
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  
+  // React Query setup
+  const queryClient = useQueryClient();
 
   // Fetch products from the API using React Query
   const { data: products = [], isLoading, error } = useQuery({
     queryKey: ['products'],
     queryFn: fetchProducts,
+  });
+
+  // Mutation for creating products
+  const createProductMutation = useMutation({
+    mutationFn: createProduct,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success('Product created successfully!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to create product: ${error.message}`);
+    },
+  });
+
+  // Mutation for updating products
+  const updateProductMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<NewProductData> }) => 
+      updateProduct(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success('Product updated successfully!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update product: ${error.message}`);
+    },
+  });
+
+  // Mutation for deleting products
+  const deleteProductMutation = useMutation({
+    mutationFn: deleteProduct,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      toast.success('Product deleted successfully!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete product: ${error.message}`);
+    },
   });
 
   // Define columns for the data table
@@ -76,11 +127,43 @@ const ProductsPage: React.FC = () => {
         );
       },
     },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const product = row.original;
+        
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditProduct(product)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleDeleteProduct(product)}
+                className="text-red-600"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
   ];
 
+  // Event handlers
   const handleRowClick = (row: any) => {
     console.log('Product clicked:', row.original);
-    // This will be expanded to show product details or edit product
+    // Could open a product details view here
   };
 
   const handleAddField = () => {
@@ -90,10 +173,33 @@ const ProductsPage: React.FC = () => {
 
   const handleNewProduct = () => {
     console.log('New Product button clicked');
-    setIsCreatingProduct(true);
-    // TODO: Open a dialog/modal for creating a new product
-    // For now, just show an alert
-    alert('New Product functionality will be implemented in Phase 2. This button is now working!');
+    setEditingProduct(null); // Ensure we're creating a new product
+    setIsProductDialogOpen(true);
+  };
+
+  const handleEditProduct = (product: Product) => {
+    console.log('Edit product clicked:', product);
+    setEditingProduct(product);
+    setIsProductDialogOpen(true);
+  };
+
+  const handleDeleteProduct = (product: Product) => {
+    if (window.confirm(`Are you sure you want to delete "${product.product_name}"? This action cannot be undone.`)) {
+      deleteProductMutation.mutate(product.id);
+    }
+  };
+
+  const handleSaveProduct = async (productData: NewProductData) => {
+    if (editingProduct) {
+      // Update existing product
+      await updateProductMutation.mutateAsync({
+        id: editingProduct.id,
+        data: productData
+      });
+    } else {
+      // Create new product
+      await createProductMutation.mutateAsync(productData);
+    }
   };
 
   // Handle loading state
@@ -117,17 +223,27 @@ const ProductsPage: React.FC = () => {
   }
 
   return (
-    <DataTable
-      columns={columns}
-      data={products}
-      title="Products"
-      description="Manage your product catalog"
-      searchPlaceholder="Search products..."
-      pageType="products"
-      onRowClick={handleRowClick}
-      onAddField={handleAddField}
-      onNewItem={handleNewProduct}
-    />
+    <>
+      <DataTable
+        columns={columns}
+        data={products}
+        title="Products"
+        description="Manage your product catalog"
+        searchPlaceholder="Search products..."
+        pageType="products"
+        onRowClick={handleRowClick}
+        onAddField={handleAddField}
+        onNewItem={handleNewProduct}
+      />
+      
+      <ProductDialog
+        open={isProductDialogOpen}
+        onOpenChange={setIsProductDialogOpen}
+        onSave={handleSaveProduct}
+        product={editingProduct}
+        isLoading={createProductMutation.isPending || updateProductMutation.isPending}
+      />
+    </>
   );
 };
 

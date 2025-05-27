@@ -92,6 +92,26 @@ export function DataTable<TData, TValue>({
   // State for adding new field
   const [isAddingField, setIsAddingField] = useState(false);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+  // Load custom fields from localStorage on component mount
+  useEffect(() => {
+    const storageKey = `customFields_${pageType}`;
+    const savedFields = localStorage.getItem(storageKey);
+    if (savedFields) {
+      try {
+        const parsedFields = JSON.parse(savedFields);
+        setCustomFields(parsedFields);
+      } catch (error) {
+        console.error('Error parsing saved custom fields:', error);
+      }
+    }
+  }, [pageType]);
+
+  // Save custom fields to localStorage whenever they change
+  useEffect(() => {
+    const storageKey = `customFields_${pageType}`;
+    localStorage.setItem(storageKey, JSON.stringify(customFields));
+  }, [customFields, pageType]);
   
   // Define additional columns based on custom fields
   const customColumns = useMemo(() => {

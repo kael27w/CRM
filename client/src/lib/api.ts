@@ -1022,4 +1022,189 @@ export async function createProduct(productData: NewProductData): Promise<Produc
   
   // If we get here, we've exhausted all retries
   throw new Error(`Failed to create product after ${maxRetries} attempts. Please check your network connection and server status.`);
+}
+
+/**
+ * Updates an existing product via the API
+ * @param productId - The ID of the product to update
+ * @param productData - The partial data to update
+ * @returns Promise containing the updated product entry
+ */
+export async function updateProduct(productId: string | number, productData: Partial<NewProductData>): Promise<Product> {
+  console.log("updateProduct API function called with ID:", productId, "and payload:", productData);
+  
+  const apiUrl = `${API_BASE_URL}/api/products/${productId}`;
+  console.log("Making API request to:", apiUrl);
+  
+  // Setup for retries
+  const maxRetries = 3;
+  const timeout = 5000; // 5 seconds
+  let retryCount = 0;
+  
+  // Retry loop
+  while (retryCount < maxRetries) {
+    try {
+      console.log(`Attempt ${retryCount + 1}/${maxRetries}: Sending PATCH request to: ${apiUrl}`);
+      
+      // Use AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      const response = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+        signal: controller.signal,
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      console.log("API response received:", response.status, response.statusText);
+
+      if (!response.ok) {
+        let errorMessage = `API error: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          console.log("Error response body:", errorData);
+          if (errorData && errorData.message) {
+            errorMessage = `${errorMessage} - ${errorData.message}`;
+          }
+        } catch (parseError) {
+          // Try to get the raw text if JSON parsing fails
+          try {
+            const textError = await response.text();
+            console.error("Raw error response:", textError);
+            errorMessage = `${errorMessage} - Raw response: ${textError}`;
+          } catch (textError) {
+            console.warn("Could not get error response text either");
+          }
+        }
+        
+        // Only retry on server errors (5xx) or network issues
+        if (response.status >= 500) {
+          console.error(`Server error (${response.status}), will retry...`);
+          retryCount++;
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+        
+        // For client errors (4xx), don't retry
+        console.error("Error details for updateProduct:", errorMessage, "Payload sent:", productData);
+        throw new Error(errorMessage);
+      }
+
+      const updatedProduct = await response.json();
+      console.log("Product updated successfully:", updatedProduct);
+      return updatedProduct as Product;
+      
+    } catch (error) {
+      // Check if it's a timeout or network error
+      if (
+        error instanceof Error && 
+        (error.name === 'AbortError' || 
+         error.message.includes('Failed to fetch') ||
+         error.message.includes('NetworkError') ||
+         error.message.includes('ECONNREFUSED') ||
+         error.message.includes('Connection refused'))
+      ) {
+        console.error(`Network error on attempt ${retryCount + 1}:`, error.message);
+        retryCount++;
+        if (retryCount < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+      }
+      
+      // For other errors or if we've exhausted retries
+      console.error('Error updating product:', error, "Payload attempted:", productData);
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Unknown error updating product');
+    }
+  }
+  
+  // If we get here, we've exhausted all retries
+  throw new Error(`Failed to update product after ${maxRetries} attempts. Please check your network connection and server status.`);
+}
+
+/**
+ * Deletes a product via the API
+ * @param productId - The ID of the product to delete
+ * @returns Promise containing a success message
+ */
+export async function deleteProduct(productId: string | number): Promise<{ message: string }> {
+  console.log("deleteProduct API function called with ID:", productId);
+  
+  const apiUrl = `${API_BASE_URL}/api/products/${productId}`;
+  console.log("Making API request to:", apiUrl);
+  
+  try {
+    // Use AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(apiUrl, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+    });
+    
+    // Clear the timeout
+    clearTimeout(timeoutId);
+    
+    console.log("API response received:", response.status, response.statusText);
+
+    if (!response.ok) {
+      let errorMessage = `API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        console.log("Error response body:", errorData);
+        if (errorData && errorData.message) {
+          errorMessage = `${errorMessage} - ${errorData.message}`;
+        }
+      } catch (parseError) {
+        // Try to get the raw text if JSON parsing fails
+        try {
+          const textError = await response.text();
+          console.error("Raw error response:", textError);
+          errorMessage = `${errorMessage} - Raw response: ${textError}`;
+        } catch (textError) {
+          console.warn("Could not get error response text either");
+        }
+      }
+      
+      console.error("Error details for deleteProduct:", errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+    console.log("Product deleted successfully:", result);
+    return result as { message: string };
+    
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    
+    // Check if this is an AbortError (timeout)
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timed out. The server might be overloaded or unreachable.');
+    }
+    
+    // Check if this is a network error
+    if (error instanceof Error && 
+        (error.message.includes('Failed to fetch') ||
+         error.message.includes('NetworkError') ||
+         error.message.includes('network'))) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    }
+    
+    throw error instanceof Error ? error : new Error('Unknown error deleting product');
+  }
 } 

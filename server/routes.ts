@@ -1095,6 +1095,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update a product by ID
+  app.patch("/api/products/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { product_name, sku_code, category, price, status, description } = req.body;
+      
+      console.log(`PATCH /api/products/${id} - Request received. Body:`, req.body);
+      
+      // Validate product ID
+      if (!id || isNaN(Number(id))) {
+        console.error(`PATCH /api/products/${id} - Invalid product ID`);
+        return res.status(400).json({ message: "Invalid product ID" });
+      }
+      
+      // Validate that there are fields to update
+      if (!req.body || Object.keys(req.body).length === 0) {
+        console.error(`PATCH /api/products/${id} - No update fields provided`);
+        return res.status(400).json({ message: "No update fields provided" });
+      }
+      
+      // Build update object with only provided fields
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      };
+      
+      if (product_name !== undefined) {
+        if (!product_name.trim()) {
+          return res.status(400).json({ message: "Product name cannot be empty" });
+        }
+        updateData.product_name = product_name.trim();
+      }
+      
+      if (sku_code !== undefined) {
+        updateData.sku_code = sku_code ? sku_code.trim() : null;
+        
+        // Check if SKU code already exists for a different product
+        if (updateData.sku_code) {
+          const { data: existingProduct, error: checkError } = await supabase
+            .from('products')
+            .select('id')
+            .eq('sku_code', updateData.sku_code)
+            .neq('id', id)
+            .limit(1);
+          
+          if (checkError) {
+            console.error(`PATCH /api/products/${id} - Error checking for existing SKU:`, checkError);
+            return res.status(500).json({ message: "Database error checking for existing SKU" });
+          }
+          
+          if (existingProduct && existingProduct.length > 0) {
+            console.log(`PATCH /api/products/${id} - SKU code already exists:`, updateData.sku_code);
+            return res.status(409).json({ message: "A product with this SKU code already exists" });
+          }
+        }
+      }
+      
+      if (category !== undefined) {
+        if (!category.trim()) {
+          return res.status(400).json({ message: "Category cannot be empty" });
+        }
+        updateData.category = category.trim();
+      }
+      
+      if (price !== undefined) {
+        const numericPrice = parseFloat(price);
+        if (isNaN(numericPrice) || numericPrice <= 0) {
+          return res.status(400).json({ message: "Price must be a valid number greater than 0" });
+        }
+        updateData.price = numericPrice;
+      }
+      
+      if (status !== undefined) {
+        const validStatuses = ['active', 'inactive'];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ 
+            message: `Status must be one of: ${validStatuses.join(', ')}` 
+          });
+        }
+        updateData.status = status;
+      }
+      
+      if (description !== undefined) {
+        updateData.description = description ? description.trim() : null;
+      }
+      
+      // Update the product
+      const { data, error } = await supabase
+        .from('products')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error(`PATCH /api/products/${id} - Supabase error:`, error);
+        
+        if (error.code === 'PGRST204') { // No rows selected
+          return res.status(404).json({ message: `Product with ID ${id} not found` });
+        }
+        
+        return res.status(500).json({ message: "Database error updating product" });
+      }
+      
+      if (!data) {
+        console.error(`PATCH /api/products/${id} - No data returned after update`);
+        return res.status(404).json({ message: `Product with ID ${id} not found` });
+      }
+      
+      console.log(`PATCH /api/products/${id} - Product updated successfully:`, data);
+      res.status(200).json(data);
+    } catch (error: any) {
+      console.error(`PATCH /api/products/${req.params.id} - Error updating product:`, error.message, error.stack);
+      res.status(500).json({ message: "Error updating product" });
+    }
+  });
+
+  // Delete a product by ID
+  app.delete("/api/products/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      console.log(`DELETE /api/products/${id} - Request received`);
+      
+      // Validate product ID
+      if (!id || isNaN(Number(id))) {
+        console.error(`DELETE /api/products/${id} - Invalid product ID`);
+        return res.status(400).json({ message: "Invalid product ID" });
+      }
+      
+      // First, check if the product exists
+      const { data: existingProduct, error: checkError } = await supabase
+        .from('products')
+        .select('id, product_name')
+        .eq('id', id)
+        .single();
+      
+      if (checkError) {
+        console.error(`DELETE /api/products/${id} - Supabase error checking product existence:`, checkError);
+        if (checkError.code === 'PGRST116') { // Not found
+          return res.status(404).json({ message: `Product with ID ${id} not found` });
+        }
+        return res.status(500).json({ message: "Database error checking product existence" });
+      }
+      
+      if (!existingProduct) {
+        console.warn(`DELETE /api/products/${id} - Product not found`);
+        return res.status(404).json({ message: `Product with ID ${id} not found` });
+      }
+      
+      console.log(`DELETE /api/products/${id} - Found product: ${existingProduct.product_name}. Proceeding with deletion.`);
+      
+      // Delete the product
+      const { error: deleteError } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+      
+      if (deleteError) {
+        console.error(`DELETE /api/products/${id} - Supabase error deleting product:`, deleteError);
+        return res.status(500).json({ message: "Database error deleting product" });
+      }
+      
+      console.log(`DELETE /api/products/${id} - Product deleted successfully`);
+      res.status(200).json({ message: `Product "${existingProduct.product_name}" deleted successfully` });
+    } catch (error: any) {
+      console.error(`DELETE /api/products/${req.params.id} - Error deleting product:`, error.message, error.stack);
+      res.status(500).json({ message: "Error deleting product" });
+    }
+  });
+
   // =========== TWILIO ROUTES ===========
   console.log("Registering Twilio routes...");
   const voiceWebhookUrl = process.env.TWILIO_WEBHOOK_BASE_URL || (process.env.API_URL ? `${process.env.API_URL}/api/twilio/voice` : '');
