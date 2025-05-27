@@ -116,6 +116,9 @@ export function DataTable<TData, TValue>({
   const [showUpdateFieldDialog, setShowUpdateFieldDialog] = useState(false);
   const [bulkActionType, setBulkActionType] = useState<'add' | 'remove'>('add');
 
+  // Add refresh key to force re-renders when localStorage changes
+  const [refreshKey, setRefreshKey] = useState(0);
+
   // Load custom fields from localStorage on component mount
   useEffect(() => {
     const storageKey = `customFields_${pageType}`;
@@ -152,7 +155,7 @@ export function DataTable<TData, TValue>({
         console.error('Error parsing saved tags:', error);
       }
     }
-  }, [pageType]);
+  }, [pageType, refreshKey]); // Add refreshKey as dependency
 
   // Save custom fields to localStorage whenever they change
   useEffect(() => {
@@ -171,6 +174,20 @@ export function DataTable<TData, TValue>({
     const tagsKey = `itemTags_${pageType}`;
     localStorage.setItem(tagsKey, JSON.stringify(itemTags));
   }, [itemTags, pageType]);
+
+  // Listen for storage changes from other components
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setRefreshKey(prev => prev + 1);
+    };
+
+    // Listen for custom storage events
+    window.addEventListener('localStorageUpdate', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('localStorageUpdate', handleStorageChange);
+    };
+  }, []);
   
   // Define additional columns based on custom fields
   const customColumns = useMemo(() => {

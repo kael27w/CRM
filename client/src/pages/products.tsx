@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
 import { fetchProducts, Product, NewProductData, createProduct, updateProduct, deleteProduct } from '@/lib/api';
-import ProductDialog from '@/components/products/product-dialog';
+import ProductDialog, { ExtendedProductData } from '@/components/products/product-dialog';
 import { toast } from 'sonner';
 
 const ProductsPage: React.FC = () => {
@@ -32,9 +32,15 @@ const ProductsPage: React.FC = () => {
   // Mutation for creating products
   const createProductMutation = useMutation({
     mutationFn: createProduct,
-    onSuccess: () => {
+    onSuccess: (newProduct: Product, variables: NewProductData) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast.success('Product created successfully!');
+      
+      // Handle saving custom fields and tags for the new product
+      const extendedData = variables as ExtendedProductData;
+      if (extendedData.customFields || extendedData.tags) {
+        saveAdditionalProductData(newProduct.id, extendedData.customFields, extendedData.tags);
+      }
     },
     onError: (error: Error) => {
       toast.error(`Failed to create product: ${error.message}`);
@@ -65,6 +71,35 @@ const ProductsPage: React.FC = () => {
       toast.error(`Failed to delete product: ${error.message}`);
     },
   });
+
+  // Function to save custom fields and tags for a new product
+  const saveAdditionalProductData = (productId: number, customFields?: Record<string, any>, tags?: string[]) => {
+    try {
+      // Save custom field data
+      if (customFields && Object.keys(customFields).length > 0) {
+        const dataKey = 'customFieldData_products';
+        const existingData = JSON.parse(localStorage.getItem(dataKey) || '{}');
+        existingData[productId.toString()] = customFields;
+        localStorage.setItem(dataKey, JSON.stringify(existingData));
+      }
+
+      // Save tags
+      if (tags && tags.length > 0) {
+        const tagsKey = 'itemTags_products';
+        const existingTags = JSON.parse(localStorage.getItem(tagsKey) || '{}');
+        existingTags[productId.toString()] = tags;
+        localStorage.setItem(tagsKey, JSON.stringify(existingTags));
+      }
+
+      // Dispatch custom event to notify DataTable of localStorage changes
+      window.dispatchEvent(new Event('localStorageUpdate'));
+
+      // Force a re-render of the DataTable to show the new tags and custom fields
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    } catch (error) {
+      console.error('Error saving additional product data:', error);
+    }
+  };
 
   // Define main columns for the data table (without actions)
   const columns: ColumnDef<Product>[] = [
@@ -191,15 +226,18 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  const handleSaveProduct = async (productData: NewProductData) => {
+  const handleSaveProduct = async (productData: ExtendedProductData) => {
+    // Extract the base product data (without custom fields and tags)
+    const { customFields, tags, ...baseProductData } = productData;
+    
     if (editingProduct) {
       // Update existing product
       await updateProductMutation.mutateAsync({
         id: editingProduct.id,
-        data: productData
+        data: baseProductData
       });
     } else {
-      // Create new product
+      // Create new product - the mutation's onSuccess will handle saving custom fields and tags
       await createProductMutation.mutateAsync(productData);
     }
   };

@@ -22,10 +22,16 @@ import { Badge } from "../ui/badge";
 import { Product, NewProductData } from '@/lib/api';
 import { CustomField } from '../shared/add-field-dialog';
 
+// Extended interface to include custom fields and tags
+export interface ExtendedProductData extends NewProductData {
+  customFields?: Record<string, any>;
+  tags?: string[];
+}
+
 interface ProductDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (productData: NewProductData) => Promise<void>;
+  onSave: (productData: ExtendedProductData) => Promise<void>;
   product?: Product | null; // For editing existing products
   isLoading?: boolean;
 }
@@ -180,20 +186,23 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
 
     try {
       // Clean up the data before sending
-      const cleanedData: NewProductData = {
+      const cleanedData: ExtendedProductData = {
         ...formData,
         product_name: formData.product_name.trim(),
         sku_code: formData.sku_code?.trim() || undefined,
         category: formData.category.trim(),
         description: formData.description?.trim() || undefined,
-        price: Number(formData.price)
+        price: Number(formData.price),
+        // Include custom fields and tags in the data
+        customFields: customFieldValues,
+        tags: tags
       };
 
       await onSave(cleanedData);
 
-      // Save custom field data and tags after successful product save
+      // For existing products, save custom field data and tags to localStorage
       if (product) {
-        // For existing products, save custom field data
+        // Save custom field data
         const dataKey = 'customFieldData_products';
         const existingData = JSON.parse(localStorage.getItem(dataKey) || '{}');
         existingData[product.id.toString()] = customFieldValues;
@@ -205,6 +214,7 @@ const ProductDialog: React.FC<ProductDialogProps> = ({
         existingTags[product.id.toString()] = tags;
         localStorage.setItem(tagsKey, JSON.stringify(existingTags));
       }
+      // For new products, the parent component will handle saving the tags and custom fields
 
       onOpenChange(false);
     } catch (error) {
