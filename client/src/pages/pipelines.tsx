@@ -192,7 +192,6 @@ const DealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
       <CardContent className="p-3 pt-2">
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="flex items-center text-muted-foreground">
-            <DollarSign className="mr-1 h-3 w-3" />
             {formattedAmount}
           </div>
           <div className="flex items-center text-muted-foreground">
@@ -322,6 +321,16 @@ const PipelinesPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
       setIsEditDealOpen(false);
       setCurrentDealId(null);
+      // Reset form to prevent state issues
+      setAddDealForm({
+        name: '',
+        amount: 0,
+        company: '',
+        contact: '',
+        closingDate: new Date().toISOString().split('T')[0],
+        probability: 20,
+        stageId: ''
+      });
       toast({
         title: "Success",
         description: "Deal updated successfully!",
@@ -343,6 +352,16 @@ const PipelinesPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
       setIsDeleteDialogOpen(false);
       setDealToDelete(null);
+      // Reset form to prevent state issues
+      setAddDealForm({
+        name: '',
+        amount: 0,
+        company: '',
+        contact: '',
+        closingDate: new Date().toISOString().split('T')[0],
+        probability: 20,
+        stageId: ''
+      });
       toast({
         title: "Success",
         description: "Deal deleted successfully!",
@@ -798,11 +817,11 @@ const PipelinesPage: React.FC = () => {
     if (!currentDealId) return;
     
     // Prepare the update data
+    // Note: Company and contact fields are currently read-only as they require foreign key relationships
+    // TODO: Implement company and contact lookup functionality
     const updateData = {
       name: addDealForm.name,
       amount: addDealForm.amount,
-      company: addDealForm.company,
-      contact: addDealForm.contact,
       closing_date: addDealForm.closingDate,
       probability: addDealForm.probability,
       stage_id: addDealForm.stageId
@@ -1174,26 +1193,28 @@ const PipelinesPage: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-company" className="text-right">
+              <Label htmlFor="edit-company" className="text-right text-muted-foreground">
                 Company
               </Label>
               <Input
                 id="edit-company"
-                className="col-span-3"
+                className="col-span-3 bg-muted"
                 value={addDealForm.company}
-                onChange={(e) => handleFormChange('company', e.target.value)}
+                disabled
+                placeholder="Company editing not yet implemented"
               />
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-contact" className="text-right">
+              <Label htmlFor="edit-contact" className="text-right text-muted-foreground">
                 Contact
               </Label>
               <Input
                 id="edit-contact"
-                className="col-span-3"
+                className="col-span-3 bg-muted"
                 value={addDealForm.contact}
-                onChange={(e) => handleFormChange('contact', e.target.value)}
+                disabled
+                placeholder="Contact editing not yet implemented"
               />
             </div>
             
