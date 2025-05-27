@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '../lib/queryClient';
+import { fetchPipelines, fetchPipelineData, type DBPipeline, type Pipeline as APIPipeline } from '../lib/api';
 import { 
   Card, 
   CardContent, 
@@ -245,7 +245,22 @@ const PipelinesPage: React.FC = () => {
     probability: 20,
     stageId: ''
   });
-  const [pipelines, setPipelines] = useState<Pipeline[]>([
+
+  // Fetch all pipelines for the sidebar
+  const { data: pipelinesList, isLoading: pipelinesLoading, error: pipelinesError } = useQuery({
+    queryKey: ['pipelines'],
+    queryFn: fetchPipelines,
+  });
+
+  // Fetch the active pipeline data
+  const { data: currentPipelineData, isLoading: pipelineLoading, error: pipelineError } = useQuery({
+    queryKey: ['pipeline', activePipeline],
+    queryFn: () => fetchPipelineData(activePipeline),
+    enabled: !!activePipeline,
+  });
+
+  // Fallback to mock data if API fails or is not available
+  const [mockPipelines] = useState<Pipeline[]>([
     {
       id: "sales-pipeline",
       name: "Sales Pipeline",
@@ -569,86 +584,24 @@ const PipelinesPage: React.FC = () => {
   
   // Handle drag start
   const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const activePipelineData = pipelines.find(p => p.id === activePipeline);
-    
-    if (!activePipelineData) return;
-    
-    // Find the deal across all stages
-    let foundDeal: Deal | undefined;
-    
-    for (const stage of activePipelineData.stages) {
-      const deal = stage.deals.find(d => d.id.toString() === active.id);
-      if (deal) {
-        foundDeal = deal;
-        break;
-      }
-    }
-    
-    if (foundDeal) {
-      setActiveItem(foundDeal);
-    }
+    // TODO: Implement drag start with API data in Phase 2
+    console.log('Drag start:', event);
+    setActiveItem(null);
   };
   
   // Handle drag end
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (!over) return;
-    
-    setPipelines(currentPipelines => {
-      // Create a deep copy of the current pipelines
-      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
-      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
-      
-      if (!currentPipeline) return currentPipelines;
-      
-      // Find the deal and its current stage
-      let draggedDeal: Deal | undefined;
-      let sourceStageId: string | undefined;
-      
-      // Find the deal in any stage
-      for (const stage of currentPipeline.stages) {
-        const dealIndex = stage.deals.findIndex(d => d.id.toString() === active.id);
-        if (dealIndex !== -1) {
-          draggedDeal = { ...stage.deals[dealIndex] };
-          sourceStageId = stage.id;
-          stage.deals.splice(dealIndex, 1); // Remove from source
-          break;
-        }
-      }
-      
-      if (!draggedDeal) return currentPipelines;
-      
-      // Get the destination stage id from the over.id directly
-      // This works because we've set up each stage column as a droppable with its stage.id
-      let targetStageId = over.id.toString();
-      
-      // Find the destination stage
-      const destinationStage = currentPipeline.stages.find(s => s.id === targetStageId);
-      
-      if (destinationStage) {
-        // Update the deal's stageId to match the destination
-        draggedDeal.stageId = destinationStage.id;
-        
-        // Add the deal to the destination stage
-        destinationStage.deals.push(draggedDeal);
-      } else if (sourceStageId) {
-        // If destination not found, put back in source stage
-        const sourceStage = currentPipeline.stages.find(s => s.id === sourceStageId);
-        if (sourceStage) {
-          sourceStage.deals.push(draggedDeal);
-        }
-      }
-      
-      return newPipelines;
-    });
-    
+    // TODO: Implement drag and drop with API calls in Phase 2
+    console.log('Drag end:', event);
     setActiveItem(null);
   };
   
   const getActivePipeline = () => {
-    return pipelines.find(p => p.id === activePipeline);
+    // Use API data if available, otherwise fall back to mock data
+    if (currentPipelineData) {
+      return currentPipelineData;
+    }
+    return mockPipelines.find(p => p.id === activePipeline);
   };
   
   const getPipelineSummary = (pipeline: Pipeline) => {
@@ -671,128 +624,50 @@ const PipelinesPage: React.FC = () => {
   
   // Handle clicking the edit option in the deal dropdown
   const handleEditDeal = (dealId: number) => {
-    const currentPipelineData = getActivePipeline();
-    if (!currentPipelineData) return;
+    // TODO: Implement edit functionality with API calls in Phase 2
+    console.log('Edit deal:', dealId);
+    // const currentPipelineData = getActivePipeline();
+    // if (!currentPipelineData) return;
     
-    // Find the deal to edit
-    let dealToEdit: Deal | undefined;
+    // // Find the deal to edit
+    // let dealToEdit: Deal | undefined;
     
-    for (const stage of currentPipelineData.stages) {
-      const deal = stage.deals.find(d => d.id === dealId);
-      if (deal) {
-        dealToEdit = deal;
-        break;
-      }
-    }
+    // for (const stage of currentPipelineData.stages) {
+    //   const deal = stage.deals.find(d => d.id === dealId);
+    //   if (deal) {
+    //     dealToEdit = deal;
+    //     break;
+    //   }
+    // }
     
-    if (dealToEdit) {
-      // Set up the form with the deal's current data
-      setAddDealForm({
-        name: dealToEdit.name,
-        amount: dealToEdit.amount,
-        company: dealToEdit.company,
-        contact: dealToEdit.contact,
-        closingDate: dealToEdit.closingDate,
-        probability: dealToEdit.probability,
-        stageId: dealToEdit.stageId
-      });
+    // if (dealToEdit) {
+    //   // Set up the form with the deal's current data
+    //   setAddDealForm({
+    //     name: dealToEdit.name,
+    //     amount: dealToEdit.amount,
+    //     company: dealToEdit.company,
+    //     contact: dealToEdit.contact,
+    //     closingDate: dealToEdit.closingDate,
+    //     probability: dealToEdit.probability,
+    //     stageId: dealToEdit.stageId
+    //   });
       
-      setCurrentDealId(dealId);
-      setIsEditDealOpen(true);
-    }
+    //   setCurrentDealId(dealId);
+    //   setIsEditDealOpen(true);
+    // }
   };
   
   // Handle saving edited deal data
   const handleSaveEdit = () => {
-    if (!currentDealId || !addDealForm.name || !addDealForm.stageId) return;
-    
-    setPipelines(currentPipelines => {
-      // Create a deep copy of the current pipelines
-      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
-      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
-      
-      if (!currentPipeline) return currentPipelines;
-      
-      // Find the deal to update
-      for (const stage of currentPipeline.stages) {
-        const dealIndex = stage.deals.findIndex(d => d.id === currentDealId);
-        if (dealIndex !== -1) {
-          // If deal needs to move stages
-          if (stage.id !== addDealForm.stageId) {
-            // Remove from current stage
-            const dealToMove = { ...stage.deals[dealIndex] };
-            stage.deals.splice(dealIndex, 1);
-            
-            // Update deal properties
-            dealToMove.name = addDealForm.name;
-            dealToMove.amount = addDealForm.amount;
-            dealToMove.company = addDealForm.company;
-            dealToMove.contact = addDealForm.contact;
-            dealToMove.closingDate = addDealForm.closingDate;
-            dealToMove.probability = addDealForm.probability;
-            dealToMove.stageId = addDealForm.stageId;
-            
-            // Add to new stage
-            const newStage = currentPipeline.stages.find(s => s.id === addDealForm.stageId);
-            if (newStage) {
-              newStage.deals.push(dealToMove);
-            } else {
-              // If target stage not found, add back to original
-              stage.deals.push(dealToMove);
-            }
-          } else {
-            // Just update in place
-            stage.deals[dealIndex] = {
-              ...stage.deals[dealIndex],
-              name: addDealForm.name,
-              amount: addDealForm.amount,
-              company: addDealForm.company,
-              contact: addDealForm.contact,
-              closingDate: addDealForm.closingDate,
-              probability: addDealForm.probability
-            };
-          }
-          break;
-        }
-      }
-      
-      return newPipelines;
-    });
-    
-    // Reset form and close dialog
-    setAddDealForm({
-      name: '',
-      amount: 0,
-      company: '',
-      contact: '',
-      closingDate: new Date().toISOString().split('T')[0],
-      probability: 20,
-      stageId: ''
-    });
-    setCurrentDealId(null);
+    // TODO: Implement save functionality with API calls in Phase 2
+    console.log('Save edit deal:', currentDealId, addDealForm);
     setIsEditDealOpen(false);
   };
   
   // Handle delete deal
   const handleDeleteDeal = (dealId: number) => {
-    setPipelines(currentPipelines => {
-      // Create a deep copy of the current pipelines
-      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
-      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
-      
-      if (!currentPipeline) return currentPipelines;
-      
-      // Find and remove the deal
-      for (const stage of currentPipeline.stages) {
-        const dealIndex = stage.deals.findIndex(d => d.id === dealId);
-        if (dealIndex !== -1) {
-          stage.deals.splice(dealIndex, 1);
-          break;
-        }
-      }
-      
-      return newPipelines;
-    });
+    // TODO: Implement delete functionality with API calls in Phase 2
+    console.log('Delete deal:', dealId);
   };
   
   // Handle opening the add deal dialog
@@ -818,49 +693,8 @@ const PipelinesPage: React.FC = () => {
   
   // Handle adding a new deal
   const handleAddDeal = () => {
-    if (!addDealForm.name || !addDealForm.stageId) return;
-    
-    setPipelines(currentPipelines => {
-      // Create a deep copy of the current pipelines
-      const newPipelines = JSON.parse(JSON.stringify(currentPipelines)) as Pipeline[];
-      const currentPipeline = newPipelines.find(p => p.id === activePipeline);
-      
-      if (!currentPipeline) return currentPipelines;
-      
-      // Find the destination stage by ID
-      const destinationStage = currentPipeline.stages.find(s => s.id === addDealForm.stageId);
-      
-      if (destinationStage) {
-        // Create a new deal
-        const newDeal: Deal = {
-          id: Date.now(), // Use timestamp as a unique ID
-          name: addDealForm.name,
-          amount: addDealForm.amount,
-          company: addDealForm.company,
-          contact: addDealForm.contact,
-          closingDate: addDealForm.closingDate,
-          stageId: addDealForm.stageId,
-          probability: addDealForm.probability,
-          status: 'open'
-        };
-        
-        // Add the deal to the stage
-        destinationStage.deals.push(newDeal);
-      }
-      
-      return newPipelines;
-    });
-    
-    // Reset the form and close the dialog
-    setAddDealForm({
-      name: '',
-      amount: 0,
-      company: '',
-      contact: '',
-      closingDate: new Date().toISOString().split('T')[0],
-      probability: 20,
-      stageId: ''
-    });
+    // TODO: Implement add functionality with API calls in Phase 2
+    console.log('Add deal:', addDealForm);
     setIsAddDealOpen(false);
   };
   
@@ -896,7 +730,7 @@ const PipelinesPage: React.FC = () => {
     return () => {
       document.removeEventListener('click', handleClick);
     };
-  }, [activePipeline, pipelines]);
+  }, [activePipeline]);
   
   return (
     <div className="flex flex-col h-full">
@@ -912,7 +746,11 @@ const PipelinesPage: React.FC = () => {
         <div className="w-64 bg-slate-50 dark:bg-slate-900 p-4 border-r border-gray-200 dark:border-gray-800 min-h-0">
           <h2 className="font-medium text-sm text-muted-foreground mb-3">PIPELINE VIEWS</h2>
           <div className="space-y-1">
-            {pipelines.map(pipeline => (
+            {pipelinesLoading ? (
+              <div className="text-sm text-muted-foreground">Loading pipelines...</div>
+            ) : pipelinesError ? (
+              <div className="text-sm text-red-500">Error loading pipelines</div>
+            ) : (pipelinesList || mockPipelines).map(pipeline => (
               <Button
                 key={pipeline.id}
                 variant={activePipeline === pipeline.id ? "secondary" : "ghost"}
@@ -928,7 +766,15 @@ const PipelinesPage: React.FC = () => {
         
         {/* Main content area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {currentPipeline && (
+          {pipelineLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-muted-foreground">Loading pipeline data...</div>
+            </div>
+          ) : pipelineError ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-red-500">Error loading pipeline data</div>
+            </div>
+          ) : currentPipeline && (
             <>
               <div className="p-4 bg-background border-b">
                 <div className="flex justify-between items-center">

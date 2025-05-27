@@ -157,6 +157,53 @@ export type ActivityUpdateData = {
 };
 
 /**
+ * Pipeline-related types for backend integration
+ */
+export interface DBPipeline {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DBPipelineStage {
+  id: string;
+  name: string;
+  order: number;
+  deals: DBDeal[];
+}
+
+export interface DBDeal {
+  id: number;
+  name: string;
+  amount: number;
+  company: string;
+  contact: string;
+  closingDate: string;
+  stageId: string;
+  probability: number;
+  status: 'open' | 'won' | 'lost';
+}
+
+export interface Pipeline {
+  id: string;
+  name: string;
+  stages: DBPipelineStage[];
+}
+
+export type NewDealData = {
+  name: string;
+  amount: number;
+  company_id?: number | null;
+  contact_id?: number | null;
+  closing_date?: string;
+  stage_id: string;
+  pipeline_id: string;
+  probability: number;
+  status?: 'open' | 'won' | 'lost';
+};
+
+/**
  * Fetches call logs from the API
  * @returns Promise containing an array of call log entries
  */
@@ -1460,4 +1507,176 @@ export async function deleteCompany(companyId: string | number): Promise<{ messa
     
     throw error instanceof Error ? error : new Error('Unknown error deleting company');
   }
-} 
+}
+
+/**
+ * Pipeline API Functions
+ */
+
+/**
+ * Fetches all pipelines (for sidebar)
+ * @returns Promise containing an array of pipeline summaries
+ */
+export async function fetchPipelines(): Promise<DBPipeline[]> {
+  const fullUrl = `${API_BASE_URL}/api/pipelines`;
+  console.log("Fetching pipelines from:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Successfully fetched ${data.length} pipelines`);
+    return data as DBPipeline[];
+  } catch (error) {
+    console.error('Error fetching pipelines:', error);
+    throw error instanceof Error ? error : new Error('Unknown error fetching pipelines');
+  }
+}
+
+/**
+ * Fetches a single pipeline with all its stages and deals
+ * @param pipelineId - The ID of the pipeline to fetch
+ * @returns Promise containing the complete pipeline data
+ */
+export async function fetchPipelineData(pipelineId: string): Promise<Pipeline> {
+  const fullUrl = `${API_BASE_URL}/api/pipelines/${pipelineId}`;
+  console.log("Fetching pipeline data from:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Pipeline with ID ${pipelineId} not found`);
+      }
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Successfully fetched pipeline data for ${pipelineId}:`, data);
+    return data as Pipeline;
+  } catch (error) {
+    console.error('Error fetching pipeline data:', error);
+    throw error instanceof Error ? error : new Error('Unknown error fetching pipeline data');
+  }
+}
+
+/**
+ * Creates a new deal
+ * @param dealData - The deal data to create
+ * @returns Promise containing the created deal
+ */
+export async function createDeal(dealData: NewDealData): Promise<DBDeal> {
+  const fullUrl = `${API_BASE_URL}/api/deals`;
+  console.log("Creating deal at:", fullUrl, "with data:", dealData);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(dealData),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error creating deal: ${response.status} ${response.statusText}`, errorText);
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.message || `Failed to create deal: ${response.status} ${response.statusText}`);
+      } catch {
+        throw new Error(`Failed to create deal: ${response.status} ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log("Successfully created deal:", data);
+    return data as DBDeal;
+  } catch (error) {
+    console.error('Error creating deal:', error);
+    throw error instanceof Error ? error : new Error('Unknown error creating deal');
+  }
+}
+
+/**
+ * Updates an existing deal
+ * @param dealId - The ID of the deal to update
+ * @param dealData - The partial deal data to update
+ * @returns Promise containing the updated deal
+ */
+export async function updateDeal(dealId: string | number, dealData: Partial<DBDeal>): Promise<DBDeal> {
+  const fullUrl = `${API_BASE_URL}/api/deals/${dealId}`;
+  console.log("Updating deal at:", fullUrl, "with data:", dealData);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(dealData),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error updating deal: ${response.status} ${response.statusText}`, errorText);
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.message || `Failed to update deal: ${response.status} ${response.statusText}`);
+      } catch {
+        if (response.status === 404) {
+          throw new Error(`Deal with ID ${dealId} not found`);
+        }
+        throw new Error(`Failed to update deal: ${response.status} ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log("Successfully updated deal:", data);
+    return data as DBDeal;
+  } catch (error) {
+    console.error('Error updating deal:', error);
+    throw error instanceof Error ? error : new Error('Unknown error updating deal');
+  }
+}
+
+/**
+ * Deletes a deal
+ * @param dealId - The ID of the deal to delete
+ * @returns Promise that resolves when the deal is deleted
+ */
+export async function deleteDeal(dealId: string | number): Promise<void> {
+  const fullUrl = `${API_BASE_URL}/api/deals/${dealId}`;
+  console.log("Deleting deal at:", fullUrl);
+  
+  try {
+    const response = await fetch(fullUrl, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error deleting deal: ${response.status} ${response.statusText}`, errorText);
+      
+      if (response.status === 404) {
+        throw new Error(`Deal with ID ${dealId} not found`);
+      }
+      throw new Error(`Failed to delete deal: ${response.status} ${response.statusText}`);
+    }
+    
+    console.log("Successfully deleted deal");
+  } catch (error) {
+    console.error('Error deleting deal:', error);
+    throw error instanceof Error ? error : new Error('Unknown error deleting deal');
+  }
+}
