@@ -19,8 +19,17 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useQuery } from '@tanstack/react-query';
-import { fetchPipelines, fetchPipelineData, type DBPipeline, type Pipeline as APIPipeline } from '../lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  fetchPipelines, 
+  fetchPipelineData, 
+  createDeal, 
+  updateDeal, 
+  deleteDeal,
+  type DBPipeline, 
+  type Pipeline as APIPipeline,
+  type NewDealData 
+} from '../lib/api';
 import { 
   Card, 
   CardContent, 
@@ -67,6 +76,17 @@ import {
   DialogTrigger,
 } from "../components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -75,6 +95,7 @@ import {
 } from "../components/ui/select";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
+import { useToast } from "../hooks/use-toast";
 
 // Define types for deals and pipeline
 interface Deal {
@@ -235,7 +256,9 @@ const PipelinesPage: React.FC = () => {
   const [activeItem, setActiveItem] = useState<Deal | null>(null);
   const [isAddDealOpen, setIsAddDealOpen] = useState(false);
   const [isEditDealOpen, setIsEditDealOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentDealId, setCurrentDealId] = useState<number | null>(null);
+  const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
   const [addDealForm, setAddDealForm] = useState<AddDealFormData>({
     name: '',
     amount: 0,
@@ -245,6 +268,9 @@ const PipelinesPage: React.FC = () => {
     probability: 20,
     stageId: ''
   });
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch all pipelines for the sidebar
   const { data: pipelinesList, isLoading: pipelinesLoading, error: pipelinesError } = useQuery({
@@ -257,6 +283,78 @@ const PipelinesPage: React.FC = () => {
     queryKey: ['pipeline', activePipeline],
     queryFn: () => fetchPipelineData(activePipeline),
     enabled: !!activePipeline,
+  });
+
+  // Mutation for creating a new deal
+  const createDealMutation = useMutation({
+    mutationFn: createDeal,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
+      setIsAddDealOpen(false);
+      setAddDealForm({
+        name: '',
+        amount: 0,
+        company: '',
+        contact: '',
+        closingDate: new Date().toISOString().split('T')[0],
+        probability: 20,
+        stageId: ''
+      });
+      toast({
+        title: "Success",
+        description: "Deal created successfully!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create deal. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for updating a deal
+  const updateDealMutation = useMutation({
+    mutationFn: ({ dealId, dealData }: { dealId: number; dealData: Partial<any> }) => 
+      updateDeal(dealId, dealData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
+      setIsEditDealOpen(false);
+      setCurrentDealId(null);
+      toast({
+        title: "Success",
+        description: "Deal updated successfully!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update deal. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for deleting a deal
+  const deleteDealMutation = useMutation({
+    mutationFn: deleteDeal,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
+      setIsDeleteDialogOpen(false);
+      setDealToDelete(null);
+      toast({
+        title: "Success",
+        description: "Deal deleted successfully!",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete deal. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Fallback to mock data if API fails or is not available
@@ -584,16 +682,56 @@ const PipelinesPage: React.FC = () => {
   
   // Handle drag start
   const handleDragStart = (event: DragStartEvent) => {
-    // TODO: Implement drag start with API data in Phase 2
-    console.log('Drag start:', event);
-    setActiveItem(null);
+    const { active } = event;
+    const currentPipelineData = getActivePipeline();
+    
+    if (currentPipelineData) {
+      // Find the deal being dragged
+      let draggedDeal: Deal | null = null;
+      for (const stage of currentPipelineData.stages) {
+        const deal = stage.deals.find(d => d.id.toString() === active.id);
+        if (deal) {
+          draggedDeal = deal;
+          break;
+        }
+      }
+      setActiveItem(draggedDeal);
+    }
   };
   
   // Handle drag end
   const handleDragEnd = (event: DragEndEvent) => {
-    // TODO: Implement drag and drop with API calls in Phase 2
-    console.log('Drag end:', event);
+    const { active, over } = event;
     setActiveItem(null);
+    
+    if (!over) return;
+    
+    const dealId = parseInt(active.id.toString());
+    const newStageId = over.id.toString();
+    
+    const currentPipelineData = getActivePipeline();
+    if (!currentPipelineData) return;
+    
+    // Find the current deal and its current stage
+    let currentDeal: Deal | null = null;
+    let currentStageId: string | null = null;
+    
+    for (const stage of currentPipelineData.stages) {
+      const deal = stage.deals.find(d => d.id === dealId);
+      if (deal) {
+        currentDeal = deal;
+        currentStageId = stage.id;
+        break;
+      }
+    }
+    
+    // Only update if the deal was moved to a different stage
+    if (currentDeal && currentStageId && currentStageId !== newStageId) {
+      updateDealMutation.mutate({
+        dealId,
+        dealData: { stage_id: newStageId }
+      });
+    }
   };
   
   const getActivePipeline = () => {
@@ -624,50 +762,85 @@ const PipelinesPage: React.FC = () => {
   
   // Handle clicking the edit option in the deal dropdown
   const handleEditDeal = (dealId: number) => {
-    // TODO: Implement edit functionality with API calls in Phase 2
-    console.log('Edit deal:', dealId);
-    // const currentPipelineData = getActivePipeline();
-    // if (!currentPipelineData) return;
+    const currentPipelineData = getActivePipeline();
+    if (!currentPipelineData) return;
     
-    // // Find the deal to edit
-    // let dealToEdit: Deal | undefined;
+    // Find the deal to edit
+    let dealToEdit: Deal | undefined;
     
-    // for (const stage of currentPipelineData.stages) {
-    //   const deal = stage.deals.find(d => d.id === dealId);
-    //   if (deal) {
-    //     dealToEdit = deal;
-    //     break;
-    //   }
-    // }
+    for (const stage of currentPipelineData.stages) {
+      const deal = stage.deals.find(d => d.id === dealId);
+      if (deal) {
+        dealToEdit = deal;
+        break;
+      }
+    }
     
-    // if (dealToEdit) {
-    //   // Set up the form with the deal's current data
-    //   setAddDealForm({
-    //     name: dealToEdit.name,
-    //     amount: dealToEdit.amount,
-    //     company: dealToEdit.company,
-    //     contact: dealToEdit.contact,
-    //     closingDate: dealToEdit.closingDate,
-    //     probability: dealToEdit.probability,
-    //     stageId: dealToEdit.stageId
-    //   });
+    if (dealToEdit) {
+      // Set up the form with the deal's current data
+      setAddDealForm({
+        name: dealToEdit.name,
+        amount: dealToEdit.amount,
+        company: dealToEdit.company,
+        contact: dealToEdit.contact,
+        closingDate: dealToEdit.closingDate.split('T')[0], // Convert to YYYY-MM-DD format
+        probability: dealToEdit.probability,
+        stageId: dealToEdit.stageId
+      });
       
-    //   setCurrentDealId(dealId);
-    //   setIsEditDealOpen(true);
-    // }
+      setCurrentDealId(dealId);
+      setIsEditDealOpen(true);
+    }
   };
   
   // Handle saving edited deal data
   const handleSaveEdit = () => {
-    // TODO: Implement save functionality with API calls in Phase 2
-    console.log('Save edit deal:', currentDealId, addDealForm);
-    setIsEditDealOpen(false);
+    if (!currentDealId) return;
+    
+    // Prepare the update data
+    const updateData = {
+      name: addDealForm.name,
+      amount: addDealForm.amount,
+      company: addDealForm.company,
+      contact: addDealForm.contact,
+      closing_date: addDealForm.closingDate,
+      probability: addDealForm.probability,
+      stage_id: addDealForm.stageId
+    };
+    
+    updateDealMutation.mutate({
+      dealId: currentDealId,
+      dealData: updateData
+    });
   };
   
   // Handle delete deal
   const handleDeleteDeal = (dealId: number) => {
-    // TODO: Implement delete functionality with API calls in Phase 2
-    console.log('Delete deal:', dealId);
+    const currentPipelineData = getActivePipeline();
+    if (!currentPipelineData) return;
+    
+    // Find the deal to delete
+    let dealToDelete: Deal | undefined;
+    
+    for (const stage of currentPipelineData.stages) {
+      const deal = stage.deals.find(d => d.id === dealId);
+      if (deal) {
+        dealToDelete = deal;
+        break;
+      }
+    }
+    
+    if (dealToDelete) {
+      setDealToDelete(dealToDelete);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  // Handle confirming delete
+  const handleConfirmDelete = () => {
+    if (dealToDelete) {
+      deleteDealMutation.mutate(dealToDelete.id);
+    }
   };
   
   // Handle opening the add deal dialog
@@ -693,9 +866,29 @@ const PipelinesPage: React.FC = () => {
   
   // Handle adding a new deal
   const handleAddDeal = () => {
-    // TODO: Implement add functionality with API calls in Phase 2
-    console.log('Add deal:', addDealForm);
-    setIsAddDealOpen(false);
+    if (!addDealForm.name.trim() || !addDealForm.stageId) {
+      toast({
+        title: "Error",
+        description: "Please fill in the deal name and select a stage.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Prepare the deal data for the API
+    const dealData: NewDealData = {
+      name: addDealForm.name,
+      amount: addDealForm.amount,
+      company_id: null, // We'll handle company lookup later
+      contact_id: null, // We'll handle contact lookup later
+      closing_date: addDealForm.closingDate || undefined,
+      stage_id: addDealForm.stageId,
+      pipeline_id: activePipeline,
+      probability: addDealForm.probability,
+      status: 'open'
+    };
+    
+    createDealMutation.mutate(dealData);
   };
   
   const currentPipeline = getActivePipeline();
@@ -937,8 +1130,8 @@ const PipelinesPage: React.FC = () => {
             <Button variant="outline" onClick={() => setIsAddDealOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddDeal}>
-              Add Deal
+            <Button onClick={handleAddDeal} disabled={createDealMutation.isPending}>
+              {createDealMutation.isPending ? "Creating..." : "Add Deal"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1058,12 +1251,37 @@ const PipelinesPage: React.FC = () => {
             <Button variant="outline" onClick={() => setIsEditDealOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit}>
-              Save Changes
+            <Button onClick={handleSaveEdit} disabled={updateDealMutation.isPending}>
+              {updateDealMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Deal Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the deal "{dealToDelete?.name}" 
+              and remove it from the pipeline.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete}
+              disabled={deleteDealMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteDealMutation.isPending ? "Deleting..." : "Delete Deal"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
