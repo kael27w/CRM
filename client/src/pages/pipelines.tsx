@@ -173,6 +173,19 @@ const DealCard: React.FC<{ deal: Deal; onEdit: (dealId: number) => void; onDelet
     day: 'numeric',
   }).format(dueDate);
   
+  const handleEditClick = () => {
+    console.log(`[DEAL_CARD] Edit button clicked for deal ID: ${deal.id}`);
+    console.log(`[DEAL_CARD] Deal data:`, deal);
+    console.log(`[DEAL_CARD] Calling onEdit handler...`);
+    onEdit(deal.id);
+  };
+  
+  const handleDeleteClick = () => {
+    console.log(`[DEAL_CARD] Delete button clicked for deal ID: ${deal.id}`);
+    console.log(`[DEAL_CARD] Calling onDelete handler...`);
+    onDelete(deal.id);
+  };
+  
   return (
     <Card className="mb-3 cursor-pointer hover:shadow-md transition-shadow duration-200">
       <CardHeader className="p-3 pb-0">
@@ -185,9 +198,9 @@ const DealCard: React.FC<{ deal: Deal; onEdit: (dealId: number) => void; onDelet
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(deal.id)}>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleEditClick}>Edit</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onDelete(deal.id)}>Delete</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDeleteClick}>Delete</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -277,6 +290,23 @@ const PipelinesPage: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Add logging for state changes to detect infinite loops
+  React.useEffect(() => {
+    console.log(`[STATE_MONITOR] isEditDealOpen changed to:`, isEditDealOpen);
+  }, [isEditDealOpen]);
+
+  React.useEffect(() => {
+    console.log(`[STATE_MONITOR] currentDealId changed to:`, currentDealId);
+  }, [currentDealId]);
+
+  React.useEffect(() => {
+    console.log(`[STATE_MONITOR] addDealForm changed to:`, addDealForm);
+  }, [addDealForm]);
+
+  React.useEffect(() => {
+    console.log(`[STATE_MONITOR] activePipeline changed to:`, activePipeline);
+  }, [activePipeline]);
+
   // Fetch all pipelines for the sidebar
   const { data: pipelinesList, isLoading: pipelinesLoading, error: pipelinesError } = useQuery({
     queryKey: ['pipelines'],
@@ -294,6 +324,19 @@ const PipelinesPage: React.FC = () => {
     queryKey: ['contacts'],
     queryFn: fetchContacts,
   });
+
+  // Monitor edit dialog opening (after data is declared)
+  React.useEffect(() => {
+    if (isEditDealOpen) {
+      console.log(`[EDIT_DIALOG_MONITOR] Edit dialog opened!`);
+      console.log(`[EDIT_DIALOG_MONITOR] Current deal ID:`, currentDealId);
+      console.log(`[EDIT_DIALOG_MONITOR] Form data:`, addDealForm);
+      console.log(`[EDIT_DIALOG_MONITOR] Companies available:`, companiesList?.length || 0);
+      console.log(`[EDIT_DIALOG_MONITOR] Contacts available:`, contactsList?.length || 0);
+    } else {
+      console.log(`[EDIT_DIALOG_MONITOR] Edit dialog closed.`);
+    }
+  }, [isEditDealOpen, currentDealId, addDealForm, companiesList, contactsList]);
 
   // Fetch the active pipeline data
   const { data: currentPipelineData, isLoading: pipelineLoading, error: pipelineError } = useQuery({
@@ -805,38 +848,94 @@ const PipelinesPage: React.FC = () => {
   
   // Handle clicking the edit option in the deal dropdown
   const handleEditDeal = (dealId: number) => {
-    const currentPipelineData = getActivePipeline();
-    if (!currentPipelineData) return;
+    console.log(`[EDIT_DEAL_CLICK] === STARTING EDIT DEAL PROCESS ===`);
+    console.log(`[EDIT_DEAL_CLICK] Attempting to edit deal ID: ${dealId}`);
+    console.log(`[EDIT_DEAL_CLICK] Type of dealId:`, typeof dealId);
     
-    // Find the deal to edit
-    let dealToEdit: Deal | undefined;
-    
-    for (const stage of currentPipelineData.stages) {
-      const deal = stage.deals.find(d => d.id === dealId);
-      if (deal) {
-        dealToEdit = deal;
-        break;
+    try {
+      console.log(`[EDIT_DEAL_CLICK] Step 1: Getting active pipeline data...`);
+      const currentPipelineData = getActivePipeline();
+      console.log(`[EDIT_DEAL_CLICK] Current pipeline data:`, currentPipelineData);
+      
+      if (!currentPipelineData) {
+        console.error(`[EDIT_DEAL_CLICK] ERROR: No current pipeline data found!`);
+        return;
       }
-    }
-    
-    if (dealToEdit) {
+      
+      console.log(`[EDIT_DEAL_CLICK] Step 2: Searching for deal in ${currentPipelineData.stages.length} stages...`);
+      
+      // Find the deal to edit
+      let dealToEdit: Deal | undefined;
+      
+      for (const stage of currentPipelineData.stages) {
+        console.log(`[EDIT_DEAL_CLICK] Searching in stage "${stage.name}" with ${stage.deals.length} deals...`);
+        const deal = stage.deals.find(d => d.id === dealId);
+        if (deal) {
+          dealToEdit = deal;
+          console.log(`[EDIT_DEAL_CLICK] Found deal:`, deal);
+          break;
+        }
+      }
+      
+      if (!dealToEdit) {
+        console.error(`[EDIT_DEAL_CLICK] ERROR: Deal with ID ${dealId} not found in any stage!`);
+        return;
+      }
+      
+      console.log(`[EDIT_DEAL_CLICK] Step 3: Looking up company and contact data...`);
+      console.log(`[EDIT_DEAL_CLICK] Companies list:`, companiesList);
+      console.log(`[EDIT_DEAL_CLICK] Contacts list:`, contactsList);
+      
       // Find company_id and contact_id by matching names
       const companyId = companiesList?.find(c => c.company_name === dealToEdit!.company)?.id || null;
       const contactId = contactsList?.find(c => `${c.first_name} ${c.last_name}` === dealToEdit!.contact)?.id || null;
       
-      // Set up the form with the deal's current data
-      setAddDealForm({
+      console.log(`[EDIT_DEAL_CLICK] Found company ID: ${companyId} for company: "${dealToEdit.company}"`);
+      console.log(`[EDIT_DEAL_CLICK] Found contact ID: ${contactId} for contact: "${dealToEdit.contact}"`);
+      
+      console.log(`[EDIT_DEAL_CLICK] Step 4: Processing closing date...`);
+      console.log(`[EDIT_DEAL_CLICK] Original closing date:`, dealToEdit.closingDate);
+      
+      // Safely handle the closing date - it might not have 'T' in it
+      let formattedClosingDate = dealToEdit.closingDate;
+      if (formattedClosingDate && formattedClosingDate.includes('T')) {
+        formattedClosingDate = formattedClosingDate.split('T')[0];
+      }
+      console.log(`[EDIT_DEAL_CLICK] Formatted closing date:`, formattedClosingDate);
+      
+      console.log(`[EDIT_DEAL_CLICK] Step 5: Setting up form data...`);
+      const formData = {
         name: dealToEdit.name,
         amount: dealToEdit.amount,
         company_id: companyId,
         contact_id: contactId,
-        closingDate: dealToEdit.closingDate.split('T')[0], // Convert to YYYY-MM-DD format
+        closingDate: formattedClosingDate,
         probability: dealToEdit.probability,
         stageId: dealToEdit.stageId
-      });
+      };
+      console.log(`[EDIT_DEAL_CLICK] Form data to set:`, formData);
       
+      console.log(`[EDIT_DEAL_CLICK] Step 6: Setting form state...`);
+      setAddDealForm(formData);
+      
+      console.log(`[EDIT_DEAL_CLICK] Step 7: Setting current deal ID...`);
       setCurrentDealId(dealId);
+      
+      console.log(`[EDIT_DEAL_CLICK] Step 8: Opening edit dialog...`);
       setIsEditDealOpen(true);
+      
+      console.log(`[EDIT_DEAL_CLICK] === EDIT DEAL PROCESS COMPLETED SUCCESSFULLY ===`);
+      
+    } catch (error) {
+      console.error(`[EDIT_DEAL_CLICK] CRITICAL ERROR in handleEditDeal:`, error);
+      console.error(`[EDIT_DEAL_CLICK] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+      
+      // Show user-friendly error
+      toast({
+        title: "Error",
+        description: "Failed to open edit dialog. Please try again.",
+        variant: "destructive",
+      });
     }
   };
   
@@ -905,10 +1004,17 @@ const PipelinesPage: React.FC = () => {
   
   // Handle form field changes
   const handleFormChange = (field: keyof AddDealFormData, value: string | number | null) => {
-    setAddDealForm(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    console.log(`[FORM_CHANGE] Field "${field}" changing to:`, value);
+    console.log(`[FORM_CHANGE] Current form state before change:`, addDealForm);
+    
+    setAddDealForm(prev => {
+      const newState = {
+        ...prev,
+        [field]: value
+      };
+      console.log(`[FORM_CHANGE] New form state after change:`, newState);
+      return newState;
+    });
   };
   
   // Handle adding a new deal
@@ -1187,7 +1293,10 @@ const PipelinesPage: React.FC = () => {
       </Dialog>
       
       {/* Edit Deal Dialog */}
-      <Dialog open={isEditDealOpen} onOpenChange={setIsEditDealOpen}>
+      <Dialog open={isEditDealOpen} onOpenChange={(open) => {
+        console.log(`[EDIT_DIALOG] Dialog onOpenChange called with:`, open);
+        setIsEditDealOpen(open);
+      }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Edit Deal</DialogTitle>
@@ -1195,6 +1304,14 @@ const PipelinesPage: React.FC = () => {
               Edit deal information in the {currentPipeline?.name} pipeline.
             </DialogDescription>
           </DialogHeader>
+          
+          {(() => {
+            console.log(`[EDIT_DIALOG] Dialog content rendering. Current form data:`, addDealForm);
+            console.log(`[EDIT_DIALOG] Current deal ID:`, currentDealId);
+            console.log(`[EDIT_DIALOG] Companies list length:`, companiesList?.length);
+            console.log(`[EDIT_DIALOG] Contacts list length:`, contactsList?.length);
+            return null;
+          })()}
           
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
