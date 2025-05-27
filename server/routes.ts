@@ -1973,6 +1973,276 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   console.log("Registered POST /api/twilio/outbound-voice-twiml route");
 
+  // === PIPELINE ROUTES ===
+  
+  // GET /api/pipelines - Fetch all pipelines (for sidebar)
+  app.get("/api/pipelines", async (req: Request, res: Response) => {
+    try {
+      console.log("GET /api/pipelines - Fetching all pipelines");
+      
+      const { data: pipelinesData, error } = await supabase
+        .from('pipelines')
+        .select('id, name, created_at, updated_at')
+        .order('created_at', { ascending: true });
+      
+      if (error) {
+        console.error("GET /api/pipelines - Supabase error:", error);
+        return res.status(500).json({ message: "Error fetching pipelines" });
+      }
+      
+      console.log(`GET /api/pipelines - Found ${pipelinesData?.length || 0} pipelines`);
+      res.json(pipelinesData || []);
+    } catch (error: any) {
+      console.error("GET /api/pipelines - Error:", error.message);
+      res.status(500).json({ message: "Server error fetching pipelines" });
+    }
+  });
+
+  // GET /api/pipelines/:pipelineId - Fetch a single pipeline with stages and deals
+  app.get("/api/pipelines/:pipelineId", async (req: Request, res: Response) => {
+    try {
+      const { pipelineId } = req.params;
+      console.log(`GET /api/pipelines/${pipelineId} - Fetching pipeline with stages and deals`);
+      
+      // First, get the pipeline
+      const { data: pipelineData, error: pipelineError } = await supabase
+        .from('pipelines')
+        .select('id, name, created_at, updated_at')
+        .eq('id', pipelineId)
+        .single();
+      
+      if (pipelineError) {
+        console.error(`GET /api/pipelines/${pipelineId} - Pipeline error:`, pipelineError);
+        if (pipelineError.code === 'PGRST116') {
+          return res.status(404).json({ message: "Pipeline not found" });
+        }
+        return res.status(500).json({ message: "Error fetching pipeline" });
+      }
+      
+      // Get the stages for this pipeline
+      const { data: stagesData, error: stagesError } = await supabase
+        .from('pipeline_stages')
+        .select('id, name, order, created_at, updated_at')
+        .eq('pipeline_id', pipelineId)
+        .order('order', { ascending: true });
+      
+      if (stagesError) {
+        console.error(`GET /api/pipelines/${pipelineId} - Stages error:`, stagesError);
+        return res.status(500).json({ message: "Error fetching pipeline stages" });
+      }
+      
+      // Get all deals for this pipeline
+      const { data: dealsData, error: dealsError } = await supabase
+        .from('deals')
+        .select(`
+          id, name, amount, company_id, contact_id, closing_date, 
+          stage_id, pipeline_id, probability, status, created_at, updated_at,
+          companies(id, company_name),
+          contacts(id, first_name, last_name)
+        `)
+        .eq('pipeline_id', pipelineId);
+      
+      if (dealsError) {
+        console.error(`GET /api/pipelines/${pipelineId} - Deals error:`, dealsError);
+        return res.status(500).json({ message: "Error fetching deals" });
+      }
+      
+      // Organize deals by stage
+      const stages = (stagesData || []).map(stage => ({
+        id: stage.id,
+        name: stage.name,
+        order: stage.order,
+        deals: (dealsData || [])
+          .filter(deal => deal.stage_id === stage.id)
+          .map(deal => ({
+            id: deal.id,
+            name: deal.name,
+            amount: deal.amount || 0,
+            company: (deal.companies as any)?.company_name || '',
+            contact: (deal.contacts as any) ? `${(deal.contacts as any).first_name} ${(deal.contacts as any).last_name}` : '',
+            closingDate: deal.closing_date || '',
+            stageId: deal.stage_id,
+            probability: deal.probability || 0,
+            status: deal.status || 'open'
+          }))
+      }));
+      
+      const response = {
+        id: pipelineData.id,
+        name: pipelineData.name,
+        stages
+      };
+      
+      console.log(`GET /api/pipelines/${pipelineId} - Returning pipeline with ${stages.length} stages and ${dealsData?.length || 0} total deals`);
+      res.json(response);
+    } catch (error: any) {
+      console.error(`GET /api/pipelines/:pipelineId - Error:`, error.message);
+      res.status(500).json({ message: "Server error fetching pipeline data" });
+    }
+  });
+
+  // POST /api/deals - Create a new deal
+  app.post("/api/deals", async (req: Request, res: Response) => {
+    try {
+      const dealData = req.body;
+      console.log("POST /api/deals - Creating new deal:", dealData);
+      
+      // Validate required fields
+      if (!dealData.name || !dealData.stage_id || !dealData.pipeline_id) {
+        return res.status(400).json({ 
+          message: "Missing required fields: name, stage_id, and pipeline_id are required" 
+        });
+      }
+      
+      // Prepare deal data for insertion
+      const newDeal = {
+        name: dealData.name,
+        amount: dealData.amount || 0,
+        company_id: dealData.company_id || null,
+        contact_id: dealData.contact_id || null,
+        closing_date: dealData.closing_date || null,
+        stage_id: dealData.stage_id,
+        pipeline_id: dealData.pipeline_id,
+        probability: dealData.probability || 0,
+        status: dealData.status || 'open',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { data: insertedDeal, error } = await supabase
+        .from('deals')
+        .insert([newDeal])
+        .select(`
+          id, name, amount, company_id, contact_id, closing_date, 
+          stage_id, pipeline_id, probability, status, created_at, updated_at,
+          companies(id, company_name),
+          contacts(id, first_name, last_name)
+        `)
+        .single();
+      
+      if (error) {
+        console.error("POST /api/deals - Supabase error:", error);
+        return res.status(500).json({ message: "Error creating deal" });
+      }
+      
+      // Format the response to match frontend expectations
+      const formattedDeal = {
+        id: insertedDeal.id,
+        name: insertedDeal.name,
+        amount: insertedDeal.amount || 0,
+        company: (insertedDeal.companies as any)?.company_name || '',
+        contact: (insertedDeal.contacts as any) ? `${(insertedDeal.contacts as any).first_name} ${(insertedDeal.contacts as any).last_name}` : '',
+        closingDate: insertedDeal.closing_date || '',
+        stageId: insertedDeal.stage_id,
+        probability: insertedDeal.probability || 0,
+        status: insertedDeal.status || 'open'
+      };
+      
+      console.log("POST /api/deals - Deal created successfully:", formattedDeal);
+      res.status(201).json(formattedDeal);
+    } catch (error: any) {
+      console.error("POST /api/deals - Error:", error.message);
+      res.status(500).json({ message: "Server error creating deal" });
+    }
+  });
+
+  // PATCH /api/deals/:dealId - Update an existing deal
+  app.patch("/api/deals/:dealId", async (req: Request, res: Response) => {
+    try {
+      const { dealId } = req.params;
+      const updates = req.body;
+      console.log(`PATCH /api/deals/${dealId} - Updating deal:`, updates);
+      
+      // Validate dealId
+      if (!dealId || isNaN(Number(dealId))) {
+        return res.status(400).json({ message: "Invalid deal ID" });
+      }
+      
+      // Prepare update data
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      };
+      
+      // Only include fields that are provided
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.amount !== undefined) updateData.amount = updates.amount;
+      if (updates.company_id !== undefined) updateData.company_id = updates.company_id;
+      if (updates.contact_id !== undefined) updateData.contact_id = updates.contact_id;
+      if (updates.closing_date !== undefined) updateData.closing_date = updates.closing_date;
+      if (updates.stage_id !== undefined) updateData.stage_id = updates.stage_id;
+      if (updates.probability !== undefined) updateData.probability = updates.probability;
+      if (updates.status !== undefined) updateData.status = updates.status;
+      
+      const { data: updatedDeal, error } = await supabase
+        .from('deals')
+        .update(updateData)
+        .eq('id', dealId)
+        .select(`
+          id, name, amount, company_id, contact_id, closing_date, 
+          stage_id, pipeline_id, probability, status, created_at, updated_at,
+          companies(id, company_name),
+          contacts(id, first_name, last_name)
+        `)
+        .single();
+      
+      if (error) {
+        console.error(`PATCH /api/deals/${dealId} - Supabase error:`, error);
+        if (error.code === 'PGRST116') {
+          return res.status(404).json({ message: "Deal not found" });
+        }
+        return res.status(500).json({ message: "Error updating deal" });
+      }
+      
+      // Format the response to match frontend expectations
+      const formattedDeal = {
+        id: updatedDeal.id,
+        name: updatedDeal.name,
+        amount: updatedDeal.amount || 0,
+        company: (updatedDeal.companies as any)?.company_name || '',
+        contact: (updatedDeal.contacts as any) ? `${(updatedDeal.contacts as any).first_name} ${(updatedDeal.contacts as any).last_name}` : '',
+        closingDate: updatedDeal.closing_date || '',
+        stageId: updatedDeal.stage_id,
+        probability: updatedDeal.probability || 0,
+        status: updatedDeal.status || 'open'
+      };
+      
+      console.log(`PATCH /api/deals/${dealId} - Deal updated successfully:`, formattedDeal);
+      res.json(formattedDeal);
+    } catch (error: any) {
+      console.error(`PATCH /api/deals/:dealId - Error:`, error.message);
+      res.status(500).json({ message: "Server error updating deal" });
+    }
+  });
+
+  // DELETE /api/deals/:dealId - Delete a deal
+  app.delete("/api/deals/:dealId", async (req: Request, res: Response) => {
+    try {
+      const { dealId } = req.params;
+      console.log(`DELETE /api/deals/${dealId} - Deleting deal`);
+      
+      // Validate dealId
+      if (!dealId || isNaN(Number(dealId))) {
+        return res.status(400).json({ message: "Invalid deal ID" });
+      }
+      
+      const { error } = await supabase
+        .from('deals')
+        .delete()
+        .eq('id', dealId);
+      
+      if (error) {
+        console.error(`DELETE /api/deals/${dealId} - Supabase error:`, error);
+        return res.status(500).json({ message: "Error deleting deal" });
+      }
+      
+      console.log(`DELETE /api/deals/${dealId} - Deal deleted successfully`);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error(`DELETE /api/deals/:dealId - Error:`, error.message);
+      res.status(500).json({ message: "Server error deleting deal" });
+    }
+  });
+
   // Test routes (consider removing for production or securing them)
   // app.post("/api/test/twilio/voice", handleVoiceWebhook);
   // app.post("/api/test/twilio/status-callback", handleStatusCallback);
