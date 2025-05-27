@@ -139,7 +139,7 @@ interface AddDealFormData {
 }
 
 // Sortable deal card component
-const SortableDealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
+const SortableDealCard: React.FC<{ deal: Deal; onEdit: (dealId: number) => void; onDelete: (dealId: number) => void }> = ({ deal, onEdit, onDelete }) => {
   const {
     attributes,
     listeners,
@@ -155,13 +155,13 @@ const SortableDealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
   
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <DealCard deal={deal} />
+      <DealCard deal={deal} onEdit={onEdit} onDelete={onDelete} />
     </div>
   );
 };
 
 // Component to display each card in the board
-const DealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
+const DealCard: React.FC<{ deal: Deal; onEdit: (dealId: number) => void; onDelete: (dealId: number) => void }> = ({ deal, onEdit, onDelete }) => {
   const formattedAmount = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -185,9 +185,9 @@ const DealCard: React.FC<{ deal: Deal }> = ({ deal }) => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem className="edit-deal" data-id={deal.id}>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(deal.id)}>Edit</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="delete-deal" data-id={deal.id}>Delete</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDelete(deal.id)}>Delete</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -223,7 +223,9 @@ const StageColumn: React.FC<{
   stage: PipelineStage, 
   stageTotal: number,
   deals: Deal[],
-}> = ({ stage, stageTotal, deals }) => {
+  onEdit: (dealId: number) => void;
+  onDelete: (dealId: number) => void;
+}> = ({ stage, stageTotal, deals, onEdit, onDelete }) => {
   // Make the column droppable, even when empty
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -247,7 +249,7 @@ const StageColumn: React.FC<{
       
       <div className="space-y-3">
         {deals.map(deal => (
-          <SortableDealCard key={deal.id} deal={deal} />
+          <SortableDealCard key={deal.id} deal={deal} onEdit={onEdit} onDelete={onDelete} />
         ))}
       </div>
     </div>
@@ -740,14 +742,14 @@ const PipelinesPage: React.FC = () => {
     const dealId = parseInt(active.id.toString());
     const newStageId = over.id.toString();
     
-    const currentPipelineData = getActivePipeline();
-    if (!currentPipelineData) return;
+    const activePipelineData = getActivePipeline();
+    if (!activePipelineData) return;
     
     // Find the current deal and its current stage
     let currentDeal: Deal | null = null;
     let currentStageId: string | null = null;
     
-    for (const stage of currentPipelineData.stages) {
+    for (const stage of activePipelineData.stages) {
       const deal = stage.deals.find(d => d.id === dealId);
       if (deal) {
         currentDeal = deal;
@@ -758,11 +760,20 @@ const PipelinesPage: React.FC = () => {
     
     // Only update if the deal was moved to a different stage
     if (currentDeal && currentStageId && currentStageId !== newStageId) {
-      // Use the same mutation with targeted cache invalidation
-      updateDealMutation.mutate({
-        dealId,
-        dealData: { stage_id: newStageId }
-      });
+      // Only call API if we're using API data from React Query (not mock data)
+      if (currentPipelineData && !pipelineError) {
+        // Use the same mutation with targeted cache invalidation
+        updateDealMutation.mutate({
+          dealId,
+          dealData: { stage_id: newStageId }
+        });
+      } else {
+        // For mock data, just show a message that this is not implemented yet
+        toast({
+          title: "Info",
+          description: "Drag and drop will be fully functional once connected to the database.",
+        });
+      }
     }
   };
   
@@ -930,37 +941,6 @@ const PipelinesPage: React.FC = () => {
   const currentPipeline = getActivePipeline();
   const summary = currentPipeline ? getPipelineSummary(currentPipeline) : { totalDeals: 0, totalAmount: 0 };
   
-  // Add event listener for dropdown actions
-  React.useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      
-      // Check for edit button click
-      if (target.classList.contains('edit-deal') || target.closest('.edit-deal')) {
-        const element = target.classList.contains('edit-deal') ? target : target.closest('.edit-deal');
-        const dealId = element?.getAttribute('data-id');
-        if (dealId) {
-          handleEditDeal(parseInt(dealId));
-        }
-      }
-      
-      // Check for delete button click
-      if (target.classList.contains('delete-deal') || target.closest('.delete-deal')) {
-        const element = target.classList.contains('delete-deal') ? target : target.closest('.delete-deal');
-        const dealId = element?.getAttribute('data-id');
-        if (dealId) {
-          handleDeleteDeal(parseInt(dealId));
-        }
-      }
-    };
-    
-    document.addEventListener('click', handleClick);
-    
-    return () => {
-      document.removeEventListener('click', handleClick);
-    };
-  }, [activePipeline]);
-  
   // Reset form state
   const resetFormState = () => {
     setAddDealForm({
@@ -1051,12 +1031,14 @@ const PipelinesPage: React.FC = () => {
                           stage={stage}
                           stageTotal={getStageTotalAmount(stage)}
                           deals={stageDeals}
+                          onEdit={handleEditDeal}
+                          onDelete={handleDeleteDeal}
                         />
                       );
                     })}
                   </div>
                   <DragOverlay>
-                    {activeItem && <DealCard deal={activeItem} />}
+                    {activeItem && <DealCard deal={activeItem} onEdit={handleEditDeal} onDelete={handleDeleteDeal} />}
                   </DragOverlay>
                 </DndContext>
               </div>
@@ -1106,14 +1088,13 @@ const PipelinesPage: React.FC = () => {
                 Company
               </Label>
               <Select 
-                value={addDealForm.company_id?.toString() || ""} 
+                value={addDealForm.company_id?.toString() || undefined} 
                 onValueChange={(value) => handleFormChange('company_id', value ? parseInt(value) : null)}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a company" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No company</SelectItem>
                   {companiesList?.map(company => (
                     <SelectItem key={company.id} value={company.id.toString()}>
                       {company.company_name}
@@ -1128,14 +1109,13 @@ const PipelinesPage: React.FC = () => {
                 Contact
               </Label>
               <Select 
-                value={addDealForm.contact_id?.toString() || ""} 
+                value={addDealForm.contact_id?.toString() || undefined} 
                 onValueChange={(value) => handleFormChange('contact_id', value ? parseInt(value) : null)}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a contact" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No contact</SelectItem>
                   {contactsList?.map(contact => (
                     <SelectItem key={contact.id} value={contact.id.toString()}>
                       {contact.first_name} {contact.last_name}
@@ -1247,14 +1227,13 @@ const PipelinesPage: React.FC = () => {
                 Company
               </Label>
               <Select 
-                value={addDealForm.company_id?.toString() || ""} 
+                value={addDealForm.company_id?.toString() || undefined} 
                 onValueChange={(value) => handleFormChange('company_id', value ? parseInt(value) : null)}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a company" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No company</SelectItem>
                   {companiesList?.map(company => (
                     <SelectItem key={company.id} value={company.id.toString()}>
                       {company.company_name}
@@ -1269,14 +1248,13 @@ const PipelinesPage: React.FC = () => {
                 Contact
               </Label>
               <Select 
-                value={addDealForm.contact_id?.toString() || ""} 
+                value={addDealForm.contact_id?.toString() || undefined} 
                 onValueChange={(value) => handleFormChange('contact_id', value ? parseInt(value) : null)}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a contact" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No contact</SelectItem>
                   {contactsList?.map(contact => (
                     <SelectItem key={contact.id} value={contact.id.toString()}>
                       {contact.first_name} {contact.last_name}
