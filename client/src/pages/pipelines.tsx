@@ -338,6 +338,31 @@ const PipelinesPage: React.FC = () => {
     }
   }, [isEditDealOpen, currentDealId, addDealForm, companiesList, contactsList]);
 
+  // Global error handler for unhandled errors
+  React.useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error(`[GLOBAL_ERROR] Unhandled error detected:`, event.error);
+      console.error(`[GLOBAL_ERROR] Error message:`, event.message);
+      console.error(`[GLOBAL_ERROR] Error filename:`, event.filename);
+      console.error(`[GLOBAL_ERROR] Error line:`, event.lineno);
+      console.error(`[GLOBAL_ERROR] Error column:`, event.colno);
+      console.error(`[GLOBAL_ERROR] This error might be causing the UI freeze!`);
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error(`[GLOBAL_ERROR] Unhandled promise rejection:`, event.reason);
+      console.error(`[GLOBAL_ERROR] This promise rejection might be causing the UI freeze!`);
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   // Fetch the active pipeline data
   const { data: currentPipelineData, isLoading: pipelineLoading, error: pipelineError } = useQuery({
     queryKey: ['pipeline', activePipeline],
@@ -848,6 +873,14 @@ const PipelinesPage: React.FC = () => {
   
   // Handle clicking the edit option in the deal dropdown
   const handleEditDeal = (dealId: number) => {
+    console.log('[HANDLE_EDIT_DEAL] === CLICKED - VERY FIRST LINE ===');
+    console.log('[HANDLE_EDIT_DEAL] Deal ID to edit:', dealId);
+    console.log('[HANDLE_EDIT_DEAL] Type of dealId:', typeof dealId);
+    console.log('[HANDLE_EDIT_DEAL] Current state before processing:');
+    console.log('[HANDLE_EDIT_DEAL] - isEditDealOpen:', isEditDealOpen);
+    console.log('[HANDLE_EDIT_DEAL] - currentDealId:', currentDealId);
+    console.log('[HANDLE_EDIT_DEAL] - addDealForm:', JSON.stringify(addDealForm, null, 2));
+    
     console.log(`[EDIT_DEAL_CLICK] === STARTING EDIT DEAL PROCESS ===`);
     console.log(`[EDIT_DEAL_CLICK] Attempting to edit deal ID: ${dealId}`);
     console.log(`[EDIT_DEAL_CLICK] Type of dealId:`, typeof dealId);
@@ -872,7 +905,7 @@ const PipelinesPage: React.FC = () => {
         const deal = stage.deals.find(d => d.id === dealId);
         if (deal) {
           dealToEdit = deal;
-          console.log(`[EDIT_DEAL_CLICK] Found deal:`, deal);
+          console.log(`[EDIT_DEAL_CLICK] Found deal:`, JSON.stringify(deal, null, 2));
           break;
         }
       }
@@ -913,16 +946,19 @@ const PipelinesPage: React.FC = () => {
         probability: dealToEdit.probability,
         stageId: dealToEdit.stageId
       };
-      console.log(`[EDIT_DEAL_CLICK] Form data to set:`, formData);
+      console.log(`[EDIT_DEAL_CLICK] Form data to set:`, JSON.stringify(formData, null, 2));
       
       console.log(`[EDIT_DEAL_CLICK] Step 6: Setting form state...`);
+      console.log('[HANDLE_EDIT_DEAL] Setting dealToEdit and attempting to open dialog...');
       setAddDealForm(formData);
       
       console.log(`[EDIT_DEAL_CLICK] Step 7: Setting current deal ID...`);
       setCurrentDealId(dealId);
       
       console.log(`[EDIT_DEAL_CLICK] Step 8: Opening edit dialog...`);
+      console.log('[HANDLE_EDIT_DEAL] About to call setIsEditDealOpen(true)...');
       setIsEditDealOpen(true);
+      console.log('[HANDLE_EDIT_DEAL] setIsEditDealOpen(true) called successfully');
       
       console.log(`[EDIT_DEAL_CLICK] === EDIT DEAL PROCESS COMPLETED SUCCESSFULLY ===`);
       
@@ -1294,8 +1330,19 @@ const PipelinesPage: React.FC = () => {
       
       {/* Edit Deal Dialog */}
       <Dialog open={isEditDealOpen} onOpenChange={(open) => {
+        console.log(`[EDIT_DIALOG] === onOpenChange CALLED ===`);
         console.log(`[EDIT_DIALOG] Dialog onOpenChange called with:`, open);
+        console.log(`[EDIT_DIALOG] Current isEditDealOpen state:`, isEditDealOpen);
+        console.log(`[EDIT_DIALOG] Stack trace for onOpenChange:`, new Error().stack);
+        
+        if (!open) {
+          console.log(`[EDIT_DIALOG] ⚠️ Dialog is being CLOSED! Investigating why...`);
+          console.log(`[EDIT_DIALOG] Current form data when closing:`, JSON.stringify(addDealForm, null, 2));
+          console.log(`[EDIT_DIALOG] Current deal ID when closing:`, currentDealId);
+        }
+        
         setIsEditDealOpen(open);
+        console.log(`[EDIT_DIALOG] setIsEditDealOpen(${open}) called`);
       }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -1306,10 +1353,25 @@ const PipelinesPage: React.FC = () => {
           </DialogHeader>
           
           {(() => {
-            console.log(`[EDIT_DIALOG] Dialog content rendering. Current form data:`, addDealForm);
+            console.log(`[EDIT_DIALOG] === DIALOG CONTENT RENDERING ===`);
+            console.log(`[EDIT_DIALOG] Dialog content rendering. isEditDealOpen:`, isEditDealOpen);
+            console.log(`[EDIT_DIALOG] Current form data:`, JSON.stringify(addDealForm, null, 2));
             console.log(`[EDIT_DIALOG] Current deal ID:`, currentDealId);
             console.log(`[EDIT_DIALOG] Companies list length:`, companiesList?.length);
             console.log(`[EDIT_DIALOG] Contacts list length:`, contactsList?.length);
+            console.log(`[EDIT_DIALOG] Current pipeline:`, currentPipeline?.name);
+            
+            // Check for potential issues
+            if (!currentDealId) {
+              console.error(`[EDIT_DIALOG] ❌ ERROR: No currentDealId set!`);
+            }
+            if (!addDealForm.name) {
+              console.warn(`[EDIT_DIALOG] ⚠️ WARNING: No deal name in form!`);
+            }
+            if (!currentPipeline) {
+              console.error(`[EDIT_DIALOG] ❌ ERROR: No current pipeline!`);
+            }
+            
             return null;
           })()}
           
@@ -1344,13 +1406,28 @@ const PipelinesPage: React.FC = () => {
                 Company
               </Label>
               <Select 
-                value={addDealForm.company_id?.toString() || undefined} 
-                onValueChange={(value) => handleFormChange('company_id', value ? parseInt(value) : null)}
+                value={(() => {
+                  const value = addDealForm.company_id?.toString() || undefined;
+                  console.log(`[EDIT_DIALOG] Company Select value:`, value);
+                  console.log(`[EDIT_DIALOG] Company Select - addDealForm.company_id:`, addDealForm.company_id);
+                  return value;
+                })()} 
+                onValueChange={(value) => {
+                  console.log(`[EDIT_DIALOG] Company Select onValueChange called with:`, value);
+                  handleFormChange('company_id', value ? parseInt(value) : null);
+                }}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a company" />
                 </SelectTrigger>
                 <SelectContent>
+                  {(() => {
+                    console.log(`[EDIT_DIALOG] Rendering company options. Companies available:`, companiesList?.length || 0);
+                    if (!companiesList || companiesList.length === 0) {
+                      console.warn(`[EDIT_DIALOG] ⚠️ No companies available for selection!`);
+                    }
+                    return null;
+                  })()}
                   {companiesList?.map(company => (
                     <SelectItem key={company.id} value={company.id.toString()}>
                       {company.company_name}
@@ -1365,13 +1442,28 @@ const PipelinesPage: React.FC = () => {
                 Contact
               </Label>
               <Select 
-                value={addDealForm.contact_id?.toString() || undefined} 
-                onValueChange={(value) => handleFormChange('contact_id', value ? parseInt(value) : null)}
+                value={(() => {
+                  const value = addDealForm.contact_id?.toString() || undefined;
+                  console.log(`[EDIT_DIALOG] Contact Select value:`, value);
+                  console.log(`[EDIT_DIALOG] Contact Select - addDealForm.contact_id:`, addDealForm.contact_id);
+                  return value;
+                })()} 
+                onValueChange={(value) => {
+                  console.log(`[EDIT_DIALOG] Contact Select onValueChange called with:`, value);
+                  handleFormChange('contact_id', value ? parseInt(value) : null);
+                }}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a contact" />
                 </SelectTrigger>
                 <SelectContent>
+                  {(() => {
+                    console.log(`[EDIT_DIALOG] Rendering contact options. Contacts available:`, contactsList?.length || 0);
+                    if (!contactsList || contactsList.length === 0) {
+                      console.warn(`[EDIT_DIALOG] ⚠️ No contacts available for selection!`);
+                    }
+                    return null;
+                  })()}
                   {contactsList?.map(contact => (
                     <SelectItem key={contact.id} value={contact.id.toString()}>
                       {contact.first_name} {contact.last_name}
@@ -1414,13 +1506,37 @@ const PipelinesPage: React.FC = () => {
                 Stage
               </Label>
               <Select 
-                value={addDealForm.stageId} 
-                onValueChange={(value) => handleFormChange('stageId', value)}
+                value={(() => {
+                  const value = addDealForm.stageId;
+                  console.log(`[EDIT_DIALOG] Stage Select value:`, value);
+                  console.log(`[EDIT_DIALOG] Stage Select - addDealForm.stageId:`, addDealForm.stageId);
+                  console.log(`[EDIT_DIALOG] Available stages:`, currentPipeline?.stages?.map(s => ({ id: s.id, name: s.name })));
+                  
+                  // Check if the current stageId exists in available stages
+                  const stageExists = currentPipeline?.stages?.some(stage => stage.id === value);
+                  if (value && !stageExists) {
+                    console.error(`[EDIT_DIALOG] ❌ ERROR: Stage ID "${value}" does not exist in current pipeline stages!`);
+                    console.error(`[EDIT_DIALOG] This could cause the Select component to fail and close the dialog!`);
+                  }
+                  
+                  return value;
+                })()} 
+                onValueChange={(value) => {
+                  console.log(`[EDIT_DIALOG] Stage Select onValueChange called with:`, value);
+                  handleFormChange('stageId', value);
+                }}
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select a stage" />
                 </SelectTrigger>
                 <SelectContent>
+                  {(() => {
+                    console.log(`[EDIT_DIALOG] Rendering stage options. Stages available:`, currentPipeline?.stages?.length || 0);
+                    if (!currentPipeline?.stages || currentPipeline.stages.length === 0) {
+                      console.error(`[EDIT_DIALOG] ❌ ERROR: No stages available for selection!`);
+                    }
+                    return null;
+                  })()}
                   {currentPipeline?.stages.map(stage => (
                     <SelectItem key={stage.id} value={stage.id}>
                       {stage.name}
