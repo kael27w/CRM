@@ -67,6 +67,7 @@ interface DataTableProps<TData, TValue> {
   searchColumn?: string;
   onRowClick?: (row: Row<TData>) => void;
   onAddField?: () => void;
+  onNewItem?: () => void; // Handler for the "New [Item]" button
   pageType?: 'contacts' | 'companies' | 'products'; // To determine which bulk actions to show
 }
 
@@ -79,6 +80,7 @@ export function DataTable<TData, TValue>({
   searchColumn = "name",
   onRowClick,
   onAddField,
+  onNewItem,
   pageType = 'contacts',
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -269,6 +271,7 @@ export function DataTable<TData, TValue>({
             variant="default" 
             size="sm" 
             className="flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2"
+            onClick={onNewItem}
           >
             <Plus className="mr-2 h-4 w-4" />
             {title === "Companies" ? "New Company" : `New ${title.slice(0, -1)}`}
@@ -319,6 +322,11 @@ export function DataTable<TData, TValue>({
               .getAllColumns()
               .filter((column) => column.getCanHide())
               .map((column) => {
+                // Get the display name for the column
+                const displayName = typeof column.columnDef.header === 'string' 
+                  ? column.columnDef.header 
+                  : column.id;
+                
                 return (
                   <DropdownMenuCheckboxItem
                     key={column.id}
@@ -328,7 +336,7 @@ export function DataTable<TData, TValue>({
                       column.toggleVisibility(!!value)
                     }
                   >
-                    {column.id}
+                    {displayName}
                   </DropdownMenuCheckboxItem>
                 );
               })}

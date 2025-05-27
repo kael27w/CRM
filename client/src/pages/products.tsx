@@ -6,6 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { fetchProducts, Product } from '@/lib/api';
 
 const ProductsPage: React.FC = () => {
+  // State for managing new product creation
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+
   // Fetch products from the API using React Query
   const { data: products = [], isLoading, error } = useQuery({
     queryKey: ['products'],
@@ -85,6 +88,14 @@ const ProductsPage: React.FC = () => {
     // This will be expanded to allow adding custom fields
   };
 
+  const handleNewProduct = () => {
+    console.log('New Product button clicked');
+    setIsCreatingProduct(true);
+    // TODO: Open a dialog/modal for creating a new product
+    // For now, just show an alert
+    alert('New Product functionality will be implemented in Phase 2. This button is now working!');
+  };
+
   // Handle loading state
   if (isLoading) {
     return (
@@ -112,8 +123,10 @@ const ProductsPage: React.FC = () => {
       title="Products"
       description="Manage your product catalog"
       searchPlaceholder="Search products..."
+      pageType="products"
       onRowClick={handleRowClick}
       onAddField={handleAddField}
+      onNewItem={handleNewProduct}
     />
   );
 };

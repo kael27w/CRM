@@ -135,6 +135,13 @@ const CompaniesPage: React.FC = () => {
     // This will be expanded to allow adding custom fields
   };
 
+  const handleNewCompany = () => {
+    console.log('New Company button clicked');
+    // TODO: Open a dialog/modal for creating a new company
+    // For now, just show an alert
+    alert('New Company functionality will be implemented in a future update. This button is now working!');
+  };
+
   return (
     <DataTable
       columns={columns}
@@ -142,8 +149,10 @@ const CompaniesPage: React.FC = () => {
       title="Companies"
       description="Manage your company records"
       searchPlaceholder="Search companies..."
+      pageType="companies"
       onRowClick={handleRowClick}
       onAddField={handleAddField}
+      onNewItem={handleNewCompany}
     />
   );
 };
