@@ -2076,9 +2076,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`GET /api/pipelines/${pipelineId} - Querying pipeline_stages table for pipeline_id: ${pipelineId}`);
       const { data: stagesData, error: stagesError } = await supabase
         .from('pipeline_stages')
-        .select('id, name, order, created_at, updated_at')
+        .select('id, name, stage_order, created_at, updated_at')
         .eq('pipeline_id', pipelineId)
-        .order('order', { ascending: true });
+        .order('stage_order', { ascending: true });
       
       if (stagesError) {
         console.error(`GET /api/pipelines/${pipelineId} - Stages error:`, stagesError);
@@ -2134,7 +2134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stages = (stagesData || []).map(stage => ({
         id: stage.id,
         name: stage.name,
-        order: stage.order,
+        order: stage.stage_order,
         deals: (dealsData || [])
           .filter(deal => deal.stage_id === stage.id)
           .map(deal => ({
