@@ -331,24 +331,33 @@ const PipelinesPage: React.FC = () => {
   React.useEffect(() => {
     if (isEditDealOpen) {
       console.log(`[EDIT_DIALOG_FOCUS] Dialog opened, setting up focus management...`);
+      console.log(`[EDIT_DIALOG_FOCUS] Waiting for Dialog to establish focus trap...`);
       
-      // Small delay to let Dialog establish its focus trap first
+      // Increased delay to let Dialog establish its focus trap first
+      // This is critical for preventing conflicts with Select components
       const focusTimer = setTimeout(() => {
+        console.log(`[EDIT_DIALOG_FOCUS] Focus timer triggered, attempting to focus name input...`);
         if (nameInputRef.current) {
-          console.log(`[EDIT_DIALOG_FOCUS] Focusing name input...`);
+          console.log(`[EDIT_DIALOG_FOCUS] Name input ref found, focusing...`);
           nameInputRef.current.focus();
+          console.log(`[EDIT_DIALOG_FOCUS] Name input focused successfully`);
+        } else {
+          console.warn(`[EDIT_DIALOG_FOCUS] ⚠️ Name input ref not found!`);
         }
+        
+        console.log(`[EDIT_DIALOG_FOCUS] Setting dialogReady to true...`);
         setDialogReady(true);
-        console.log(`[EDIT_DIALOG_FOCUS] Dialog ready for complex components`);
-      }, 100);
+        console.log(`[EDIT_DIALOG_FOCUS] Dialog ready for complex components (Select, etc.)`);
+      }, 250); // Increased from 100ms to 250ms for better stability
       
       return () => {
+        console.log(`[EDIT_DIALOG_FOCUS] Cleaning up focus timer...`);
         clearTimeout(focusTimer);
         setDialogReady(false);
       };
     } else {
+      console.log(`[EDIT_DIALOG_FOCUS] Dialog closed, resetting focus management`);
       setDialogReady(false);
-      console.log(`[EDIT_DIALOG_FOCUS] Dialog closed, focus management reset`);
     }
   }, [isEditDealOpen]);
 
@@ -913,6 +922,12 @@ const PipelinesPage: React.FC = () => {
     console.log(`[EDIT_DEAL_CLICK] Type of dealId:`, typeof dealId);
     
     try {
+      // Ensure dialog is closed and state is clean before starting
+      console.log(`[EDIT_DEAL_CLICK] Step 0: Ensuring clean state...`);
+      setIsEditDealOpen(false);
+      setDialogReady(false);
+      setCurrentDealId(null);
+      
       console.log(`[EDIT_DEAL_CLICK] Step 1: Getting active pipeline data...`);
       const currentPipelineData = getActivePipeline();
       console.log(`[EDIT_DEAL_CLICK] Current pipeline data:`, currentPipelineData);
@@ -1364,6 +1379,7 @@ const PipelinesPage: React.FC = () => {
           console.log(`[EDIT_DIALOG] Dialog onOpenChange called with:`, open);
           console.log(`[EDIT_DIALOG] Current isEditDealOpen state:`, isEditDealOpen);
           console.log(`[EDIT_DIALOG] dialogReady state:`, dialogReady);
+          console.log(`[EDIT_DIALOG] Current deal ID:`, currentDealId);
           console.log(`[EDIT_DIALOG] Stack trace for onOpenChange:`, new Error().stack);
           
           if (!open) {
@@ -1372,11 +1388,28 @@ const PipelinesPage: React.FC = () => {
             console.log(`[EDIT_DIALOG] Current deal ID when closing:`, currentDealId);
             
             // CRITICAL: Prevent premature closing during initial setup
+            // This is the key fix for the focus management conflict
             if (isEditDealOpen && !dialogReady) {
               console.error(`[EDIT_DIALOG] ❌ PREVENTING PREMATURE CLOSE: Dialog not ready yet!`);
               console.error(`[EDIT_DIALOG] This appears to be a focus management conflict - ignoring close request!`);
+              console.error(`[EDIT_DIALOG] Dialog needs more time to establish focus trap before Select components render`);
               return; // Prevent the dialog from closing during setup
             }
+            
+            // Additional check: Don't close if we just opened and have valid data
+            if (isEditDealOpen && currentDealId && addDealForm.name) {
+              const timeSinceOpen = Date.now() - (window as any).lastEditDialogOpenTime;
+              if (timeSinceOpen < 500) { // Less than 500ms since opening
+                console.error(`[EDIT_DIALOG] ❌ PREVENTING PREMATURE CLOSE: Dialog opened too recently (${timeSinceOpen}ms ago)`);
+                console.error(`[EDIT_DIALOG] This is likely a focus management conflict - ignoring close request!`);
+                return;
+              }
+            }
+            
+            console.log(`[EDIT_DIALOG] ✅ Allowing dialog to close - conditions met`);
+          } else {
+            console.log(`[EDIT_DIALOG] ✅ Dialog is being OPENED`);
+            (window as any).lastEditDialogOpenTime = Date.now();
           }
           
           setIsEditDealOpen(open);
@@ -1425,7 +1458,6 @@ const PipelinesPage: React.FC = () => {
                 className="col-span-3"
                 value={addDealForm.name}
                 onChange={(e) => handleFormChange('name', e.target.value)}
-                autoFocus
               />
             </div>
             
@@ -1462,7 +1494,11 @@ const PipelinesPage: React.FC = () => {
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a company" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper"
+                    sideOffset={5}
+                    className="z-[60]"
+                  >
                     {(() => {
                       console.log(`[EDIT_DIALOG] Rendering company options. Companies available:`, companiesList?.length || 0);
                       if (!companiesList || companiesList.length === 0) {
@@ -1504,7 +1540,11 @@ const PipelinesPage: React.FC = () => {
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a contact" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper"
+                    sideOffset={5}
+                    className="z-[60]"
+                  >
                     {(() => {
                       console.log(`[EDIT_DIALOG] Rendering contact options. Contacts available:`, contactsList?.length || 0);
                       if (!contactsList || contactsList.length === 0) {
@@ -1585,7 +1625,11 @@ const PipelinesPage: React.FC = () => {
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a stage" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent 
+                    position="popper"
+                    sideOffset={5}
+                    className="z-[60]"
+                  >
                     {(() => {
                       console.log(`[EDIT_DIALOG] Rendering stage options. Stages available:`, currentPipeline?.stages?.length || 0);
                       if (!currentPipeline?.stages || currentPipeline.stages.length === 0) {
@@ -1611,10 +1655,12 @@ const PipelinesPage: React.FC = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               console.log(`[EDIT_DIALOG] Cancel button clicked - closing dialog properly`);
+              console.log(`[EDIT_DIALOG] Performing complete cleanup...`);
               setIsEditDealOpen(false);
               setCurrentDealId(null);
               setDialogReady(false);
               resetFormState();
+              console.log(`[EDIT_DIALOG] Cleanup completed - dialog should close cleanly`);
             }}>
               Cancel
             </Button>
