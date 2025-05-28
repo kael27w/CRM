@@ -327,32 +327,34 @@ const PipelinesPage: React.FC = () => {
     queryFn: fetchContacts,
   });
 
-  // Focus management for edit dialog
+  // Focus management for edit dialog - TEMPORARILY DISABLED FOR DEBUGGING
   React.useEffect(() => {
     if (isEditDealOpen) {
-      console.log(`[EDIT_DIALOG_FOCUS] Dialog opened, setting up focus management...`);
-      console.log(`[EDIT_DIALOG_FOCUS] Waiting for Dialog to establish focus trap...`);
+      console.log(`[EDIT_DIALOG_FOCUS] Dialog opened, but focus management is DISABLED for debugging`);
+      console.log(`[EDIT_DIALOG_FOCUS] Letting Radix Dialog handle focus automatically...`);
       
-      // Increased delay to let Dialog establish its focus trap first
-      // This is critical for preventing conflicts with Select components
-      const focusTimer = setTimeout(() => {
-        console.log(`[EDIT_DIALOG_FOCUS] Focus timer triggered, attempting to focus name input...`);
-        if (nameInputRef.current) {
-          console.log(`[EDIT_DIALOG_FOCUS] Name input ref found, focusing...`);
-          nameInputRef.current.focus();
-          console.log(`[EDIT_DIALOG_FOCUS] Name input focused successfully`);
-        } else {
-          console.warn(`[EDIT_DIALOG_FOCUS] ⚠️ Name input ref not found!`);
-        }
-        
-        console.log(`[EDIT_DIALOG_FOCUS] Setting dialogReady to true...`);
-        setDialogReady(true);
-        console.log(`[EDIT_DIALOG_FOCUS] Dialog ready for complex components (Select, etc.)`);
-      }, 250); // Increased from 100ms to 250ms for better stability
+      // DISABLED: No manual focus management for debugging
+      // const focusTimer = setTimeout(() => {
+      //   console.log(`[EDIT_DIALOG_FOCUS] Focus timer triggered, attempting to focus name input...`);
+      //   if (nameInputRef.current) {
+      //     console.log(`[EDIT_DIALOG_FOCUS] Name input ref found, focusing...`);
+      //     nameInputRef.current.focus();
+      //     console.log(`[EDIT_DIALOG_FOCUS] Name input focused successfully`);
+      //   } else {
+      //     console.warn(`[EDIT_DIALOG_FOCUS] ⚠️ Name input ref not found!`);
+      //   }
+      //   
+      //   console.log(`[EDIT_DIALOG_FOCUS] Setting dialogReady to true...`);
+      //   setDialogReady(true);
+      //   console.log(`[EDIT_DIALOG_FOCUS] Dialog ready for complex components (Select, etc.)`);
+      // }, 250); // Increased from 100ms to 250ms for better stability
+      
+      // Immediately set dialogReady to true since we're not using Select components
+      setDialogReady(true);
+      console.log(`[EDIT_DIALOG_FOCUS] dialogReady set to true immediately (no Select components to worry about)`);
       
       return () => {
-        console.log(`[EDIT_DIALOG_FOCUS] Cleaning up focus timer...`);
-        clearTimeout(focusTimer);
+        console.log(`[EDIT_DIALOG_FOCUS] Cleaning up - no timers to clear`);
         setDialogReady(false);
       };
     } else {
@@ -1370,302 +1372,153 @@ const PipelinesPage: React.FC = () => {
         </DialogContent>
       </Dialog>
       
-      {/* Edit Deal Dialog */}
+      {/* Edit Deal Dialog - SIMPLIFIED VERSION FOR DEBUGGING */}
       <Dialog 
         open={isEditDealOpen} 
         modal={true}
         onOpenChange={(open) => {
-          console.log(`[EDIT_DIALOG] === onOpenChange CALLED ===`);
-          console.log(`[EDIT_DIALOG] Dialog onOpenChange called with:`, open);
-          console.log(`[EDIT_DIALOG] Current isEditDealOpen state:`, isEditDealOpen);
-          console.log(`[EDIT_DIALOG] dialogReady state:`, dialogReady);
-          console.log(`[EDIT_DIALOG] Current deal ID:`, currentDealId);
-          console.log(`[EDIT_DIALOG] Stack trace for onOpenChange:`, new Error().stack);
+          console.log(`[EDIT_DIALOG_SIMPLE] === onOpenChange CALLED ===`);
+          console.log(`[EDIT_DIALOG_SIMPLE] Dialog onOpenChange called with:`, open);
+          console.log(`[EDIT_DIALOG_SIMPLE] Current isEditDealOpen state:`, isEditDealOpen);
+          console.log(`[EDIT_DIALOG_SIMPLE] dialogReady state:`, dialogReady);
+          console.log(`[EDIT_DIALOG_SIMPLE] Current deal ID:`, currentDealId);
           
           if (!open) {
-            console.log(`[EDIT_DIALOG] ⚠️ Dialog is being CLOSED! Investigating why...`);
-            console.log(`[EDIT_DIALOG] Current form data when closing:`, JSON.stringify(addDealForm, null, 2));
-            console.log(`[EDIT_DIALOG] Current deal ID when closing:`, currentDealId);
+            console.log(`[EDIT_DIALOG_SIMPLE] ⚠️ Dialog is being CLOSED!`);
             
-            // CRITICAL: Prevent premature closing during initial setup
-            // This is the key fix for the focus management conflict
-            if (isEditDealOpen && !dialogReady) {
-              console.error(`[EDIT_DIALOG] ❌ PREVENTING PREMATURE CLOSE: Dialog not ready yet!`);
-              console.error(`[EDIT_DIALOG] This appears to be a focus management conflict - ignoring close request!`);
-              console.error(`[EDIT_DIALOG] Dialog needs more time to establish focus trap before Select components render`);
-              return; // Prevent the dialog from closing during setup
-            }
-            
-            // Additional check: Don't close if we just opened and have valid data
-            if (isEditDealOpen && currentDealId && addDealForm.name) {
+            // Simplified protection - only prevent closing if we just opened
+            if (isEditDealOpen && currentDealId) {
               const timeSinceOpen = Date.now() - (window as any).lastEditDialogOpenTime;
-              if (timeSinceOpen < 500) { // Less than 500ms since opening
-                console.error(`[EDIT_DIALOG] ❌ PREVENTING PREMATURE CLOSE: Dialog opened too recently (${timeSinceOpen}ms ago)`);
-                console.error(`[EDIT_DIALOG] This is likely a focus management conflict - ignoring close request!`);
+              if (timeSinceOpen < 1000) { // Less than 1 second since opening
+                console.error(`[EDIT_DIALOG_SIMPLE] ❌ PREVENTING PREMATURE CLOSE: Dialog opened too recently (${timeSinceOpen}ms ago)`);
                 return;
               }
             }
             
-            console.log(`[EDIT_DIALOG] ✅ Allowing dialog to close - conditions met`);
+            console.log(`[EDIT_DIALOG_SIMPLE] ✅ Allowing dialog to close`);
           } else {
-            console.log(`[EDIT_DIALOG] ✅ Dialog is being OPENED`);
+            console.log(`[EDIT_DIALOG_SIMPLE] ✅ Dialog is being OPENED`);
             (window as any).lastEditDialogOpenTime = Date.now();
           }
           
           setIsEditDealOpen(open);
-          console.log(`[EDIT_DIALOG] setIsEditDealOpen(${open}) called`);
+          console.log(`[EDIT_DIALOG_SIMPLE] setIsEditDealOpen(${open}) called`);
         }}
       >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Edit Deal</DialogTitle>
+            <DialogTitle>Edit Deal (Simplified)</DialogTitle>
             <DialogDescription>
-              Edit deal information in the {currentPipeline?.name} pipeline.
+              Simplified edit dialog for debugging - only basic fields.
             </DialogDescription>
           </DialogHeader>
           
-          {(() => {
-            console.log(`[EDIT_DIALOG] === DIALOG CONTENT RENDERING ===`);
-            console.log(`[EDIT_DIALOG] Dialog content rendering. isEditDealOpen:`, isEditDealOpen);
-            console.log(`[EDIT_DIALOG] Current form data:`, JSON.stringify(addDealForm, null, 2));
-            console.log(`[EDIT_DIALOG] Current deal ID:`, currentDealId);
-            console.log(`[EDIT_DIALOG] Companies list length:`, companiesList?.length);
-            console.log(`[EDIT_DIALOG] Contacts list length:`, contactsList?.length);
-            console.log(`[EDIT_DIALOG] Current pipeline:`, currentPipeline?.name);
-            
-            // Check for potential issues
-            if (!currentDealId) {
-              console.error(`[EDIT_DIALOG] ❌ ERROR: No currentDealId set!`);
-            }
-            if (!addDealForm.name) {
-              console.warn(`[EDIT_DIALOG] ⚠️ WARNING: No deal name in form!`);
-            }
-            if (!currentPipeline) {
-              console.error(`[EDIT_DIALOG] ❌ ERROR: No current pipeline!`);
-            }
-            
-            return null;
-          })()}
-          
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-name" className="text-right">
+              <Label htmlFor="edit-name-simple" className="text-right">
                 Deal Name
               </Label>
               <Input
                 ref={nameInputRef}
-                id="edit-name"
+                id="edit-name-simple"
                 className="col-span-3"
                 value={addDealForm.name}
-                onChange={(e) => handleFormChange('name', e.target.value)}
+                onChange={(e) => {
+                  console.log(`[EDIT_DIALOG_SIMPLE] Name input changed to:`, e.target.value);
+                  handleFormChange('name', e.target.value);
+                }}
+                placeholder="Enter deal name"
               />
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-amount" className="text-right">
+              <Label htmlFor="edit-amount-simple" className="text-right">
                 Amount
               </Label>
               <Input
-                id="edit-amount"
+                id="edit-amount-simple"
                 type="number"
                 className="col-span-3"
                 value={addDealForm.amount}
-                onChange={(e) => handleFormChange('amount', parseFloat(e.target.value) || 0)}
+                onChange={(e) => {
+                  console.log(`[EDIT_DIALOG_SIMPLE] Amount input changed to:`, e.target.value);
+                  handleFormChange('amount', parseFloat(e.target.value) || 0);
+                }}
+                placeholder="Enter amount"
               />
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-company" className="text-right">
-                Company
-              </Label>
-              {dialogReady ? (
-                <Select 
-                  value={(() => {
-                    const value = addDealForm.company_id?.toString() || undefined;
-                    console.log(`[EDIT_DIALOG] Company Select value:`, value);
-                    console.log(`[EDIT_DIALOG] Company Select - addDealForm.company_id:`, addDealForm.company_id);
-                    return value;
-                  })()} 
-                  onValueChange={(value) => {
-                    console.log(`[EDIT_DIALOG] Company Select onValueChange called with:`, value);
-                    handleFormChange('company_id', value ? parseInt(value) : null);
-                  }}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a company" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    position="popper"
-                    sideOffset={5}
-                    className="z-[60]"
-                  >
-                    {(() => {
-                      console.log(`[EDIT_DIALOG] Rendering company options. Companies available:`, companiesList?.length || 0);
-                      if (!companiesList || companiesList.length === 0) {
-                        console.warn(`[EDIT_DIALOG] ⚠️ No companies available for selection!`);
-                      }
-                      return null;
-                    })()}
-                    {companiesList?.map(company => (
-                      <SelectItem key={company.id} value={company.id.toString()}>
-                        {company.company_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="col-span-3 p-2 border rounded bg-muted text-muted-foreground text-sm">
-                  Loading companies...
-                </div>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-contact" className="text-right">
-                Contact
-              </Label>
-              {dialogReady ? (
-                <Select 
-                  value={(() => {
-                    const value = addDealForm.contact_id?.toString() || undefined;
-                    console.log(`[EDIT_DIALOG] Contact Select value:`, value);
-                    console.log(`[EDIT_DIALOG] Contact Select - addDealForm.contact_id:`, addDealForm.contact_id);
-                    return value;
-                  })()} 
-                  onValueChange={(value) => {
-                    console.log(`[EDIT_DIALOG] Contact Select onValueChange called with:`, value);
-                    handleFormChange('contact_id', value ? parseInt(value) : null);
-                  }}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a contact" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    position="popper"
-                    sideOffset={5}
-                    className="z-[60]"
-                  >
-                    {(() => {
-                      console.log(`[EDIT_DIALOG] Rendering contact options. Contacts available:`, contactsList?.length || 0);
-                      if (!contactsList || contactsList.length === 0) {
-                        console.warn(`[EDIT_DIALOG] ⚠️ No contacts available for selection!`);
-                      }
-                      return null;
-                    })()}
-                    {contactsList?.map(contact => (
-                      <SelectItem key={contact.id} value={contact.id.toString()}>
-                        {contact.first_name} {contact.last_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="col-span-3 p-2 border rounded bg-muted text-muted-foreground text-sm">
-                  Loading contacts...
-                </div>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-closingDate" className="text-right">
-                Closing Date
-              </Label>
-              <Input
-                id="edit-closingDate"
-                type="date"
-                className="col-span-3"
-                value={addDealForm.closingDate}
-                onChange={(e) => handleFormChange('closingDate', e.target.value)}
-              />
-            </div>
-            
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-probability" className="text-right">
+              <Label htmlFor="edit-probability-simple" className="text-right">
                 Probability (%)
               </Label>
               <Input
-                id="edit-probability"
+                id="edit-probability-simple"
                 type="number"
                 min="0"
                 max="100"
                 className="col-span-3"
                 value={addDealForm.probability}
-                onChange={(e) => handleFormChange('probability', parseInt(e.target.value) || 0)}
+                onChange={(e) => {
+                  console.log(`[EDIT_DIALOG_SIMPLE] Probability input changed to:`, e.target.value);
+                  handleFormChange('probability', parseInt(e.target.value) || 0);
+                }}
+                placeholder="Enter probability"
               />
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-stage" className="text-right">
-                Stage
+              <Label htmlFor="edit-closingDate-simple" className="text-right">
+                Closing Date
               </Label>
-              {dialogReady ? (
-                <Select 
-                  value={(() => {
-                    const value = addDealForm.stageId;
-                    console.log(`[EDIT_DIALOG] Stage Select value:`, value);
-                    console.log(`[EDIT_DIALOG] Stage Select - addDealForm.stageId:`, addDealForm.stageId);
-                    console.log(`[EDIT_DIALOG] Available stages:`, currentPipeline?.stages?.map(s => ({ id: s.id, name: s.name })));
-                    
-                    // Check if the current stageId exists in available stages
-                    const stageExists = currentPipeline?.stages?.some(stage => stage.id === value);
-                    if (value && !stageExists) {
-                      console.error(`[EDIT_DIALOG] ❌ ERROR: Stage ID "${value}" does not exist in current pipeline stages!`);
-                      console.error(`[EDIT_DIALOG] This could cause the Select component to fail and close the dialog!`);
-                      // Return undefined for invalid stage to prevent Select errors
-                      return undefined;
-                    }
-                    
-                    return value;
-                  })()} 
-                  onValueChange={(value) => {
-                    console.log(`[EDIT_DIALOG] Stage Select onValueChange called with:`, value);
-                    handleFormChange('stageId', value);
-                  }}
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a stage" />
-                  </SelectTrigger>
-                  <SelectContent 
-                    position="popper"
-                    sideOffset={5}
-                    className="z-[60]"
-                  >
-                    {(() => {
-                      console.log(`[EDIT_DIALOG] Rendering stage options. Stages available:`, currentPipeline?.stages?.length || 0);
-                      if (!currentPipeline?.stages || currentPipeline.stages.length === 0) {
-                        console.error(`[EDIT_DIALOG] ❌ ERROR: No stages available for selection!`);
-                      }
-                      return null;
-                    })()}
-                    {currentPipeline?.stages.map(stage => (
-                      <SelectItem key={stage.id} value={stage.id}>
-                        {stage.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="col-span-3 p-2 border rounded bg-muted text-muted-foreground text-sm">
-                  Loading stages...
-                </div>
-              )}
+              <Input
+                id="edit-closingDate-simple"
+                type="date"
+                className="col-span-3"
+                value={addDealForm.closingDate}
+                onChange={(e) => {
+                  console.log(`[EDIT_DIALOG_SIMPLE] Closing date input changed to:`, e.target.value);
+                  handleFormChange('closingDate', e.target.value);
+                }}
+              />
+            </div>
+            
+            {/* DEBUGGING INFO DISPLAY */}
+            <div className="grid grid-cols-4 items-center gap-4 p-2 bg-muted rounded">
+              <Label className="text-right text-xs">Debug Info:</Label>
+              <div className="col-span-3 text-xs text-muted-foreground">
+                <div>Deal ID: {currentDealId}</div>
+                <div>Dialog Ready: {dialogReady ? 'Yes' : 'No'}</div>
+                <div>Form Name: {addDealForm.name}</div>
+                <div>Form Amount: {addDealForm.amount}</div>
+              </div>
             </div>
           </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => {
-              console.log(`[EDIT_DIALOG] Cancel button clicked - closing dialog properly`);
-              console.log(`[EDIT_DIALOG] Performing complete cleanup...`);
+              console.log(`[EDIT_DIALOG_SIMPLE] Cancel button clicked - closing dialog`);
               setIsEditDealOpen(false);
               setCurrentDealId(null);
               setDialogReady(false);
               resetFormState();
-              console.log(`[EDIT_DIALOG] Cleanup completed - dialog should close cleanly`);
+              console.log(`[EDIT_DIALOG_SIMPLE] Cleanup completed`);
             }}>
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit} disabled={updateDealMutation.isPending}>
-              {updateDealMutation.isPending ? "Saving..." : "Save Changes"}
+            <Button onClick={() => {
+              console.log(`[EDIT_DIALOG_SIMPLE] Save button clicked`);
+              console.log(`[EDIT_DIALOG_SIMPLE] Current form data:`, addDealForm);
+              // For now, just close the dialog without saving
+              setIsEditDealOpen(false);
+              setCurrentDealId(null);
+              resetFormState();
+              toast({
+                title: "Debug Mode",
+                description: "Simplified dialog - save functionality disabled for testing",
+              });
+            }}>
+              Save (Debug)
             </Button>
           </DialogFooter>
         </DialogContent>
