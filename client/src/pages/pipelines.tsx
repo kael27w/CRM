@@ -325,18 +325,7 @@ const PipelinesPage: React.FC = () => {
     queryFn: fetchContacts,
   });
 
-  // Monitor edit dialog opening (after data is declared)
-  React.useEffect(() => {
-    if (isEditDealOpen) {
-      console.log(`[EDIT_DIALOG_MONITOR] Edit dialog opened!`);
-      console.log(`[EDIT_DIALOG_MONITOR] Current deal ID:`, currentDealId);
-      console.log(`[EDIT_DIALOG_MONITOR] Form data:`, addDealForm);
-      console.log(`[EDIT_DIALOG_MONITOR] Companies available:`, companiesList?.length || 0);
-      console.log(`[EDIT_DIALOG_MONITOR] Contacts available:`, contactsList?.length || 0);
-    } else {
-      console.log(`[EDIT_DIALOG_MONITOR] Edit dialog closed.`);
-    }
-  }, [isEditDealOpen, currentDealId, addDealForm, companiesList, contactsList]);
+
 
   // Global error handler for unhandled errors
   React.useEffect(() => {
@@ -936,7 +925,22 @@ const PipelinesPage: React.FC = () => {
       }
       console.log(`[EDIT_DEAL_CLICK] Formatted closing date:`, formattedClosingDate);
       
-      console.log(`[EDIT_DEAL_CLICK] Step 5: Setting up form data...`);
+      console.log(`[EDIT_DEAL_CLICK] Step 5: Validating stage ID compatibility...`);
+      console.log(`[EDIT_DEAL_CLICK] Deal's current stage ID:`, dealToEdit.stageId);
+      console.log(`[EDIT_DEAL_CLICK] Available stages in current pipeline:`, currentPipelineData.stages.map(s => ({ id: s.id, name: s.name })));
+      
+      // CRITICAL FIX: Check if the deal's stage ID exists in the current pipeline
+      const stageExists = currentPipelineData.stages.some(stage => stage.id === dealToEdit!.stageId);
+      let validStageId = dealToEdit.stageId;
+      
+      if (!stageExists) {
+        console.warn(`[EDIT_DEAL_CLICK] ⚠️ WARNING: Deal's stage ID "${dealToEdit.stageId}" does not exist in current pipeline!`);
+        console.warn(`[EDIT_DEAL_CLICK] This could cause Select component to fail and close the dialog!`);
+        console.warn(`[EDIT_DEAL_CLICK] Defaulting to first available stage: "${currentPipelineData.stages[0]?.id}"`);
+        validStageId = currentPipelineData.stages[0]?.id || '';
+      }
+      
+      console.log(`[EDIT_DEAL_CLICK] Step 6: Setting up form data with validated stage ID...`);
       const formData = {
         name: dealToEdit.name,
         amount: dealToEdit.amount,
@@ -944,18 +948,18 @@ const PipelinesPage: React.FC = () => {
         contact_id: contactId,
         closingDate: formattedClosingDate,
         probability: dealToEdit.probability,
-        stageId: dealToEdit.stageId
+        stageId: validStageId
       };
       console.log(`[EDIT_DEAL_CLICK] Form data to set:`, JSON.stringify(formData, null, 2));
       
-      console.log(`[EDIT_DEAL_CLICK] Step 6: Setting form state...`);
+      console.log(`[EDIT_DEAL_CLICK] Step 7: Setting form state...`);
       console.log('[HANDLE_EDIT_DEAL] Setting dealToEdit and attempting to open dialog...');
       setAddDealForm(formData);
       
-      console.log(`[EDIT_DEAL_CLICK] Step 7: Setting current deal ID...`);
+      console.log(`[EDIT_DEAL_CLICK] Step 8: Setting current deal ID...`);
       setCurrentDealId(dealId);
       
-      console.log(`[EDIT_DEAL_CLICK] Step 8: Opening edit dialog...`);
+      console.log(`[EDIT_DEAL_CLICK] Step 9: Opening edit dialog...`);
       console.log('[HANDLE_EDIT_DEAL] About to call setIsEditDealOpen(true)...');
       setIsEditDealOpen(true);
       console.log('[HANDLE_EDIT_DEAL] setIsEditDealOpen(true) called successfully');
@@ -1082,6 +1086,46 @@ const PipelinesPage: React.FC = () => {
   
   const currentPipeline = getActivePipeline();
   const summary = currentPipeline ? getPipelineSummary(currentPipeline) : { totalDeals: 0, totalAmount: 0 };
+  
+  // Monitor edit dialog opening (after data is declared)
+  React.useEffect(() => {
+    if (isEditDealOpen) {
+      console.log(`[EDIT_DIALOG_MONITOR] Edit dialog opened!`);
+      console.log(`[EDIT_DIALOG_MONITOR] Current deal ID:`, currentDealId);
+      console.log(`[EDIT_DIALOG_MONITOR] Form data:`, addDealForm);
+      console.log(`[EDIT_DIALOG_MONITOR] Companies available:`, companiesList?.length || 0);
+      console.log(`[EDIT_DIALOG_MONITOR] Contacts available:`, contactsList?.length || 0);
+      
+      // Validate that we have the minimum required data
+      if (!currentDealId) {
+        console.error(`[EDIT_DIALOG_MONITOR] ❌ ERROR: Dialog opened without currentDealId!`);
+      }
+      if (!addDealForm.name) {
+        console.error(`[EDIT_DIALOG_MONITOR] ❌ ERROR: Dialog opened without deal name!`);
+      }
+      if (!currentPipeline) {
+        console.error(`[EDIT_DIALOG_MONITOR] ❌ ERROR: Dialog opened without current pipeline!`);
+      }
+    } else {
+      console.log(`[EDIT_DIALOG_MONITOR] Edit dialog closed.`);
+    }
+  }, [isEditDealOpen, currentDealId, addDealForm, companiesList, contactsList, currentPipeline]);
+
+  // Add a safety check to prevent dialog from opening with invalid data
+  React.useEffect(() => {
+    if (isEditDealOpen && (!currentDealId || !addDealForm.name || !currentPipeline)) {
+      console.error(`[EDIT_DIALOG_SAFETY] ❌ SAFETY CHECK FAILED - Dialog opened with invalid data!`);
+      console.error(`[EDIT_DIALOG_SAFETY] currentDealId:`, currentDealId);
+      console.error(`[EDIT_DIALOG_SAFETY] addDealForm.name:`, addDealForm.name);
+      console.error(`[EDIT_DIALOG_SAFETY] currentPipeline:`, currentPipeline?.name);
+      console.error(`[EDIT_DIALOG_SAFETY] Closing dialog to prevent issues...`);
+      
+      // Close the dialog and reset state
+      setIsEditDealOpen(false);
+      setCurrentDealId(null);
+      resetFormState();
+    }
+  }, [isEditDealOpen, currentDealId, addDealForm.name, currentPipeline]);
   
   // Reset form state
   const resetFormState = () => {
@@ -1339,6 +1383,15 @@ const PipelinesPage: React.FC = () => {
           console.log(`[EDIT_DIALOG] ⚠️ Dialog is being CLOSED! Investigating why...`);
           console.log(`[EDIT_DIALOG] Current form data when closing:`, JSON.stringify(addDealForm, null, 2));
           console.log(`[EDIT_DIALOG] Current deal ID when closing:`, currentDealId);
+          
+          // CRITICAL FIX: Only allow closing if we have valid data or explicit user action
+          if (!currentDealId || !addDealForm.name) {
+            console.error(`[EDIT_DIALOG] ❌ PREVENTING PREMATURE CLOSE: Missing critical data!`);
+            console.error(`[EDIT_DIALOG] currentDealId:`, currentDealId);
+            console.error(`[EDIT_DIALOG] addDealForm.name:`, addDealForm.name);
+            console.error(`[EDIT_DIALOG] This appears to be an unwanted closure - ignoring!`);
+            return; // Prevent the dialog from closing
+          }
         }
         
         setIsEditDealOpen(open);
@@ -1405,72 +1458,104 @@ const PipelinesPage: React.FC = () => {
               <Label htmlFor="edit-company" className="text-right">
                 Company
               </Label>
-              <Select 
-                value={(() => {
+              {(() => {
+                try {
                   const value = addDealForm.company_id?.toString() || undefined;
                   console.log(`[EDIT_DIALOG] Company Select value:`, value);
                   console.log(`[EDIT_DIALOG] Company Select - addDealForm.company_id:`, addDealForm.company_id);
-                  return value;
-                })()} 
-                onValueChange={(value) => {
-                  console.log(`[EDIT_DIALOG] Company Select onValueChange called with:`, value);
-                  handleFormChange('company_id', value ? parseInt(value) : null);
-                }}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a company" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(() => {
-                    console.log(`[EDIT_DIALOG] Rendering company options. Companies available:`, companiesList?.length || 0);
-                    if (!companiesList || companiesList.length === 0) {
-                      console.warn(`[EDIT_DIALOG] ⚠️ No companies available for selection!`);
-                    }
-                    return null;
-                  })()}
-                  {companiesList?.map(company => (
-                    <SelectItem key={company.id} value={company.id.toString()}>
-                      {company.company_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  
+                  return (
+                    <Select 
+                      value={value}
+                      onValueChange={(value) => {
+                        try {
+                          console.log(`[EDIT_DIALOG] Company Select onValueChange called with:`, value);
+                          handleFormChange('company_id', value ? parseInt(value) : null);
+                        } catch (error) {
+                          console.error(`[EDIT_DIALOG] Error in Company Select onValueChange:`, error);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select a company" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(() => {
+                          console.log(`[EDIT_DIALOG] Rendering company options. Companies available:`, companiesList?.length || 0);
+                          if (!companiesList || companiesList.length === 0) {
+                            console.warn(`[EDIT_DIALOG] ⚠️ No companies available for selection!`);
+                          }
+                          return null;
+                        })()}
+                        {companiesList?.map(company => (
+                          <SelectItem key={company.id} value={company.id.toString()}>
+                            {company.company_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                } catch (error) {
+                  console.error(`[EDIT_DIALOG] Error rendering Company Select:`, error);
+                  return (
+                    <div className="col-span-3 p-2 border rounded text-red-500 text-sm">
+                      Error loading companies
+                    </div>
+                  );
+                }
+              })()}
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit-contact" className="text-right">
                 Contact
               </Label>
-              <Select 
-                value={(() => {
+              {(() => {
+                try {
                   const value = addDealForm.contact_id?.toString() || undefined;
                   console.log(`[EDIT_DIALOG] Contact Select value:`, value);
                   console.log(`[EDIT_DIALOG] Contact Select - addDealForm.contact_id:`, addDealForm.contact_id);
-                  return value;
-                })()} 
-                onValueChange={(value) => {
-                  console.log(`[EDIT_DIALOG] Contact Select onValueChange called with:`, value);
-                  handleFormChange('contact_id', value ? parseInt(value) : null);
-                }}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a contact" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(() => {
-                    console.log(`[EDIT_DIALOG] Rendering contact options. Contacts available:`, contactsList?.length || 0);
-                    if (!contactsList || contactsList.length === 0) {
-                      console.warn(`[EDIT_DIALOG] ⚠️ No contacts available for selection!`);
-                    }
-                    return null;
-                  })()}
-                  {contactsList?.map(contact => (
-                    <SelectItem key={contact.id} value={contact.id.toString()}>
-                      {contact.first_name} {contact.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  
+                  return (
+                    <Select 
+                      value={value}
+                      onValueChange={(value) => {
+                        try {
+                          console.log(`[EDIT_DIALOG] Contact Select onValueChange called with:`, value);
+                          handleFormChange('contact_id', value ? parseInt(value) : null);
+                        } catch (error) {
+                          console.error(`[EDIT_DIALOG] Error in Contact Select onValueChange:`, error);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select a contact" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(() => {
+                          console.log(`[EDIT_DIALOG] Rendering contact options. Contacts available:`, contactsList?.length || 0);
+                          if (!contactsList || contactsList.length === 0) {
+                            console.warn(`[EDIT_DIALOG] ⚠️ No contacts available for selection!`);
+                          }
+                          return null;
+                        })()}
+                        {contactsList?.map(contact => (
+                          <SelectItem key={contact.id} value={contact.id.toString()}>
+                            {contact.first_name} {contact.last_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                } catch (error) {
+                  console.error(`[EDIT_DIALOG] Error rendering Contact Select:`, error);
+                  return (
+                    <div className="col-span-3 p-2 border rounded text-red-500 text-sm">
+                      Error loading contacts
+                    </div>
+                  );
+                }
+              })()}
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
@@ -1505,50 +1590,74 @@ const PipelinesPage: React.FC = () => {
               <Label htmlFor="edit-stage" className="text-right">
                 Stage
               </Label>
-              <Select 
-                value={(() => {
+              {(() => {
+                try {
                   const value = addDealForm.stageId;
                   console.log(`[EDIT_DIALOG] Stage Select value:`, value);
                   console.log(`[EDIT_DIALOG] Stage Select - addDealForm.stageId:`, addDealForm.stageId);
                   console.log(`[EDIT_DIALOG] Available stages:`, currentPipeline?.stages?.map(s => ({ id: s.id, name: s.name })));
                   
+                  // CRITICAL: Validate that the stage exists before rendering
+                  if (!currentPipeline?.stages || currentPipeline.stages.length === 0) {
+                    console.error(`[EDIT_DIALOG] ❌ ERROR: No stages available for selection!`);
+                    return (
+                      <div className="col-span-3 p-2 border rounded text-red-500 text-sm">
+                        No stages available
+                      </div>
+                    );
+                  }
+                  
                   // Check if the current stageId exists in available stages
-                  const stageExists = currentPipeline?.stages?.some(stage => stage.id === value);
+                  const stageExists = currentPipeline.stages.some(stage => stage.id === value);
                   if (value && !stageExists) {
                     console.error(`[EDIT_DIALOG] ❌ ERROR: Stage ID "${value}" does not exist in current pipeline stages!`);
                     console.error(`[EDIT_DIALOG] This could cause the Select component to fail and close the dialog!`);
+                    console.error(`[EDIT_DIALOG] Available stage IDs:`, currentPipeline.stages.map(s => s.id));
                   }
                   
-                  return value;
-                })()} 
-                onValueChange={(value) => {
-                  console.log(`[EDIT_DIALOG] Stage Select onValueChange called with:`, value);
-                  handleFormChange('stageId', value);
-                }}
-              >
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(() => {
-                    console.log(`[EDIT_DIALOG] Rendering stage options. Stages available:`, currentPipeline?.stages?.length || 0);
-                    if (!currentPipeline?.stages || currentPipeline.stages.length === 0) {
-                      console.error(`[EDIT_DIALOG] ❌ ERROR: No stages available for selection!`);
-                    }
-                    return null;
-                  })()}
-                  {currentPipeline?.stages.map(stage => (
-                    <SelectItem key={stage.id} value={stage.id}>
-                      {stage.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  return (
+                    <Select 
+                      value={stageExists ? value : undefined}
+                      onValueChange={(value) => {
+                        try {
+                          console.log(`[EDIT_DIALOG] Stage Select onValueChange called with:`, value);
+                          handleFormChange('stageId', value);
+                        } catch (error) {
+                          console.error(`[EDIT_DIALOG] Error in Stage Select onValueChange:`, error);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select a stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {currentPipeline.stages.map(stage => (
+                          <SelectItem key={stage.id} value={stage.id}>
+                            {stage.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                } catch (error) {
+                  console.error(`[EDIT_DIALOG] Error rendering Stage Select:`, error);
+                  return (
+                    <div className="col-span-3 p-2 border rounded text-red-500 text-sm">
+                      Error loading stages
+                    </div>
+                  );
+                }
+              })()}
             </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDealOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              console.log(`[EDIT_DIALOG] Cancel button clicked - closing dialog properly`);
+              setIsEditDealOpen(false);
+              setCurrentDealId(null);
+              resetFormState();
+            }}>
               Cancel
             </Button>
             <Button onClick={handleSaveEdit} disabled={updateDealMutation.isPending}>
