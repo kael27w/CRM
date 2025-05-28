@@ -138,6 +138,20 @@ interface AddDealFormData {
   stageId: string;
 }
 
+// Utility function to parse date strings without timezone conversion issues
+const parseLocalDate = (dateString: string): Date => {
+  if (!dateString) return new Date();
+  
+  // If the date string includes 'T' (ISO format), extract just the date part
+  const dateOnly = dateString.includes('T') ? dateString.split('T')[0] : dateString;
+  
+  // Parse the date components manually to avoid timezone issues
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  
+  // Create a date in local timezone (month is 0-indexed in JavaScript)
+  return new Date(year, month - 1, day);
+};
+
 // Sortable deal card component
 const SortableDealCard: React.FC<{ deal: Deal; onEdit: (dealId: number) => void; onDelete: (dealId: number) => void }> = ({ deal, onEdit, onDelete }) => {
   const {
@@ -167,7 +181,8 @@ const DealCard: React.FC<{ deal: Deal; onEdit: (dealId: number) => void; onDelet
     currency: 'USD',
   }).format(deal.amount);
   
-  const dueDate = new Date(deal.closingDate);
+  // Use the utility function to parse the date without timezone issues
+  const dueDate = parseLocalDate(deal.closingDate);
   const formattedDate = new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -278,12 +293,22 @@ const PipelinesPage: React.FC = () => {
   const [currentDealId, setCurrentDealId] = useState<number | null>(null);
   const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
   const [dialogReady, setDialogReady] = useState(false);
+  
+  // Get today's date in YYYY-MM-DD format without timezone issues
+  const getTodayString = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
   const [addDealForm, setAddDealForm] = useState<AddDealFormData>({
     name: '',
     amount: 0,
     company_id: null,
     contact_id: null,
-    closingDate: new Date().toISOString().split('T')[0],
+    closingDate: getTodayString(),
     probability: 20,
     stageId: ''
   });
@@ -969,10 +994,19 @@ const PipelinesPage: React.FC = () => {
       console.log(`[EDIT_DEAL_CLICK] Step 4: Processing closing date...`);
       console.log(`[EDIT_DEAL_CLICK] Original closing date:`, dealToEdit.closingDate);
       
-      // Safely handle the closing date - it might not have 'T' in it
+      // Use the utility function to properly handle the date without timezone issues
       let formattedClosingDate = dealToEdit.closingDate;
-      if (formattedClosingDate && formattedClosingDate.includes('T')) {
-        formattedClosingDate = formattedClosingDate.split('T')[0];
+      if (formattedClosingDate) {
+        // If it's an ISO string with time, extract just the date part
+        if (formattedClosingDate.includes('T')) {
+          formattedClosingDate = formattedClosingDate.split('T')[0];
+        }
+        // Ensure the date is in YYYY-MM-DD format for the date input
+        const parsedDate = parseLocalDate(formattedClosingDate);
+        const year = parsedDate.getFullYear();
+        const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(parsedDate.getDate()).padStart(2, '0');
+        formattedClosingDate = `${year}-${month}-${day}`;
       }
       console.log(`[EDIT_DEAL_CLICK] Formatted closing date:`, formattedClosingDate);
       
@@ -1158,12 +1192,19 @@ const PipelinesPage: React.FC = () => {
   
   // Reset form state
   const resetFormState = () => {
+    // Get today's date in YYYY-MM-DD format without timezone issues
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const todayString = `${year}-${month}-${day}`;
+    
     setAddDealForm({
       name: '',
       amount: 0,
       company_id: null,
       contact_id: null,
-      closingDate: new Date().toISOString().split('T')[0],
+      closingDate: todayString,
       probability: 20,
       stageId: ''
     });

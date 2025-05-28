@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../components/shared/data-table';
 import { Badge } from '../components/ui/badge';
@@ -16,7 +16,7 @@ import {
 } from "../components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Label } from "../components/ui/label";
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, Phone, Mail, CheckSquare, Filter } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, Phone, Mail, CheckSquare, Filter, Edit, Trash2, MapPin, User, Building } from 'lucide-react';
 import CalendarEventDialog, { CalendarEvent } from '../components/calendar/calendar-event-dialog';
 import { Button } from "../components/ui/button";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -26,6 +26,25 @@ import { useLocation } from 'wouter';
 import TaskDialog from '../components/dashboard/task-dialog';
 import { Task } from '../types';
 import { CallLogDisplay } from '../components/activities/CallLogDisplay';
+import { AddEventDialog } from '../components/activities/AddEventDialog';
+import { EditEventDialog } from '../components/activities/EditEventDialog';
+import { 
+  fetchEvents, 
+  deleteEvent, 
+  type ActivityEntry 
+} from '../lib/api';
+import { toast } from 'sonner';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
+import { format } from 'date-fns';
 
 // This will be replaced with the actual Activity types from schema.ts
 // when we update the backend
@@ -204,6 +223,16 @@ const ActivitiesPage: React.FC = () => {
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [currentEditEvent, setCurrentEditEvent] = useState<Activity | null>(null);
+  
+  // Event-related state
+  const [isAddEventDialogOpen, setIsAddEventDialogOpen] = useState(false);
+  const [isEditEventDialogOpen, setIsEditEventDialogOpen] = useState(false);
+  const [isDeleteEventDialogOpen, setIsDeleteEventDialogOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<ActivityEntry | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<ActivityEntry | null>(null);
+  
+  // Query client for invalidating queries
+  const queryClient = useQueryClient();
   
   // Use the tasks hook to access and manage tasks
   const { tasks, toggleTask, refetch: refetchTasks } = useTasks();
@@ -439,20 +468,47 @@ const ActivitiesPage: React.FC = () => {
     return activity.type === activeTab;
   });
 
-  // For now we'll use the sample data. Later this will be replaced with actual API data
-  // const { data: activities = [], isLoading, error } = useQuery({
-  //   queryKey: ['/api/activities'],
-  //   queryFn: () => apiRequest('/api/activities'),
-  // });
+  // Fetch events
+  const { data: events = [], isLoading: eventsLoading, error: eventsError } = useQuery({
+    queryKey: ['events'],
+    queryFn: () => fetchEvents(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
-  const handleRowClick = (row: any) => {
-    console.log('Activity clicked:', row.original);
-    // This will be expanded to show activity details or edit activity
+  // Delete event mutation
+  const deleteEventMutation = useMutation({
+    mutationFn: deleteEvent,
+    onSuccess: () => {
+      toast.success('Event deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      setIsDeleteEventDialogOpen(false);
+      setEventToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Error deleting event: ${error.message}`);
+    },
+  });
+
+  // Event handlers
+  const handleAddEventNew = (defaultDate?: Date) => {
+    setIsAddEventDialogOpen(true);
   };
 
-  const handleAddField = () => {
-    console.log('Add field clicked');
-    // This will be expanded to allow adding custom fields
+  const handleEditEventNew = (event: ActivityEntry) => {
+    setSelectedEvent(event);
+    setIsEditEventDialogOpen(true);
+  };
+
+  const handleDeleteEventNew = (event: ActivityEntry) => {
+    setEventToDelete(event);
+    setIsDeleteEventDialogOpen(true);
+  };
+
+  const confirmDeleteEvent = () => {
+    if (eventToDelete) {
+      deleteEventMutation.mutate(eventToDelete.id);
+    }
   };
 
   // Helper functions for calendar
@@ -963,15 +1019,120 @@ const ActivitiesPage: React.FC = () => {
               <h2 className="text-2xl font-bold">Events</h2>
               <p className="text-slate-500 dark:text-slate-400">Manage your events and meetings</p>
             </div>
-            <Button onClick={() => handleAddEvent()}>
+            <Button onClick={() => handleAddEventNew()}>
               <Plus className="mr-2 h-4 w-4" />
               Add Event
             </Button>
           </div>
           
-          <div className="text-center py-8">
-            <p className="text-slate-500 dark:text-slate-400 mb-4">Events feature coming soon</p>
-          </div>
+          {eventsLoading ? (
+            <div className="text-center py-8">
+              <p className="text-slate-500 dark:text-slate-400">Loading events...</p>
+            </div>
+          ) : eventsError ? (
+            <div className="text-center py-8">
+              <p className="text-red-500 mb-4">Error loading events: {eventsError.message}</p>
+              <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['events'] })}>
+                Try Again
+              </Button>
+            </div>
+          ) : events.length === 0 ? (
+            <div className="text-center py-8">
+              <CalendarIcon className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+              <p className="text-slate-500 dark:text-slate-400 mb-4">No events found</p>
+              <Button onClick={() => handleAddEventNew()}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create your first event
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {events.map((event) => (
+                <Card key={event.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <CalendarIcon className="h-5 w-5 text-green-600" />
+                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                            {event.title}
+                          </h3>
+                          <Badge 
+                            variant={
+                              event.status === 'completed' ? 'default' :
+                              event.status === 'in-progress' ? 'secondary' :
+                              event.status === 'cancelled' ? 'destructive' : 'outline'
+                            }
+                          >
+                            {event.status}
+                          </Badge>
+                        </div>
+                        
+                        {event.description && (
+                          <p className="text-slate-600 dark:text-slate-300 mb-3">
+                            {event.description}
+                          </p>
+                        )}
+                        
+                        <div className="flex flex-wrap gap-4 text-sm text-slate-500 dark:text-slate-400">
+                          {event.start_datetime && (
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-4 w-4" />
+                              <span>
+                                {format(new Date(event.start_datetime), 'MMM d, yyyy h:mm a')}
+                                {event.end_datetime && (
+                                  <span> - {format(new Date(event.end_datetime), 'h:mm a')}</span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {event.location && (
+                            <div className="flex items-center gap-1">
+                              <MapPin className="h-4 w-4" />
+                              <span>{event.location}</span>
+                            </div>
+                          )}
+                          
+                          {event.contacts && (
+                            <div className="flex items-center gap-1">
+                              <User className="h-4 w-4" />
+                              <span>{event.contacts.first_name} {event.contacts.last_name}</span>
+                            </div>
+                          )}
+                          
+                          {event.companies && (
+                            <div className="flex items-center gap-1">
+                              <Building className="h-4 w-4" />
+                              <span>{event.companies.company_name}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 ml-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditEventNew(event)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteEventNew(event)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
         
         {/* Calls Tab Content */}
@@ -1020,6 +1181,43 @@ const ActivitiesPage: React.FC = () => {
         onOpenChange={setIsTaskDialogOpen}
         onTaskAdded={handleTaskAdded}
       />
+
+      {/* Add Event Dialog */}
+      <AddEventDialog
+        open={isAddEventDialogOpen}
+        onOpenChange={setIsAddEventDialogOpen}
+      />
+
+      {/* Edit Event Dialog */}
+      {selectedEvent && (
+        <EditEventDialog
+          open={isEditEventDialogOpen}
+          onOpenChange={setIsEditEventDialogOpen}
+          event={selectedEvent}
+        />
+      )}
+
+      {/* Delete Event Confirmation Dialog */}
+      <AlertDialog open={isDeleteEventDialogOpen} onOpenChange={setIsDeleteEventDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{eventToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteEvent}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteEventMutation.isPending}
+            >
+              {deleteEventMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -78,6 +78,48 @@ export interface UnifiedActivityEntry {
 }
 
 /**
+ * Interface representing a comprehensive activity/event entry from the API
+ */
+export interface ActivityEntry {
+  id: number;
+  type: 'task' | 'event' | 'note' | 'call';
+  title: string;
+  description?: string;
+  status: string; // 'pending', 'completed', 'in-progress', 'cancelled'
+  created_at: string;
+  updated_at: string;
+  
+  // Task-specific fields
+  due_date?: string;
+  completed?: boolean;
+  priority?: string;
+  
+  // Event-specific fields
+  start_datetime?: string; // ISO date string
+  end_datetime?: string; // ISO date string
+  location?: string;
+  
+  // Relationship fields
+  contact_id?: number;
+  company_id?: number;
+  user_id?: number;
+  
+  // Related data (populated by joins)
+  contacts?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    phone: string;
+    email: string;
+  };
+  companies?: {
+    id: number;
+    company_name: string;
+    industry: string;
+  };
+}
+
+/**
  * Interface representing a product entry from the API
  */
 export interface Product {
@@ -1708,4 +1750,186 @@ export async function fetchContacts(): Promise<ContactEntry[]> {
     console.error("Error fetching contacts:", error);
     throw error;
   }
+}
+
+/**
+ * Type for creating a new event
+ */
+export type NewEventData = {
+  type: 'event';
+  title: string;
+  description?: string;
+  start_datetime: string; // Required for events
+  end_datetime?: string;
+  location?: string;
+  contact_id?: number;
+  company_id?: number;
+  user_id?: number;
+  status?: string; // Defaults to 'pending'
+};
+
+/**
+ * Type for updating an event
+ */
+export type EventUpdateData = {
+  title?: string;
+  description?: string;
+  start_datetime?: string;
+  end_datetime?: string;
+  location?: string;
+  contact_id?: number;
+  company_id?: number;
+  user_id?: number;
+  status?: string;
+};
+
+/**
+ * Query parameters for fetching activities
+ */
+export interface ActivityQueryParams {
+  type?: 'task' | 'event' | 'note' | 'call';
+  start_date?: string;
+  end_date?: string;
+  contact_id?: number;
+  company_id?: number;
+  user_id?: number;
+}
+
+/**
+ * Fetch activities with optional filtering
+ */
+export async function fetchActivities(params?: ActivityQueryParams): Promise<ActivityEntry[]> {
+  try {
+    console.log("fetchActivities - Request params:", params);
+    
+    // Build query string
+    const queryParams = new URLSearchParams();
+    if (params?.type) queryParams.append('type', params.type);
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.contact_id) queryParams.append('contact_id', params.contact_id.toString());
+    if (params?.company_id) queryParams.append('company_id', params.company_id.toString());
+    if (params?.user_id) queryParams.append('user_id', params.user_id.toString());
+    
+    const queryString = queryParams.toString();
+    const url = `${API_BASE_URL}/api/activities${queryString ? `?${queryString}` : ''}`;
+    
+    console.log("fetchActivities - Making request to:", url);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("fetchActivities - HTTP error:", response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("fetchActivities - Success:", data);
+    return data as ActivityEntry[];
+  } catch (error) {
+    console.error("fetchActivities - Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Create a new event
+ */
+export async function createEvent(eventData: NewEventData): Promise<ActivityEntry> {
+  try {
+    console.log("createEvent - Request data:", eventData);
+    
+    const response = await fetch(`${API_BASE_URL}/api/activities`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(eventData),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("createEvent - HTTP error:", response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("createEvent - Success:", data);
+    return data as ActivityEntry;
+  } catch (error) {
+    console.error("createEvent - Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Update an existing event
+ */
+export async function updateEvent(eventId: string | number, updateData: EventUpdateData): Promise<ActivityEntry> {
+  try {
+    console.log(`updateEvent - Request for ID ${eventId}:`, updateData);
+    
+    const response = await fetch(`${API_BASE_URL}/api/activities/${eventId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("updateEvent - HTTP error:", response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("updateEvent - Success:", data);
+    return data as ActivityEntry;
+  } catch (error) {
+    console.error("updateEvent - Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Delete an event
+ */
+export async function deleteEvent(eventId: string | number): Promise<{ message: string }> {
+  try {
+    console.log(`deleteEvent - Request for ID ${eventId}`);
+    
+    const response = await fetch(`${API_BASE_URL}/api/activities/${eventId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("deleteEvent - HTTP error:", response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("deleteEvent - Success:", data);
+    return data as { message: string };
+  } catch (error) {
+    console.error("deleteEvent - Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch events specifically (convenience function)
+ */
+export async function fetchEvents(params?: Omit<ActivityQueryParams, 'type'>): Promise<ActivityEntry[]> {
+  return fetchActivities({ ...params, type: 'event' });
 }

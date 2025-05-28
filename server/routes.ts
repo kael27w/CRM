@@ -589,6 +589,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
+      // First, get the existing activity to check its type
+      const { data: existingActivity, error: fetchError } = await supabase
+        .from('activities')
+        .select('type')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) {
+        console.error(`PATCH /api/activities/${id} - Error fetching existing activity:`, fetchError);
+        if (fetchError.code === 'PGRST116') {
+          return res.status(404).json({ message: `Activity with ID ${id} not found` });
+        }
+        return res.status(500).json({ message: "Database error fetching activity", error: fetchError.message });
+      }
+
+      // Validate event-specific updates if this is an event
+      if (existingActivity.type === 'event' || updates.type === 'event') {
+        // Validate start_datetime if being updated
+        if (updates.start_datetime && isNaN(new Date(updates.start_datetime).getTime())) {
+          return res.status(400).json({ message: "Invalid start_datetime format" });
+        }
+        
+        // Validate end_datetime if being updated
+        if (updates.end_datetime && isNaN(new Date(updates.end_datetime).getTime())) {
+          return res.status(400).json({ message: "Invalid end_datetime format" });
+        }
+        
+        // Ensure end_datetime is after start_datetime if both are provided
+        if (updates.start_datetime && updates.end_datetime) {
+          const startDate = new Date(updates.start_datetime);
+          const endDate = new Date(updates.end_datetime);
+          if (endDate <= startDate) {
+            return res.status(400).json({ message: "end_datetime must be after start_datetime" });
+          }
+        }
+      }
+
       // Ensure updated_at is set
       const updatesWithTimestamp = {
         ...updates,
@@ -600,7 +637,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from('activities')
         .update(updatesWithTimestamp)
         .eq('id', id)
-        .select()
+        .select(`
+          *,
+          contacts:contact_id(id, first_name, last_name, phone, email),
+          companies:company_id(id, company_name, industry)
+        `)
         .single(); // .single() is important to get the updated record or null if not found/matches multiple (though id should be unique)
 
       if (error) {
@@ -703,6 +744,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...activityPayload, // Client-provided values will override defaults if present
           type: 'task',      // Ensure type is explicitly 'task'
         };
+      } else if (activityPayload.type === 'event') {
+        // For events, validate required fields and set defaults
+        console.log("Creating event activity:", activityPayload);
+        
+        // Validate required fields for events
+        if (!activityPayload.title) {
+          return res.status(400).json({ message: "Title is required for events" });
+        }
+        
+        if (!activityPayload.start_datetime) {
+          return res.status(400).json({ message: "start_datetime is required for events" });
+        }
+        
+        // Validate start_datetime format
+        if (isNaN(new Date(activityPayload.start_datetime).getTime())) {
+          return res.status(400).json({ message: "Invalid start_datetime format" });
+        }
+        
+        // Validate end_datetime if provided
+        if (activityPayload.end_datetime && isNaN(new Date(activityPayload.end_datetime).getTime())) {
+          return res.status(400).json({ message: "Invalid end_datetime format" });
+        }
+        
+        // Ensure end_datetime is after start_datetime if both are provided
+        if (activityPayload.end_datetime) {
+          const startDate = new Date(activityPayload.start_datetime);
+          const endDate = new Date(activityPayload.end_datetime);
+          if (endDate <= startDate) {
+            return res.status(400).json({ message: "end_datetime must be after start_datetime" });
+          }
+        }
+        
+        activityPayload = {
+          status: 'pending', // Default status for new events
+          ...activityPayload, // Client-provided values will override defaults if present
+          type: 'event',     // Ensure type is explicitly 'event'
+        };
       } else if (activityPayload.type === 'note') {
         // For notes, just log that we're creating a note
         console.log("Creating note activity for contact:", activityPayload.contact_id);
@@ -719,6 +797,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // activityPayload.status = activityPayload.status || 'pending';
         // activityPayload.completed = activityPayload.completed === undefined ? false : activityPayload.completed;
         // However, for now, we'll assume client sends type: 'task' for tasks.
+        return res.status(400).json({ message: "Activity type is required" });
       }
       
       // Ensure due_date is either a valid ISO string or null.
@@ -729,11 +808,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activityPayload.due_date = null; // Or handle as an error
       }
 
+      // Add created_at and updated_at timestamps
+      const now = new Date().toISOString();
+      activityPayload.created_at = now;
+      activityPayload.updated_at = now;
 
       const { data: newActivity, error } = await supabase
           .from('activities')
           .insert([activityPayload]) // insert expects an array
-          .select()
+          .select(`
+            *,
+            contacts:contact_id(id, first_name, last_name, phone, email),
+            companies:company_id(id, company_name, industry)
+          `)
           .single();
 
       if (error) {
@@ -2331,6 +2418,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test routes (consider removing for production or securing them)
   // app.post("/api/test/twilio/voice", handleVoiceWebhook);
   // app.post("/api/test/twilio/status-callback", handleStatusCallback);
+
+  // GET /api/activities - Fetch activities with optional filtering
+  app.get("/api/activities", async (req: Request, res: Response) => {
+    try {
+      console.log("GET /api/activities - Request received. Query params:", req.query);
+      
+      const { type, start_date, end_date, contact_id, company_id, user_id } = req.query;
+      
+      let query = supabase
+        .from('activities')
+        .select(`
+          *,
+          contacts:contact_id(id, first_name, last_name, phone, email),
+          companies:company_id(id, company_name, industry)
+        `)
+        .order('created_at', { ascending: false });
+      
+      // Apply filters
+      if (type && typeof type === 'string') {
+        query = query.eq('type', type);
+      }
+      
+      if (contact_id && typeof contact_id === 'string') {
+        query = query.eq('contact_id', contact_id);
+      }
+      
+      if (company_id && typeof company_id === 'string') {
+        query = query.eq('company_id', company_id);
+      }
+      
+      if (user_id && typeof user_id === 'string') {
+        query = query.eq('user_id', user_id);
+      }
+      
+      // Date range filtering for events based on start_datetime
+      if (start_date && typeof start_date === 'string') {
+        query = query.gte('start_datetime', start_date);
+      }
+      
+      if (end_date && typeof end_date === 'string') {
+        query = query.lte('start_datetime', end_date);
+      }
+      
+      const { data: activities, error } = await query;
+      
+      if (error) {
+        console.error("GET /api/activities - Supabase error:", error);
+        return res.status(500).json({ message: "Database error fetching activities", error: error.message });
+      }
+      
+      console.log(`GET /api/activities - Found ${activities?.length || 0} activities`);
+      res.status(200).json(activities || []);
+    } catch (error: any) {
+      console.error("GET /api/activities - Unexpected error:", error.message, error.stack);
+      res.status(500).json({ message: "Internal server error fetching activities", details: error.message });
+    }
+  });
 
   const httpServer = createServer(app);
   console.log("All routes registered successfully");
