@@ -371,8 +371,8 @@ export function EditEventDialog({ open, onOpenChange, event }: EditEventDialogPr
                   <FormItem>
                     <FormLabel>Related Contact</FormLabel>
                     <Select 
-                      onValueChange={(value) => field.onChange(value ? Number(value) : undefined)}
-                      value={field.value?.toString() || ''}
+                      onValueChange={(value) => field.onChange(value === "NO_CONTACT_SELECTED" ? undefined : Number(value))}
+                      value={field.value?.toString() || "NO_CONTACT_SELECTED"}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -380,7 +380,7 @@ export function EditEventDialog({ open, onOpenChange, event }: EditEventDialogPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">No contact</SelectItem>
+                        <SelectItem value="NO_CONTACT_SELECTED">-- No contact --</SelectItem>
                         {contacts.map((contact) => (
                           <SelectItem key={contact.id} value={contact.id.toString()}>
                             {contact.first_name} {contact.last_name}
@@ -400,8 +400,8 @@ export function EditEventDialog({ open, onOpenChange, event }: EditEventDialogPr
                   <FormItem>
                     <FormLabel>Related Company</FormLabel>
                     <Select 
-                      onValueChange={(value) => field.onChange(value ? Number(value) : undefined)}
-                      value={field.value?.toString() || ''}
+                      onValueChange={(value) => field.onChange(value === "NO_COMPANY_SELECTED" ? undefined : Number(value))}
+                      value={field.value?.toString() || "NO_COMPANY_SELECTED"}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -409,7 +409,7 @@ export function EditEventDialog({ open, onOpenChange, event }: EditEventDialogPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">No company</SelectItem>
+                        <SelectItem value="NO_COMPANY_SELECTED">-- No company --</SelectItem>
                         {companies.map((company) => (
                           <SelectItem key={company.id} value={company.id.toString()}>
                             {company.company_name}
