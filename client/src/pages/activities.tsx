@@ -30,8 +30,11 @@ import { AddEventDialog } from '../components/activities/AddEventDialog';
 import { EditEventDialog } from '../components/activities/EditEventDialog';
 import { 
   fetchEvents, 
+  fetchActivities,
+  fetchCallLogs,
   deleteEvent, 
-  type ActivityEntry 
+  type ActivityEntry,
+  type CallLogEntry
 } from '../lib/api';
 import { toast } from 'sonner';
 import { 
@@ -286,62 +289,78 @@ const ActivitiesPage: React.FC = () => {
       window.history.replaceState(null, '', `${pathWithoutQuery}?tab=${activeTab}`);
     }
   }, [activeTab, location]);
-  
-  // Sample data - this will be replaced with actual API data
-  const sampleActivities: Activity[] = [
-    {
-      id: 1,
-      title: "Follow-up call with Sarah Johnson",
-      type: "call",
-      status: "pending",
-      dueDate: "2025-04-10T14:00:00",
-      relatedTo: "Sarah Johnson",
-      relatedType: "contact",
-      assignedTo: "Alex Davis",
-      priority: "high"
-    },
-    {
-      id: 2,
-      title: "Send proposal to TechStart Inc",
-      type: "task",
-      status: "in-progress",
-      dueDate: "2025-04-07T12:00:00",
-      relatedTo: "TechStart Inc",
-      relatedType: "company",
-      assignedTo: "Sarah Johnson"
-    },
-    {
-      id: 3,
-      title: "Quarterly review meeting",
-      type: "event",
-      status: "pending",
-      dueDate: "2025-04-15T10:00:00",
-      relatedTo: "Acme Corp Deal",
-      relatedType: "deal",
-      assignedTo: "Michael Rodriguez"
-    },
-    {
-      id: 4,
-      title: "Send onboarding materials",
-      type: "email",
-      status: "completed",
-      dueDate: "2025-04-02T09:00:00",
-      relatedTo: "Brown Enterprises",
-      relatedType: "company",
-      assignedTo: "Emily Chen"
-    },
-    {
-      id: 5,
-      title: "Prepare contract documents",
-      type: "task",
-      status: "pending",
-      dueDate: "2025-04-09T16:00:00",
-      relatedTo: "Medical Solutions Deal",
-      relatedType: "deal",
-      assignedTo: "Alex Davis",
-      priority: "medium"
-    }
-  ];
+
+  // Fetch all activities for calendar integration
+  const { data: allActivities = [], isLoading: activitiesLoading } = useQuery({
+    queryKey: ['activities'],
+    queryFn: () => fetchActivities(),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  // Fetch call logs for calendar integration
+  const { data: callLogs = [], isLoading: callLogsLoading } = useQuery({
+    queryKey: ['call-logs'],
+    queryFn: fetchCallLogs,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  // Convert API data to calendar activities format
+  const getCalendarActivities = (): Activity[] => {
+    const activities: Activity[] = [];
+
+    // Add events from activities API
+    allActivities.forEach(activity => {
+      if (activity.type === 'event' && activity.start_datetime) {
+        activities.push({
+          id: activity.id,
+          title: activity.title,
+          type: 'event',
+          status: activity.status as any,
+          dueDate: activity.start_datetime,
+          relatedTo: activity.contacts ? `${activity.contacts.first_name} ${activity.contacts.last_name}` : 
+                     activity.companies ? activity.companies.company_name : 'No relation',
+          relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
+          assignedTo: 'Current User', // You might want to add user info to the API
+        });
+      }
+    });
+
+    // Add tasks from activities API
+    allActivities.forEach(activity => {
+      if (activity.type === 'task' && activity.due_date) {
+        activities.push({
+          id: activity.id,
+          title: activity.title,
+          type: 'task',
+          status: activity.status as any,
+          dueDate: activity.due_date,
+          relatedTo: activity.contacts ? `${activity.contacts.first_name} ${activity.contacts.last_name}` : 
+                     activity.companies ? activity.companies.company_name : 'No relation',
+          relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
+          assignedTo: 'Current User',
+          priority: activity.priority as any,
+        });
+      }
+    });
+
+    // Add calls from call logs
+    callLogs.forEach(call => {
+      activities.push({
+        id: call.id,
+        title: `Call ${call.direction === 'inbound' ? 'from' : 'to'} ${call.contact_first_name ? `${call.contact_first_name} ${call.contact_last_name}` : call.from_number}`,
+        type: 'call',
+        status: call.status === 'completed' ? 'completed' : 'pending',
+        dueDate: call.created_at,
+        relatedTo: call.contact_first_name ? `${call.contact_first_name} ${call.contact_last_name}` : call.from_number,
+        relatedType: 'contact',
+        assignedTo: 'Current User',
+      });
+    });
+
+    return activities;
+  };
+
+  const calendarActivities = getCalendarActivities();
 
   // Define columns for the data table
   const columns: ColumnDef<Activity>[] = [
@@ -463,7 +482,7 @@ const ActivitiesPage: React.FC = () => {
   ];
 
   // Filter activities based on active tab
-  const filteredActivities = sampleActivities.filter(activity => {
+  const filteredActivities = calendarActivities.filter(activity => {
     if (activeTab === 'all') return true;
     return activity.type === activeTab;
   });
@@ -492,6 +511,9 @@ const ActivitiesPage: React.FC = () => {
 
   // Event handlers
   const handleAddEventNew = (defaultDate?: Date) => {
+    if (defaultDate) {
+      setSelectedDate(defaultDate);
+    }
     setIsAddEventDialogOpen(true);
   };
 
@@ -509,6 +531,28 @@ const ActivitiesPage: React.FC = () => {
     if (eventToDelete) {
       deleteEventMutation.mutate(eventToDelete.id);
     }
+  };
+
+  // Helper function to convert Activity to ActivityEntry
+  const convertActivityToActivityEntry = (activity: Activity): ActivityEntry => {
+    return {
+      id: activity.id,
+      type: activity.type as any,
+      title: activity.title,
+      description: '',
+      status: activity.status,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      start_datetime: activity.type === 'event' ? activity.dueDate : undefined,
+      due_date: activity.type === 'task' ? activity.dueDate : undefined,
+      priority: activity.priority,
+    };
+  };
+
+  // Handle editing an activity from the calendar
+  const handleEditActivity = (activity: Activity) => {
+    const activityEntry = convertActivityToActivityEntry(activity);
+    handleEditEventNew(activityEntry);
   };
 
   // Helper functions for calendar
@@ -576,7 +620,7 @@ const ActivitiesPage: React.FC = () => {
   
   // Get activities for selected date
   const getActivitiesForSelectedDate = () => {
-    return sampleActivities.filter(activity => {
+    return calendarActivities.filter(activity => {
       // Match date
       const activityDate = new Date(activity.dueDate);
       if (activityDate.toDateString() !== selectedDate.toDateString()) return false;
@@ -584,8 +628,8 @@ const ActivitiesPage: React.FC = () => {
       // Apply filters
       if (!filterTypes[activity.type]) return false;
       
-      // Apply ownership filter (assumption: current user is Alex Davis)
-      if (filterOwnership === "my" && activity.assignedTo !== "Alex Davis") return false;
+      // Apply ownership filter (assumption: current user is Current User)
+      if (filterOwnership === "my" && activity.assignedTo !== "Current User") return false;
       
       // Apply status filter
       if (filterStatus === "open" && activity.status === "completed") return false;
@@ -616,43 +660,9 @@ const ActivitiesPage: React.FC = () => {
     
     // Refresh tasks data from the server or mock
     await refetchTasks();
+    // Also refresh activities for calendar integration
+    queryClient.invalidateQueries({ queryKey: ['activities'] });
     setIsTaskDialogOpen(false);
-  };
-  
-  // Add function to handle opening the dialog for new events
-  const handleAddEvent = (date?: Date) => {
-    setCurrentEditEvent(null);
-    setSelectedDate(date || selectedDate);
-    setIsEventDialogOpen(true);
-  };
-  
-  // Add function to handle opening the dialog for editing events
-  const handleEditEvent = (activity: Activity) => {
-    setCurrentEditEvent(activity);
-    setIsEventDialogOpen(true);
-  };
-  
-  // Add function to save new/edited events
-  const handleSaveEvent = (eventData: CalendarEvent) => {
-    // For now, just log the data. In a real app, this would send data to an API
-    console.log('Event saved:', eventData);
-    
-    if (currentEditEvent) {
-      // Update existing event logic would go here
-      console.log('Updating existing event:', currentEditEvent.id);
-    } else {
-      // Create new event logic would go here
-      console.log('Creating new event');
-    }
-    
-    // Close the dialog
-    setIsEventDialogOpen(false);
-  };
-  
-  // Update activity status
-  const handleActivityStatusChange = (id: number, completed: boolean) => {
-    console.log(`Activity ${id} status changed to ${completed ? 'completed' : 'pending'}`);
-    // This would be replaced with a mutation to update the activity status
   };
   
   // Get month name and year
@@ -664,6 +674,9 @@ const ActivitiesPage: React.FC = () => {
   const calendarDays = generateCalendarDays();
   const today = new Date();
   const activitiesForSelectedDate = getActivitiesForSelectedDate();
+  
+  // Check if calendar data is loading
+  const isCalendarLoading = activitiesLoading || callLogsLoading;
   
   const renderTasks = () => {
     if (!tasks || tasks.length === 0) {
@@ -730,6 +743,35 @@ const ActivitiesPage: React.FC = () => {
     );
   };
   
+  // Update activity status
+  const handleActivityStatusChange = (id: number, completed: boolean) => {
+    console.log(`Activity ${id} status changed to ${completed ? 'completed' : 'pending'}`);
+    // This would be replaced with a mutation to update the activity status
+    // For now, we'll refresh the activities to get updated data
+    queryClient.invalidateQueries({ queryKey: ['activities'] });
+  };
+
+  // Add function to save new/edited events (for old calendar dialog compatibility)
+  const handleSaveEvent = (eventData: CalendarEvent) => {
+    // For now, just log the data. In a real app, this would send data to an API
+    console.log('Event saved:', eventData);
+    
+    if (currentEditEvent) {
+      // Update existing event logic would go here
+      console.log('Updating existing event:', currentEditEvent.id);
+    } else {
+      // Create new event logic would go here
+      console.log('Creating new event');
+    }
+    
+    // Refresh activities for calendar integration
+    queryClient.invalidateQueries({ queryKey: ['activities'] });
+    queryClient.invalidateQueries({ queryKey: ['events'] });
+    
+    // Close the dialog
+    setIsEventDialogOpen(false);
+  };
+  
   return (
     <div className="space-y-6">
       <div>
@@ -761,239 +803,246 @@ const ActivitiesPage: React.FC = () => {
         
         {/* Calendar Tab Content */}
         <TabsContent value="calendar" className="mt-6">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Main Calendar View */}
-            <div className="flex-1">
-              {/* Calendar Controls */}
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={goToToday}
-                    className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium"
-                  >
-                    Today
-                  </button>
-                  <button 
-                    onClick={goToPrevMonth}
-                    className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button 
-                    onClick={goToNextMonth}
-                    className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                  <h2 className="text-lg font-medium">{monthYearStr}</h2>
+          {isCalendarLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-slate-500 dark:text-slate-400">Loading calendar data...</p>
+            </div>
+          ) : (
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* Main Calendar View */}
+              <div className="flex-1">
+                {/* Calendar Controls */}
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={goToToday}
+                      className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium"
+                    >
+                      Today
+                    </button>
+                    <button 
+                      onClick={goToPrevMonth}
+                      className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <button 
+                      onClick={goToNextMonth}
+                      className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                    <h2 className="text-lg font-medium">{monthYearStr}</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      onClick={() => handleAddEventNew()} 
+                      className="flex items-center gap-1"
+                      size="sm"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Event
+                    </Button>
+                    <button className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium">
+                      Month
+                    </button>
+                    <button className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium">
+                      Week
+                    </button>
+                    <button className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium">
+                      Day
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    onClick={() => handleAddEvent()} 
-                    className="flex items-center gap-1"
-                    size="sm"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Event
-                  </Button>
-                  <button className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium">
-                    Month
-                  </button>
-                  <button className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium">
-                    Week
-                  </button>
-                  <button className="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md font-medium">
-                    Day
-                  </button>
+                
+                {/* Calendar Grid */}
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm">
+                  {/* Day names header */}
+                  <div className="grid grid-cols-7 gap-px border-b border-slate-200 dark:border-slate-700">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
+                      <div key={i} className="py-2 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Calendar grid */}
+                  <div className="grid grid-cols-7 gap-px">
+                    {calendarDays.map((day, i) => {
+                      // Filter activities for this calendar day based on active filters
+                      const filteredActivitiesForDay = calendarActivities.filter(activity => {
+                        // Match day
+                        const activityDate = new Date(activity.dueDate);
+                        if (activityDate.toDateString() !== day.toDateString()) return false;
+                        
+                        // Apply type filters
+                        if (!filterTypes[activity.type]) return false;
+                        
+                        // Apply ownership filter (assumption: current user is Current User)
+                        if (filterOwnership === "my" && activity.assignedTo !== "Current User") return false;
+                        
+                        // Apply status filter
+                        if (filterStatus === "open" && activity.status === "completed") return false;
+                        if (filterStatus === "closed" && activity.status !== "completed") return false;
+                        
+                        return true;
+                      });
+                      
+                      return (
+                        <CalendarDay
+                          key={i}
+                          day={day}
+                          activities={filteredActivitiesForDay}
+                          isCurrentMonth={day.getMonth() === currentDate.getMonth()}
+                          isToday={day.toDateString() === today.toDateString()}
+                          onClick={() => {
+                            setSelectedDate(day);
+                            // Double-click detection could be added here
+                          }}
+                          onDoubleClick={() => handleAddEventNew(day)}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
               
-              {/* Calendar Grid */}
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm">
-                {/* Day names header */}
-                <div className="grid grid-cols-7 gap-px border-b border-slate-200 dark:border-slate-700">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
-                    <div key={i} className="py-2 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
-                      {day}
+              {/* Right Panel */}
+              <div className="w-full md:w-80 shrink-0">
+                <Card className="overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <div>
+                      <h3 className="font-semibold text-lg">
+                        {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                      </h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {activitiesForSelectedDate.length} activities
+                      </p>
                     </div>
-                  ))}
-                </div>
-                
-                {/* Calendar grid */}
-                <div className="grid grid-cols-7 gap-px">
-                  {calendarDays.map((day, i) => {
-                    // Filter activities for this calendar day based on active filters
-                    const filteredActivitiesForDay = sampleActivities.filter(activity => {
-                      // Match day
-                      const activityDate = new Date(activity.dueDate);
-                      if (activityDate.toDateString() !== day.toDateString()) return false;
-                      
-                      // Apply type filters
-                      if (!filterTypes[activity.type]) return false;
-                      
-                      // Apply ownership filter (assumption: current user is Alex Davis)
-                      if (filterOwnership === "my" && activity.assignedTo !== "Alex Davis") return false;
-                      
-                      // Apply status filter
-                      if (filterStatus === "open" && activity.status === "completed") return false;
-                      if (filterStatus === "closed" && activity.status !== "completed") return false;
-                      
-                      return true;
-                    });
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => handleAddEventNew(selectedDate)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span className="sr-only">Add activity</span>
+                    </Button>
+                  </div>
+                  
+                  {/* Activities for selected date */}
+                  <div className="max-h-80 overflow-y-auto">
+                    {activitiesForSelectedDate.length > 0 ? (
+                      activitiesForSelectedDate.map(activity => (
+                        <div 
+                          key={activity.id} 
+                          onClick={() => handleEditActivity(activity)} 
+                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        >
+                          <ActivityItem 
+                            activity={activity}
+                            onStatusChange={handleActivityStatusChange}
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-slate-500 dark:text-slate-400">
+                        No activities for this date
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Filter Controls */}
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+                    <h4 className="font-medium text-sm mb-3">Filters</h4>
                     
-                    return (
-                      <CalendarDay
-                        key={i}
-                        day={day}
-                        activities={filteredActivitiesForDay}
-                        isCurrentMonth={day.getMonth() === currentDate.getMonth()}
-                        isToday={day.toDateString() === today.toDateString()}
-                        onClick={() => {
-                          setSelectedDate(day);
-                          // Double-click detection could be added here
-                        }}
-                        onDoubleClick={() => handleAddEvent(day)}
-                      />
-                    );
-                  })}
-                </div>
+                    {/* Activity Type Filters */}
+                    <div className="mb-4">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Activity Types</p>
+                      <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center">
+                          <Checkbox 
+                            id="filter-task" 
+                            checked={filterTypes.task}
+                            onCheckedChange={() => toggleActivityTypeFilter('task')}
+                            className="mr-2"
+                          />
+                          <Label htmlFor="filter-task" className="text-sm flex items-center">
+                            <CheckSquare className="h-3 w-3 mr-1 text-orange-500" /> Tasks
+                          </Label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox 
+                            id="filter-event" 
+                            checked={filterTypes.event}
+                            onCheckedChange={() => toggleActivityTypeFilter('event')}
+                            className="mr-2"
+                          />
+                          <Label htmlFor="filter-event" className="text-sm flex items-center">
+                            <CalendarIcon className="h-3 w-3 mr-1 text-green-500" /> Events
+                          </Label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox 
+                            id="filter-call" 
+                            checked={filterTypes.call}
+                            onCheckedChange={() => toggleActivityTypeFilter('call')}
+                            className="mr-2"
+                          />
+                          <Label htmlFor="filter-call" className="text-sm flex items-center">
+                            <Phone className="h-3 w-3 mr-1 text-blue-500" /> Calls
+                          </Label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Ownership Filter */}
+                    <div className="mb-4">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Ownership</p>
+                      <RadioGroup 
+                        value={filterOwnership}
+                        onValueChange={setFilterOwnership}
+                        className="flex gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="my" id="ownership-my" />
+                          <Label htmlFor="ownership-my" className="text-sm">My Activities</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="all" id="ownership-all" />
+                          <Label htmlFor="ownership-all" className="text-sm">All Activities</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                    
+                    {/* Status Filter */}
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Status</p>
+                      <RadioGroup 
+                        value={filterStatus}
+                        onValueChange={setFilterStatus}
+                        className="flex gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="open" id="status-open" />
+                          <Label htmlFor="status-open" className="text-sm">Open</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="closed" id="status-closed" />
+                          <Label htmlFor="status-closed" className="text-sm">Closed</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="all" id="status-all" />
+                          <Label htmlFor="status-all" className="text-sm">All</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  </div>
+                </Card>
               </div>
             </div>
-            
-            {/* Right Panel */}
-            <div className="w-full md:w-80 shrink-0">
-              <Card className="overflow-hidden">
-                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold text-lg">
-                      {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                    </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      {activitiesForSelectedDate.length} activities
-                    </p>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => handleAddEvent(selectedDate)}
-                    className="h-8 w-8 p-0"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span className="sr-only">Add activity</span>
-                  </Button>
-                </div>
-                
-                {/* Activities for selected date */}
-                <div className="max-h-80 overflow-y-auto">
-                  {activitiesForSelectedDate.length > 0 ? (
-                    activitiesForSelectedDate.map(activity => (
-                      <div 
-                        key={activity.id} 
-                        onClick={() => handleEditEvent(activity)} 
-                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                      >
-                        <ActivityItem 
-                          activity={activity}
-                          onStatusChange={handleActivityStatusChange}
-                        />
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-4 text-center text-slate-500 dark:text-slate-400">
-                      No activities for this date
-                    </div>
-                  )}
-                </div>
-                
-                {/* Filter Controls */}
-                <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-                  <h4 className="font-medium text-sm mb-3">Filters</h4>
-                  
-                  {/* Activity Type Filters */}
-                  <div className="mb-4">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Activity Types</p>
-                    <div className="flex flex-wrap gap-2">
-                      <div className="flex items-center">
-                        <Checkbox 
-                          id="filter-task" 
-                          checked={filterTypes.task}
-                          onCheckedChange={() => toggleActivityTypeFilter('task')}
-                          className="mr-2"
-                        />
-                        <Label htmlFor="filter-task" className="text-sm flex items-center">
-                          <CheckSquare className="h-3 w-3 mr-1 text-orange-500" /> Tasks
-                        </Label>
-                      </div>
-                      <div className="flex items-center">
-                        <Checkbox 
-                          id="filter-event" 
-                          checked={filterTypes.event}
-                          onCheckedChange={() => toggleActivityTypeFilter('event')}
-                          className="mr-2"
-                        />
-                        <Label htmlFor="filter-event" className="text-sm flex items-center">
-                          <CalendarIcon className="h-3 w-3 mr-1 text-green-500" /> Events
-                        </Label>
-                      </div>
-                      <div className="flex items-center">
-                        <Checkbox 
-                          id="filter-call" 
-                          checked={filterTypes.call}
-                          onCheckedChange={() => toggleActivityTypeFilter('call')}
-                          className="mr-2"
-                        />
-                        <Label htmlFor="filter-call" className="text-sm flex items-center">
-                          <Phone className="h-3 w-3 mr-1 text-blue-500" /> Calls
-                        </Label>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Ownership Filter */}
-                  <div className="mb-4">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Ownership</p>
-                    <RadioGroup 
-                      value={filterOwnership}
-                      onValueChange={setFilterOwnership}
-                      className="flex gap-4"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="my" id="ownership-my" />
-                        <Label htmlFor="ownership-my" className="text-sm">My Activities</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="all" id="ownership-all" />
-                        <Label htmlFor="ownership-all" className="text-sm">All Activities</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                  
-                  {/* Status Filter */}
-                  <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Status</p>
-                    <RadioGroup 
-                      value={filterStatus}
-                      onValueChange={setFilterStatus}
-                      className="flex gap-4"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="open" id="status-open" />
-                        <Label htmlFor="status-open" className="text-sm">Open</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="closed" id="status-closed" />
-                        <Label htmlFor="status-closed" className="text-sm">Closed</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="all" id="status-all" />
-                        <Label htmlFor="status-all" className="text-sm">All</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
+          )}
         </TabsContent>
         
         {/* Tasks Tab Content */}
@@ -1186,6 +1235,7 @@ const ActivitiesPage: React.FC = () => {
       <AddEventDialog
         open={isAddEventDialogOpen}
         onOpenChange={setIsAddEventDialogOpen}
+        defaultDate={selectedDate}
       />
 
       {/* Edit Event Dialog */}

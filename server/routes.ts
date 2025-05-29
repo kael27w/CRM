@@ -727,17 +727,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Example for POST /api/activities (can be adapted for tasks)
   app.post("/api/activities", async (req: Request, res: Response) => {
     try {
-      console.log("POST /api/activities - Request received. Body:", req.body);
+      console.log("[POST_ACTIVITIES] Request received. Full body:", JSON.stringify(req.body, null, 2));
+      console.log("[POST_ACTIVITIES] Request body type field:", typeof req.body.type, "value:", req.body.type);
       
       // Validate with Zod (assuming insertActivitySchema is appropriate or a new one is made)
       // For now, we'll manually construct and ensure 'type' and defaults for tasks.
       // const validatedData = insertActivitySchema.parse(req.body);
 
       let activityPayload = { ...req.body };
+      console.log("[POST_ACTIVITIES] Initial activityPayload:", JSON.stringify(activityPayload, null, 2));
 
       // If the client intends to create a task, ensure critical fields are set.
       // The client should ideally always send type: 'task'.
       if (activityPayload.type === 'task') {
+        console.log("[POST_ACTIVITIES] Processing task creation");
         activityPayload = {
           status: 'pending', // Default status for new tasks
           completed: false,  // Default completion state for new tasks
@@ -746,24 +749,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       } else if (activityPayload.type === 'event') {
         // For events, validate required fields and set defaults
-        console.log("Creating event activity:", activityPayload);
+        console.log("[POST_ACTIVITIES] Processing event creation:", activityPayload);
         
         // Validate required fields for events
         if (!activityPayload.title) {
+          console.error("[POST_ACTIVITIES] Missing title for event");
           return res.status(400).json({ message: "Title is required for events" });
         }
         
         if (!activityPayload.start_datetime) {
+          console.error("[POST_ACTIVITIES] Missing start_datetime for event");
           return res.status(400).json({ message: "start_datetime is required for events" });
         }
         
         // Validate start_datetime format
         if (isNaN(new Date(activityPayload.start_datetime).getTime())) {
+          console.error("[POST_ACTIVITIES] Invalid start_datetime format:", activityPayload.start_datetime);
           return res.status(400).json({ message: "Invalid start_datetime format" });
         }
         
         // Validate end_datetime if provided
         if (activityPayload.end_datetime && isNaN(new Date(activityPayload.end_datetime).getTime())) {
+          console.error("[POST_ACTIVITIES] Invalid end_datetime format:", activityPayload.end_datetime);
           return res.status(400).json({ message: "Invalid end_datetime format" });
         }
         
@@ -772,6 +779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const startDate = new Date(activityPayload.start_datetime);
           const endDate = new Date(activityPayload.end_datetime);
           if (endDate <= startDate) {
+            console.error("[POST_ACTIVITIES] end_datetime is not after start_datetime");
             return res.status(400).json({ message: "end_datetime must be after start_datetime" });
           }
         }
@@ -781,12 +789,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...activityPayload, // Client-provided values will override defaults if present
           type: 'event',     // Ensure type is explicitly 'event'
         };
+        console.log("[POST_ACTIVITIES] Final event payload after processing:", JSON.stringify(activityPayload, null, 2));
       } else if (activityPayload.type === 'note') {
         // For notes, just log that we're creating a note
-        console.log("Creating note activity for contact:", activityPayload.contact_id);
+        console.log("[POST_ACTIVITIES] Creating note activity for contact:", activityPayload.contact_id);
         // Remove call_sid if present since database doesn't support it
         if (activityPayload.call_sid) {
-          console.log("Note: call_sid provided but not stored in database:", activityPayload.call_sid);
+          console.log("[POST_ACTIVITIES] Note: call_sid provided but not stored in database:", activityPayload.call_sid);
           delete activityPayload.call_sid;
         }
       } else if (!activityPayload.type) {
@@ -797,6 +806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // activityPayload.status = activityPayload.status || 'pending';
         // activityPayload.completed = activityPayload.completed === undefined ? false : activityPayload.completed;
         // However, for now, we'll assume client sends type: 'task' for tasks.
+        console.error("[POST_ACTIVITIES] Missing activity type");
         return res.status(400).json({ message: "Activity type is required" });
       }
       
@@ -804,7 +814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Supabase might handle invalid date strings by erroring or setting to null depending on column type.
       // It's good practice to validate/sanitize dates.
       if (activityPayload.due_date && isNaN(new Date(activityPayload.due_date).getTime())) {
-        console.warn("POST /api/activities - Invalid due_date received:", activityPayload.due_date);
+        console.warn("[POST_ACTIVITIES] Invalid due_date received:", activityPayload.due_date);
         activityPayload.due_date = null; // Or handle as an error
       }
 
@@ -812,6 +822,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = new Date().toISOString();
       activityPayload.created_at = now;
       activityPayload.updated_at = now;
+
+      console.log("[POST_ACTIVITIES] Final payload before Supabase insert:", JSON.stringify(activityPayload, null, 2));
+      console.log("[POST_ACTIVITIES] Payload type field:", typeof activityPayload.type, "value:", activityPayload.type);
 
       const { data: newActivity, error } = await supabase
           .from('activities')
@@ -824,19 +837,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .single();
 
       if (error) {
-          console.error("POST /api/activities - Supabase error creating activity:", error);
+          console.error("[POST_ACTIVITIES] Supabase error creating activity:", error);
+          console.error("[POST_ACTIVITIES] Supabase error code:", error.code);
+          console.error("[POST_ACTIVITIES] Supabase error message:", error.message);
+          console.error("[POST_ACTIVITIES] Supabase error details:", error.details);
           // More specific error handling based on Supabase error codes can be added
           // e.g., if (error.code === '23505') { /* unique constraint violation */ }
           return res.status(500).json({ message: "Database error creating activity", details: error.message });
       }
       if (!newActivity) {
           // This case should ideally be caught by the Supabase error above
+          console.error("[POST_ACTIVITIES] No data returned from Supabase insert");
           return res.status(500).json({ message: "Failed to create activity (no data returned)" });
       }
-      console.log("POST /api/activities - Activity created successfully:", newActivity);
+      console.log("[POST_ACTIVITIES] Activity created successfully:", newActivity);
       res.status(201).json(newActivity);
     } catch (error: any) {
-        console.error("POST /api/activities - Unexpected error in handler:", error.message, error.stack);
+        console.error("[POST_ACTIVITIES] Unexpected error in handler:", error.message, error.stack);
         if (error instanceof ZodError) {
             // Make sure you have `insertActivitySchema` defined and imported for this to work
             // return res.status(400).json({ message: fromZodError(error).message });

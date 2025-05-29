@@ -114,12 +114,13 @@ export function AddEventDialog({ open, onOpenChange, defaultDate }: AddEventDial
   });
 
   const onSubmit = (data: EventFormData) => {
-    console.log('Form submitted with data:', data);
+    console.log('[ADD_EVENT_DIALOG] Form submitted with raw data:', data);
     
     // Combine date and time for start_datetime
     const startDateTime = new Date(data.start_date);
     const [startHours, startMinutes] = data.start_time.split(':').map(Number);
     startDateTime.setHours(startHours, startMinutes, 0, 0);
+    console.log('[ADD_EVENT_DIALOG] Processed start_datetime:', startDateTime.toISOString());
     
     // Combine date and time for end_datetime if provided
     let endDateTime: Date | undefined;
@@ -127,6 +128,9 @@ export function AddEventDialog({ open, onOpenChange, defaultDate }: AddEventDial
       endDateTime = new Date(data.end_date);
       const [endHours, endMinutes] = data.end_time.split(':').map(Number);
       endDateTime.setHours(endHours, endMinutes, 0, 0);
+      console.log('[ADD_EVENT_DIALOG] Processed end_datetime:', endDateTime.toISOString());
+    } else {
+      console.log('[ADD_EVENT_DIALOG] No end_datetime provided');
     }
     
     const eventData: NewEventData = {
@@ -141,7 +145,8 @@ export function AddEventDialog({ open, onOpenChange, defaultDate }: AddEventDial
       status: data.status,
     };
     
-    console.log('Submitting event data:', eventData);
+    console.log('[ADD_EVENT_DIALOG] Final eventData payload:', eventData);
+    console.log('[ADD_EVENT_DIALOG] Calling createEvent mutation...');
     createEventMutation.mutate(eventData);
   };
 

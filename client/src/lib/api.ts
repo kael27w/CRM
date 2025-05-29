@@ -1843,7 +1843,10 @@ export async function fetchActivities(params?: ActivityQueryParams): Promise<Act
  */
 export async function createEvent(eventData: NewEventData): Promise<ActivityEntry> {
   try {
-    console.log("createEvent - Request data:", eventData);
+    console.log("[CREATE_EVENT_API] Starting createEvent with data:", eventData);
+    console.log("[CREATE_EVENT_API] Event data type:", typeof eventData.type, "value:", eventData.type);
+    console.log("[CREATE_EVENT_API] Event data title:", eventData.title);
+    console.log("[CREATE_EVENT_API] Event data start_datetime:", eventData.start_datetime);
     
     const response = await fetch(`${API_BASE_URL}/api/activities`, {
       method: 'POST',
@@ -1853,17 +1856,20 @@ export async function createEvent(eventData: NewEventData): Promise<ActivityEntr
       body: JSON.stringify(eventData),
     });
 
+    console.log("[CREATE_EVENT_API] Response status:", response.status);
+    console.log("[CREATE_EVENT_API] Response headers:", Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("createEvent - HTTP error:", response.status, errorText);
+      console.error("[CREATE_EVENT_API] HTTP error:", response.status, errorText);
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
-    console.log("createEvent - Success:", data);
+    console.log("[CREATE_EVENT_API] Success response:", data);
     return data as ActivityEntry;
   } catch (error) {
-    console.error("createEvent - Error:", error);
+    console.error("[CREATE_EVENT_API] Error:", error);
     throw error;
   }
 }
