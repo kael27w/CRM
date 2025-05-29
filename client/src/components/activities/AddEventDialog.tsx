@@ -32,7 +32,6 @@ const eventSchema = z.object({
   location: z.string().optional(),
   contact_id: z.number().optional(),
   company_id: z.number().optional(),
-  status: z.enum(['pending', 'in-progress', 'completed', 'cancelled']).default('pending'),
 }).refine((data) => {
   // If end_date and end_time are provided, ensure end is after start
   if (data.end_date && data.end_time) {
@@ -75,7 +74,6 @@ export function AddEventDialog({ open, onOpenChange, defaultDate }: AddEventDial
       location: '',
       contact_id: undefined,
       company_id: undefined,
-      status: 'pending',
     },
   });
 
@@ -142,7 +140,6 @@ export function AddEventDialog({ open, onOpenChange, defaultDate }: AddEventDial
       location: data.location || undefined,
       contact_id: data.contact_id || undefined,
       company_id: data.company_id || undefined,
-      status: data.status,
     };
     
     console.log('[ADD_EVENT_DIALOG] Final eventData payload:', eventData);
@@ -390,31 +387,6 @@ export function AddEventDialog({ open, onOpenChange, defaultDate }: AddEventDial
                 )}
               />
             </div>
-
-            {/* Status */}
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in-progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleCancel}>

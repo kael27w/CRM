@@ -34,7 +34,8 @@ import {
   fetchCallLogs,
   deleteEvent, 
   type ActivityEntry,
-  type CallLogEntry
+  type CallLogEntry,
+  updateActivity
 } from '../lib/api';
 import { toast } from 'sonner';
 import { 
@@ -61,6 +62,11 @@ interface Activity {
   relatedType: 'contact' | 'company' | 'deal';
   assignedTo: string;
   priority?: 'low' | 'medium' | 'high';
+  // Multi-day event properties
+  isMultiDay?: boolean;
+  eventStartDate?: string;
+  eventEndDate?: string;
+  currentDisplayDate?: string;
 }
 
 // Calendar Day Component
@@ -83,8 +89,30 @@ const CalendarDay: React.FC<CalendarDayProps> = ({ day, activities, isCurrentMon
   };
   
   activities.forEach(activity => {
-    const activityDate = new Date(activity.dueDate);
-    if (activityDate.toDateString() === day.toDateString()) {
+    let shouldInclude = false;
+    
+    if (activity.type === 'task') {
+      // For tasks, use date-only comparison to avoid timezone issues
+      const activityDateStr = activity.dueDate.split('T')[0];
+      const dayDateStr = day.toISOString().split('T')[0];
+      shouldInclude = activityDateStr === dayDateStr;
+    } else if ((activity as any).isMultiDay) {
+      // For multi-day events, check if this day falls within the event's date range
+      const eventStartDate = new Date((activity as any).eventStartDate);
+      const eventEndDate = new Date((activity as any).eventEndDate);
+      const dayStart = new Date(day);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(day);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      shouldInclude = dayStart <= eventEndDate && dayEnd >= eventStartDate;
+    } else {
+      // For single-day events and calls, use standard date comparison
+      const activityDate = new Date(activity.dueDate);
+      shouldInclude = activityDate.toDateString() === day.toDateString();
+    }
+    
+    if (shouldInclude) {
       activityCounts[activity.type]++;
     }
   });
@@ -164,7 +192,12 @@ interface ActivityItemProps {
 
 const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange }) => {
   const isCompleted = activity.status === 'completed';
-  const time = new Date(activity.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  // For tasks, don't show a specific time (they're all-day)
+  // For events and calls, show the actual time
+  const timeDisplay = activity.type === 'task' 
+    ? 'All day' 
+    : new Date(activity.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
   const iconMap = {
     task: <CheckSquare className="h-4 w-4 text-orange-500" />,
@@ -173,28 +206,82 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange })
     email: <Mail className="h-4 w-4 text-purple-500" />
   };
 
+  const handleCheckboxChange = (checked: boolean) => {
+    // Only allow checkbox interaction for tasks
+    if (activity.type === 'task') {
+      onStatusChange(activity.id, checked);
+    }
+  };
+
   return (
     <div className={`
       p-3 border-b border-slate-100 dark:border-slate-800 last:border-0
       ${isCompleted ? 'opacity-60' : ''}
     `}>
       <div className="flex items-start gap-3">
-        <Checkbox 
-          checked={isCompleted} 
-          onCheckedChange={(checked) => onStatusChange(activity.id, checked === true)}
-          className="mt-1"
-        />
+        {/* Only show checkbox for tasks */}
+        {activity.type === 'task' && (
+          <Checkbox 
+            checked={isCompleted} 
+            onCheckedChange={handleCheckboxChange}
+            className="mt-1"
+          />
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             {iconMap[activity.type]}
-            <span className="text-xs text-slate-500">{time}</span>
+            <span className="text-xs text-slate-500">{timeDisplay}</span>
+            {activity.priority && activity.type === 'task' && (
+              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                activity.priority === 'high' ? 'bg-red-100 text-red-700' :
+                activity.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                'bg-gray-100 text-gray-700'
+              }`}>
+                {activity.priority}
+              </span>
+            )}
           </div>
-          <p className={`text-sm mt-1 ${isCompleted ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>
+          <p className={`text-sm mt-1 font-medium ${isCompleted ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>
             {activity.title}
           </p>
-          <div className="text-xs text-slate-500 mt-1 truncate">
-            {activity.relatedTo} ({activity.relatedType})
-          </div>
+          
+          {/* Enhanced detail display based on activity type */}
+          {activity.type === 'task' && (
+            <div className="text-xs text-slate-500 mt-1">
+              <div>Due: {new Date(activity.dueDate).toLocaleDateString()}</div>
+              {activity.relatedTo !== 'No relation' && (
+                <div className="truncate">Related to: {activity.relatedTo} ({activity.relatedType})</div>
+              )}
+            </div>
+          )}
+          
+          {activity.type === 'event' && (
+            <div className="text-xs text-slate-500 mt-1">
+              {(activity as any).isMultiDay ? (
+                <div>
+                  {new Date((activity as any).eventStartDate).toLocaleDateString()} - {new Date((activity as any).eventEndDate).toLocaleDateString()}
+                  <br />
+                  Starts: {new Date((activity as any).eventStartDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              ) : (
+                <div>
+                  {new Date(activity.dueDate).toLocaleDateString()} at {new Date(activity.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
+              {activity.relatedTo !== 'No relation' && (
+                <div className="truncate">With: {activity.relatedTo} ({activity.relatedType})</div>
+              )}
+            </div>
+          )}
+          
+          {activity.type === 'call' && (
+            <div className="text-xs text-slate-500 mt-1">
+              <div>
+                {new Date(activity.dueDate).toLocaleDateString()} at {new Date(activity.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="truncate">{activity.relatedTo}</div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -311,17 +398,49 @@ const ActivitiesPage: React.FC = () => {
     // Add events from activities API
     allActivities.forEach(activity => {
       if (activity.type === 'event' && activity.start_datetime) {
-        activities.push({
-          id: activity.id,
-          title: activity.title,
-          type: 'event',
-          status: activity.status as any,
-          dueDate: activity.start_datetime,
-          relatedTo: activity.contacts ? `${activity.contacts.first_name} ${activity.contacts.last_name}` : 
-                     activity.companies ? activity.companies.company_name : 'No relation',
-          relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
-          assignedTo: 'Current User', // You might want to add user info to the API
-        });
+        const startDate = new Date(activity.start_datetime);
+        const endDate = activity.end_datetime ? new Date(activity.end_datetime) : null;
+        
+        // If event has an end date and spans multiple days, create entries for each day
+        if (endDate && endDate.toDateString() !== startDate.toDateString()) {
+          const currentDate = new Date(startDate);
+          currentDate.setHours(0, 0, 0, 0); // Start at beginning of day
+          
+          while (currentDate <= endDate) {
+            activities.push({
+              id: activity.id,
+              title: activity.title,
+              type: 'event',
+              status: activity.status as any,
+              dueDate: activity.start_datetime, // Keep original start time for sorting
+              relatedTo: activity.contacts ? `${activity.contacts.first_name} ${activity.contacts.last_name}` : 
+                         activity.companies ? activity.companies.company_name : 'No relation',
+              relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
+              assignedTo: 'Current User',
+              // Add metadata to identify multi-day events
+              isMultiDay: true,
+              eventStartDate: activity.start_datetime,
+              eventEndDate: activity.end_datetime,
+              currentDisplayDate: currentDate.toISOString(),
+            } as Activity & { isMultiDay?: boolean; eventStartDate?: string; eventEndDate?: string; currentDisplayDate?: string });
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        } else {
+          // Single day event
+          activities.push({
+            id: activity.id,
+            title: activity.title,
+            type: 'event',
+            status: activity.status as any,
+            dueDate: activity.start_datetime,
+            relatedTo: activity.contacts ? `${activity.contacts.first_name} ${activity.contacts.last_name}` : 
+                       activity.companies ? activity.companies.company_name : 'No relation',
+            relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
+            assignedTo: 'Current User',
+          });
+        }
       }
     });
 
@@ -621,9 +740,30 @@ const ActivitiesPage: React.FC = () => {
   // Get activities for selected date
   const getActivitiesForSelectedDate = () => {
     return calendarActivities.filter(activity => {
-      // Match date
-      const activityDate = new Date(activity.dueDate);
-      if (activityDate.toDateString() !== selectedDate.toDateString()) return false;
+      let shouldInclude = false;
+      
+      if (activity.type === 'task') {
+        // For tasks, use date-only comparison to avoid timezone issues
+        const activityDateStr = activity.dueDate.split('T')[0]; // Get just the date part
+        const selectedDateStr = selectedDate.toISOString().split('T')[0]; // Get just the date part
+        shouldInclude = activityDateStr === selectedDateStr;
+      } else if ((activity as any).isMultiDay) {
+        // For multi-day events, check if the selected date falls within the event's date range
+        const eventStartDate = new Date((activity as any).eventStartDate);
+        const eventEndDate = new Date((activity as any).eventEndDate);
+        const selectedDateStart = new Date(selectedDate);
+        selectedDateStart.setHours(0, 0, 0, 0);
+        const selectedDateEnd = new Date(selectedDate);
+        selectedDateEnd.setHours(23, 59, 59, 999);
+        
+        shouldInclude = selectedDateStart <= eventEndDate && selectedDateEnd >= eventStartDate;
+      } else {
+        // For single-day events and calls, use full datetime comparison
+        const activityDate = new Date(activity.dueDate);
+        shouldInclude = activityDate.toDateString() === selectedDate.toDateString();
+      }
+      
+      if (!shouldInclude) return false;
       
       // Apply filters
       if (!filterTypes[activity.type]) return false;
@@ -636,6 +776,23 @@ const ActivitiesPage: React.FC = () => {
       if (filterStatus === "closed" && activity.status !== "completed") return false;
       
       return true;
+    }).sort((a, b) => {
+      // Sort activities by time within the day (earliest first)
+      if (a.type === 'task' && b.type === 'task') {
+        // For tasks, sort by creation time or title since they don't have specific times
+        return a.title.localeCompare(b.title);
+      } else if (a.type === 'task') {
+        // Tasks come first (all-day items)
+        return -1;
+      } else if (b.type === 'task') {
+        // Tasks come first (all-day items)
+        return 1;
+      } else {
+        // For events and calls, sort by actual time
+        const timeA = new Date(a.dueDate).getTime();
+        const timeB = new Date(b.dueDate).getTime();
+        return timeA - timeB;
+      }
     });
   };
   
@@ -744,11 +901,26 @@ const ActivitiesPage: React.FC = () => {
   };
   
   // Update activity status
-  const handleActivityStatusChange = (id: number, completed: boolean) => {
+  const handleActivityStatusChange = async (id: number, completed: boolean) => {
     console.log(`Activity ${id} status changed to ${completed ? 'completed' : 'pending'}`);
-    // This would be replaced with a mutation to update the activity status
-    // For now, we'll refresh the activities to get updated data
-    queryClient.invalidateQueries({ queryKey: ['activities'] });
+    
+    try {
+      // Update the activity status via API
+      await updateActivity(id, {
+        completed,
+        status: completed ? 'completed' : 'pending'
+      });
+      
+      // Show success feedback
+      toast.success(`Task ${completed ? 'completed' : 'reopened'} successfully!`);
+      
+      // Refresh the activities to get updated data
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    } catch (error: any) {
+      console.error('Error updating activity status:', error);
+      toast.error(`Error updating task: ${error.message}`);
+    }
   };
 
   // Add function to save new/edited events (for old calendar dialog compatibility)

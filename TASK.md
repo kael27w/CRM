@@ -131,6 +131,32 @@
     - [x] Added comprehensive logging for debugging database constraint issues
     - [x] Created test script to verify both task and event creation work correctly
 
+15. [x] **Enhance Calendar View and Activity Handling (01/27/2025)**
+    - [x] Fixed Task Date and Time Display Issues:
+      - [x] Resolved timezone off-by-one error for task due dates using date-only comparison
+      - [x] Updated task time display to show "All day" instead of specific times
+      - [x] Fixed date parsing to avoid timezone shifts that pushed tasks to previous day
+    - [x] Improved Activity List Sorting in Calendar Sidebar:
+      - [x] Changed sorting from latest-to-earliest to earliest-to-latest within each day
+      - [x] Tasks (all-day items) now appear first, followed by timed events/calls
+      - [x] Events and calls sorted by actual time within the day
+    - [x] Implemented Multi-Day Event Support:
+      - [x] Events with end_datetime now appear on all days from start to end date
+      - [x] Updated calendar day rendering to properly count multi-day events
+      - [x] Enhanced activity sidebar to show full date range for multi-day events
+      - [x] Added proper date range filtering for multi-day events
+    - [x] Simplified Event Creation:
+      - [x] Removed status field from AddEventDialog form
+      - [x] Backend now defaults new events to 'pending' status automatically
+      - [x] Streamlined event creation process for better user experience
+    - [x] Enhanced Activity Detail Display and Task Completion:
+      - [x] Improved activity detail display in calendar sidebar with type-specific information
+      - [x] Made task completion checkboxes functional with API integration
+      - [x] Added priority display for tasks in sidebar
+      - [x] Enhanced event details to show date ranges and times appropriately
+      - [x] Added proper error handling and success feedback for task status changes
+      - [x] Only show checkboxes for tasks (not events or calls)
+
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)
