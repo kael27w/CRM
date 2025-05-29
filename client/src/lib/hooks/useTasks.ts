@@ -115,15 +115,21 @@ export function useTasks() {
   const createTaskMutation = useMutation({
     mutationFn: async (newTask: CreateTaskInput) => {
       try {
-        const url = '/api/tasks';
-        const method = 'POST';
+        // Use the createTask function from api.ts which correctly calls /api/activities
+        // and handles the proper payload structure
+        const taskData = {
+          title: newTask.title,
+          description: newTask.description,
+          due_date: newTask.dueDate,
+          // Don't include clientId and policyId as they're not part of the activities schema
+          // These would need to be mapped to contact_id and company_id if needed
+        };
         
-        const response = await apiRequest(method, url, newTask);
-        if (!response.ok) {
-          throw new Error(`Error creating task: ${response.status} ${response.statusText}`);
-        }
+        console.log('useTasks: Creating task with data:', taskData);
         
-        return await response.json();
+        // Import and use the createTask function from api.ts
+        const { createTask: apiCreateTask } = await import('../../lib/api');
+        return await apiCreateTask(taskData);
       } catch (err) {
         console.error('Error creating task:', err);
         

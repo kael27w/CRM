@@ -118,6 +118,19 @@
     - [x] Improved contact lookup for outbound calls to support note-taking
     - [x] Ensured proper cleanup of note state when calls end
 
+14. [x] **Fix Database Errors for Task and Event Creation (01/27/2025)**
+    - [x] Fixed Task Creation Error: Resolved "null value in column start_datetime violates not-null constraint"
+      - [x] Updated POST /api/activities handler to exclude start_datetime and end_datetime for tasks
+      - [x] Modified createTask function in client/src/lib/api.ts to send only task-relevant fields
+      - [x] Ensured useTasks hook uses correct API endpoint (/api/activities instead of /api/tasks)
+    - [x] Fixed Event Creation Error: Resolved "violates check constraint activities_type_check"
+      - [x] Verified POST /api/activities handler correctly sets type to 'event' (lowercase)
+      - [x] Updated backend to exclude task-specific fields (due_date, completed, priority) for events
+      - [x] Ensured AddEventDialog sends correct payload structure with type: 'event'
+    - [x] Enhanced backend validation and field filtering for different activity types
+    - [x] Added comprehensive logging for debugging database constraint issues
+    - [x] Created test script to verify both task and event creation work correctly
+
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)

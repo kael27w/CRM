@@ -741,12 +741,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The client should ideally always send type: 'task'.
       if (activityPayload.type === 'task') {
         console.log("[POST_ACTIVITIES] Processing task creation");
+        
+        // For tasks, ensure start_datetime is not included or is null
+        // since it's now nullable but not relevant for tasks
+        if (activityPayload.start_datetime !== undefined) {
+          console.log("[POST_ACTIVITIES] Removing start_datetime for task (not applicable)");
+          delete activityPayload.start_datetime;
+        }
+        
+        // For tasks, ensure end_datetime is not included
+        if (activityPayload.end_datetime !== undefined) {
+          console.log("[POST_ACTIVITIES] Removing end_datetime for task (not applicable)");
+          delete activityPayload.end_datetime;
+        }
+        
         activityPayload = {
           status: 'pending', // Default status for new tasks
           completed: false,  // Default completion state for new tasks
           ...activityPayload, // Client-provided values will override defaults if present
           type: 'task',      // Ensure type is explicitly 'task'
         };
+        
+        console.log("[POST_ACTIVITIES] Final task payload after processing:", JSON.stringify(activityPayload, null, 2));
       } else if (activityPayload.type === 'event') {
         // For events, validate required fields and set defaults
         console.log("[POST_ACTIVITIES] Processing event creation:", activityPayload);
@@ -784,10 +800,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
+        // For events, ensure task-specific fields are not included
+        if (activityPayload.due_date !== undefined) {
+          console.log("[POST_ACTIVITIES] Removing due_date for event (not applicable)");
+          delete activityPayload.due_date;
+        }
+        
+        if (activityPayload.completed !== undefined) {
+          console.log("[POST_ACTIVITIES] Removing completed for event (not applicable)");
+          delete activityPayload.completed;
+        }
+        
+        if (activityPayload.priority !== undefined) {
+          console.log("[POST_ACTIVITIES] Removing priority for event (not applicable)");
+          delete activityPayload.priority;
+        }
+        
         activityPayload = {
           status: 'pending', // Default status for new events
           ...activityPayload, // Client-provided values will override defaults if present
-          type: 'event',     // Ensure type is explicitly 'event'
+          type: 'event',     // Ensure type is explicitly 'event' (lowercase)
         };
         console.log("[POST_ACTIVITIES] Final event payload after processing:", JSON.stringify(activityPayload, null, 2));
       } else if (activityPayload.type === 'note') {

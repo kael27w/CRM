@@ -385,6 +385,29 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
     }
   }
 
+  // For tasks, ensure event-specific fields are not included
+  // This prevents database errors with start_datetime constraint
+  const taskPayload = {
+    type: payload.type,
+    title: payload.title,
+    description: payload.description,
+    due_date: payload.due_date,
+    completed: payload.completed,
+    status: payload.status,
+    priority: payload.priority,
+    // Explicitly exclude start_datetime, end_datetime, location for tasks
+    // Only include fields that are relevant for tasks
+  };
+
+  // Remove undefined fields to keep payload clean
+  Object.keys(taskPayload).forEach(key => {
+    if (taskPayload[key as keyof typeof taskPayload] === undefined) {
+      delete taskPayload[key as keyof typeof taskPayload];
+    }
+  });
+
+  console.log("Final task payload (cleaned):", taskPayload);
+
   // The API URL to call
   const apiUrl = `${API_BASE_URL}/api/activities`;
   console.log("Making API request to:", apiUrl);
@@ -408,7 +431,7 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(taskPayload),
         signal: controller.signal,
       });
       
@@ -451,7 +474,7 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
         }
         
         // For client errors (4xx), don't retry
-        console.error("Error details for createTask:", errorMessage, "Payload sent:", payload);
+        console.error("Error details for createTask:", errorMessage, "Payload sent:", taskPayload);
         throw new Error(errorMessage);
       }
 
@@ -479,7 +502,7 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
       }
       
       // For other errors or if we've exhausted retries
-      console.error('Error creating task:', error, "Payload attempted:", payload);
+      console.error('Error creating task:', error, "Payload attempted:", taskPayload);
       if (error instanceof Error) {
         throw error;
       }
