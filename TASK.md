@@ -157,6 +157,31 @@
       - [x] Added proper error handling and success feedback for task status changes
       - [x] Only show checkboxes for tasks (not events or calls)
 
+16. [x] **Calendar and Activity Refinements (01/27/2025)**
+    - [x] Fixed Event Spanning Multiple Days on Calendar:
+      - [x] Events with both start_datetime and end_datetime now visually span all days from start to end
+      - [x] Created helper function `isActivityOnDay()` for consistent multi-day event logic
+      - [x] Updated calendar grid rendering to properly show multi-day events on all relevant days
+      - [x] Enhanced calendar day activity indicators to work correctly with multi-day events
+    - [x] Fixed Sidebar Activity List Click Behavior:
+      - [x] Separated checkbox clicks from item clicks to prevent unintended detail view opening
+      - [x] Checkbox clicks now only toggle task completion status without opening details
+      - [x] Removed checkboxes from events (only tasks have completion checkboxes)
+      - [x] Added click prevention on checkbox to stop event propagation
+      - [x] Made clicking item title/body open activity details in sidebar
+    - [x] Enhanced Activity Detail Display in Sidebar:
+      - [x] Created comprehensive ActivityDetailView component
+      - [x] Added detailed information display for tasks (due date, priority, related contacts/companies)
+      - [x] Added detailed information display for events (date/time ranges, location, multi-day indicators)
+      - [x] Added detailed information display for calls (date/time, contact information)
+      - [x] Included back button and edit functionality in detail view
+      - [x] Added proper status badges and priority indicators
+    - [x] Restored Calendar Day Activity Indicators:
+      - [x] Fixed activity type icons/badges on calendar days to work with new filtering logic
+      - [x] Activity indicators now properly show task, event, and call icons on relevant days
+      - [x] Icons correctly reflect filtered activities and multi-day events
+      - [x] Maintained visual consistency with existing design patterns
+
 ## Completed Tasks
 
 - [x] **Pipeline View Redesign** (08/12/2024)

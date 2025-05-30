@@ -16,7 +16,7 @@ import {
 } from "../components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Label } from "../components/ui/label";
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, Phone, Mail, CheckSquare, Filter, Edit, Trash2, MapPin, User, Building } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, Phone, Mail, CheckSquare, Filter, Edit, Trash2, MapPin, User, Building, ArrowLeft } from 'lucide-react';
 import CalendarEventDialog, { CalendarEvent } from '../components/calendar/calendar-event-dialog';
 import { Button } from "../components/ui/button";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -62,12 +62,187 @@ interface Activity {
   relatedType: 'contact' | 'company' | 'deal';
   assignedTo: string;
   priority?: 'low' | 'medium' | 'high';
+  description?: string;
+  location?: string;
   // Multi-day event properties
   isMultiDay?: boolean;
   eventStartDate?: string;
   eventEndDate?: string;
   currentDisplayDate?: string;
 }
+
+// Helper function to check if an activity should be included on a specific day
+const isActivityOnDay = (activity: Activity, day: Date): boolean => {
+  if (activity.type === 'task') {
+    // For tasks, use date-only comparison to avoid timezone issues
+    const activityDateStr = activity.dueDate.split('T')[0];
+    const dayDateStr = day.toISOString().split('T')[0];
+    return activityDateStr === dayDateStr;
+  } else if ((activity as any).isMultiDay) {
+    // For multi-day events, check if this day falls within the event's date range
+    const eventStartDate = new Date((activity as any).eventStartDate);
+    const eventEndDate = new Date((activity as any).eventEndDate);
+    const dayStart = new Date(day);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    return dayStart <= eventEndDate && dayEnd >= eventStartDate;
+  } else {
+    // For single-day events and calls, use standard date comparison
+    const activityDate = new Date(activity.dueDate);
+    return activityDate.toDateString() === day.toDateString();
+  }
+};
+
+// Activity Detail View Component
+interface ActivityDetailViewProps {
+  activity: Activity;
+  onBack: () => void;
+  onEdit: () => void;
+}
+
+const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({ activity, onBack, onEdit }) => {
+  const isCompleted = activity.status === 'completed';
+  
+  const iconMap = {
+    task: <CheckSquare className="h-5 w-5 text-orange-500" />,
+    event: <CalendarIcon className="h-5 w-5 text-green-500" />,
+    call: <Phone className="h-5 w-5 text-blue-500" />,
+    email: <Mail className="h-5 w-5 text-purple-500" />
+  };
+
+  return (
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-4">
+        <Button variant="ghost" size="sm" onClick={onBack} className="p-1">
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Edit className="h-4 w-4 mr-1" />
+          Edit
+        </Button>
+      </div>
+      
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          {iconMap[activity.type]}
+          <div className="flex-1">
+            <h3 className={`text-lg font-semibold ${isCompleted ? 'line-through text-slate-500' : 'text-slate-900 dark:text-white'}`}>
+              {activity.title}
+            </h3>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant={
+                activity.status === 'completed' ? 'default' :
+                activity.status === 'in-progress' ? 'secondary' :
+                activity.status === 'cancelled' ? 'destructive' : 'outline'
+              }>
+                {activity.status}
+              </Badge>
+              {activity.priority && activity.type === 'task' && (
+                <Badge variant={
+                  activity.priority === 'high' ? 'destructive' :
+                  activity.priority === 'medium' ? 'secondary' : 'outline'
+                }>
+                  {activity.priority} priority
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {activity.description && (
+          <div>
+            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</h4>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{activity.description}</p>
+          </div>
+        )}
+
+        {activity.type === 'task' && (
+          <div className="space-y-2">
+            <div>
+              <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Due Date</h4>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {new Date(activity.dueDate).toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {activity.type === 'event' && (
+          <div className="space-y-2">
+            {(activity as any).isMultiDay ? (
+              <div>
+                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Event Period</h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {new Date((activity as any).eventStartDate).toLocaleDateString()} - {new Date((activity as any).eventEndDate).toLocaleDateString()}
+                </p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Starts: {new Date((activity as any).eventStartDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date & Time</h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {new Date(activity.dueDate).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })} at {new Date(activity.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            )}
+            {activity.location && (
+              <div>
+                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Location</h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {activity.location}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activity.type === 'call' && (
+          <div>
+            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Call Date & Time</h4>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {new Date(activity.dueDate).toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })} at {new Date(activity.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+        )}
+
+        {activity.relatedTo !== 'No relation' && (
+          <div>
+            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Related To</h4>
+            <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center">
+              {activity.relatedType === 'contact' ? <User className="h-3 w-3 mr-1" /> : <Building className="h-3 w-3 mr-1" />}
+              {activity.relatedTo} ({activity.relatedType})
+            </p>
+          </div>
+        )}
+
+        <div>
+          <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Assigned To</h4>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{activity.assignedTo}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Calendar Day Component
 interface CalendarDayProps {
@@ -89,30 +264,7 @@ const CalendarDay: React.FC<CalendarDayProps> = ({ day, activities, isCurrentMon
   };
   
   activities.forEach(activity => {
-    let shouldInclude = false;
-    
-    if (activity.type === 'task') {
-      // For tasks, use date-only comparison to avoid timezone issues
-      const activityDateStr = activity.dueDate.split('T')[0];
-      const dayDateStr = day.toISOString().split('T')[0];
-      shouldInclude = activityDateStr === dayDateStr;
-    } else if ((activity as any).isMultiDay) {
-      // For multi-day events, check if this day falls within the event's date range
-      const eventStartDate = new Date((activity as any).eventStartDate);
-      const eventEndDate = new Date((activity as any).eventEndDate);
-      const dayStart = new Date(day);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(day);
-      dayEnd.setHours(23, 59, 59, 999);
-      
-      shouldInclude = dayStart <= eventEndDate && dayEnd >= eventStartDate;
-    } else {
-      // For single-day events and calls, use standard date comparison
-      const activityDate = new Date(activity.dueDate);
-      shouldInclude = activityDate.toDateString() === day.toDateString();
-    }
-    
-    if (shouldInclude) {
+    if (isActivityOnDay(activity, day)) {
       activityCounts[activity.type]++;
     }
   });
@@ -188,9 +340,10 @@ const CalendarDay: React.FC<CalendarDayProps> = ({ day, activities, isCurrentMon
 interface ActivityItemProps {
   activity: Activity;
   onStatusChange: (id: number, completed: boolean) => void;
+  onItemClick: (activity: Activity) => void;
 }
 
-const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange }) => {
+const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange, onItemClick }) => {
   const isCompleted = activity.status === 'completed';
   
   // For tasks, don't show a specific time (they're all-day)
@@ -213,6 +366,10 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange })
     }
   };
 
+  const handleItemClick = () => {
+    onItemClick(activity);
+  };
+
   return (
     <div className={`
       p-3 border-b border-slate-100 dark:border-slate-800 last:border-0
@@ -225,9 +382,13 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange })
             checked={isCompleted} 
             onCheckedChange={handleCheckboxChange}
             className="mt-1"
+            onClick={(e) => e.stopPropagation()} // Prevent triggering item click
           />
         )}
-        <div className="flex-1 min-w-0">
+        <div 
+          className="flex-1 min-w-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded p-1 -m-1"
+          onClick={handleItemClick}
+        >
           <div className="flex items-center gap-2">
             {iconMap[activity.type]}
             <span className="text-xs text-slate-500">{timeDisplay}</span>
@@ -300,6 +461,7 @@ const ActivitiesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>(getInitialTab());
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null); // New state for activity details
   const [filterTypes, setFilterTypes] = useState<Record<string, boolean>>({
     task: true,
     event: true,
@@ -417,6 +579,8 @@ const ActivitiesPage: React.FC = () => {
                          activity.companies ? activity.companies.company_name : 'No relation',
               relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
               assignedTo: 'Current User',
+              description: activity.description,
+              location: activity.location,
               // Add metadata to identify multi-day events
               isMultiDay: true,
               eventStartDate: activity.start_datetime,
@@ -439,6 +603,8 @@ const ActivitiesPage: React.FC = () => {
                        activity.companies ? activity.companies.company_name : 'No relation',
             relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
             assignedTo: 'Current User',
+            description: activity.description,
+            location: activity.location,
           });
         }
       }
@@ -458,6 +624,7 @@ const ActivitiesPage: React.FC = () => {
           relatedType: activity.contacts ? 'contact' : activity.companies ? 'company' : 'deal',
           assignedTo: 'Current User',
           priority: activity.priority as any,
+          description: activity.description,
         });
       }
     });
@@ -740,30 +907,8 @@ const ActivitiesPage: React.FC = () => {
   // Get activities for selected date
   const getActivitiesForSelectedDate = () => {
     return calendarActivities.filter(activity => {
-      let shouldInclude = false;
-      
-      if (activity.type === 'task') {
-        // For tasks, use date-only comparison to avoid timezone issues
-        const activityDateStr = activity.dueDate.split('T')[0]; // Get just the date part
-        const selectedDateStr = selectedDate.toISOString().split('T')[0]; // Get just the date part
-        shouldInclude = activityDateStr === selectedDateStr;
-      } else if ((activity as any).isMultiDay) {
-        // For multi-day events, check if the selected date falls within the event's date range
-        const eventStartDate = new Date((activity as any).eventStartDate);
-        const eventEndDate = new Date((activity as any).eventEndDate);
-        const selectedDateStart = new Date(selectedDate);
-        selectedDateStart.setHours(0, 0, 0, 0);
-        const selectedDateEnd = new Date(selectedDate);
-        selectedDateEnd.setHours(23, 59, 59, 999);
-        
-        shouldInclude = selectedDateStart <= eventEndDate && selectedDateEnd >= eventStartDate;
-      } else {
-        // For single-day events and calls, use full datetime comparison
-        const activityDate = new Date(activity.dueDate);
-        shouldInclude = activityDate.toDateString() === selectedDate.toDateString();
-      }
-      
-      if (!shouldInclude) return false;
+      // Use the helper function to check if activity should be on this day
+      if (!isActivityOnDay(activity, selectedDate)) return false;
       
       // Apply filters
       if (!filterTypes[activity.type]) return false;
@@ -1044,9 +1189,8 @@ const ActivitiesPage: React.FC = () => {
                     {calendarDays.map((day, i) => {
                       // Filter activities for this calendar day based on active filters
                       const filteredActivitiesForDay = calendarActivities.filter(activity => {
-                        // Match day
-                        const activityDate = new Date(activity.dueDate);
-                        if (activityDate.toDateString() !== day.toDateString()) return false;
+                        // Use the helper function to check if activity should be on this day
+                        if (!isActivityOnDay(activity, day)) return false;
                         
                         // Apply type filters
                         if (!filterTypes[activity.type]) return false;
@@ -1070,7 +1214,7 @@ const ActivitiesPage: React.FC = () => {
                           isToday={day.toDateString() === today.toDateString()}
                           onClick={() => {
                             setSelectedDate(day);
-                            // Double-click detection could be added here
+                            setSelectedActivity(null); // Clear activity details when selecting a new date
                           }}
                           onDoubleClick={() => handleAddEventNew(day)}
                         />
@@ -1083,134 +1227,144 @@ const ActivitiesPage: React.FC = () => {
               {/* Right Panel */}
               <div className="w-full md:w-80 shrink-0">
                 <Card className="overflow-hidden">
-                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                    <div>
-                      <h3 className="font-semibold text-lg">
-                        {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                      </h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        {activitiesForSelectedDate.length} activities
-                      </p>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      onClick={() => handleAddEventNew(selectedDate)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="sr-only">Add activity</span>
-                    </Button>
-                  </div>
-                  
-                  {/* Activities for selected date */}
-                  <div className="max-h-80 overflow-y-auto">
-                    {activitiesForSelectedDate.length > 0 ? (
-                      activitiesForSelectedDate.map(activity => (
-                        <div 
-                          key={activity.id} 
-                          onClick={() => handleEditActivity(activity)} 
-                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  {selectedActivity ? (
+                    // Show activity details
+                    <ActivityDetailView
+                      activity={selectedActivity}
+                      onBack={() => setSelectedActivity(null)}
+                      onEdit={() => handleEditActivity(selectedActivity)}
+                    />
+                  ) : (
+                    // Show activities list for selected date
+                    <>
+                      <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                        <div>
+                          <h3 className="font-semibold text-lg">
+                            {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                          </h3>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            {activitiesForSelectedDate.length} activities
+                          </p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => handleAddEventNew(selectedDate)}
+                          className="h-8 w-8 p-0"
                         >
-                          <ActivityItem 
-                            activity={activity}
-                            onStatusChange={handleActivityStatusChange}
-                          />
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-4 text-center text-slate-500 dark:text-slate-400">
-                        No activities for this date
+                          <Plus className="h-4 w-4" />
+                          <span className="sr-only">Add activity</span>
+                        </Button>
                       </div>
-                    )}
-                  </div>
+                      
+                      {/* Activities for selected date */}
+                      <div className="max-h-80 overflow-y-auto">
+                        {activitiesForSelectedDate.length > 0 ? (
+                          activitiesForSelectedDate.map(activity => (
+                            <ActivityItem 
+                              key={activity.id}
+                              activity={activity}
+                              onStatusChange={handleActivityStatusChange}
+                              onItemClick={(a) => setSelectedActivity(a)}
+                            />
+                          ))
+                        ) : (
+                          <div className="p-4 text-center text-slate-500 dark:text-slate-400">
+                            No activities for this date
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                   
-                  {/* Filter Controls */}
-                  <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-                    <h4 className="font-medium text-sm mb-3">Filters</h4>
-                    
-                    {/* Activity Type Filters */}
-                    <div className="mb-4">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Activity Types</p>
-                      <div className="flex flex-wrap gap-2">
-                        <div className="flex items-center">
-                          <Checkbox 
-                            id="filter-task" 
-                            checked={filterTypes.task}
-                            onCheckedChange={() => toggleActivityTypeFilter('task')}
-                            className="mr-2"
-                          />
-                          <Label htmlFor="filter-task" className="text-sm flex items-center">
-                            <CheckSquare className="h-3 w-3 mr-1 text-orange-500" /> Tasks
-                          </Label>
-                        </div>
-                        <div className="flex items-center">
-                          <Checkbox 
-                            id="filter-event" 
-                            checked={filterTypes.event}
-                            onCheckedChange={() => toggleActivityTypeFilter('event')}
-                            className="mr-2"
-                          />
-                          <Label htmlFor="filter-event" className="text-sm flex items-center">
-                            <CalendarIcon className="h-3 w-3 mr-1 text-green-500" /> Events
-                          </Label>
-                        </div>
-                        <div className="flex items-center">
-                          <Checkbox 
-                            id="filter-call" 
-                            checked={filterTypes.call}
-                            onCheckedChange={() => toggleActivityTypeFilter('call')}
-                            className="mr-2"
-                          />
-                          <Label htmlFor="filter-call" className="text-sm flex items-center">
-                            <Phone className="h-3 w-3 mr-1 text-blue-500" /> Calls
-                          </Label>
+                  {/* Filter Controls - only show when not viewing activity details */}
+                  {!selectedActivity && (
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+                      <h4 className="font-medium text-sm mb-3">Filters</h4>
+                      
+                      {/* Activity Type Filters */}
+                      <div className="mb-4">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Activity Types</p>
+                        <div className="flex flex-wrap gap-2">
+                          <div className="flex items-center">
+                            <Checkbox 
+                              id="filter-task" 
+                              checked={filterTypes.task}
+                              onCheckedChange={() => toggleActivityTypeFilter('task')}
+                              className="mr-2"
+                            />
+                            <Label htmlFor="filter-task" className="text-sm flex items-center">
+                              <CheckSquare className="h-3 w-3 mr-1 text-orange-500" /> Tasks
+                            </Label>
+                          </div>
+                          <div className="flex items-center">
+                            <Checkbox 
+                              id="filter-event" 
+                              checked={filterTypes.event}
+                              onCheckedChange={() => toggleActivityTypeFilter('event')}
+                              className="mr-2"
+                            />
+                            <Label htmlFor="filter-event" className="text-sm flex items-center">
+                              <CalendarIcon className="h-3 w-3 mr-1 text-green-500" /> Events
+                            </Label>
+                          </div>
+                          <div className="flex items-center">
+                            <Checkbox 
+                              id="filter-call" 
+                              checked={filterTypes.call}
+                              onCheckedChange={() => toggleActivityTypeFilter('call')}
+                              className="mr-2"
+                            />
+                            <Label htmlFor="filter-call" className="text-sm flex items-center">
+                              <Phone className="h-3 w-3 mr-1 text-blue-500" /> Calls
+                            </Label>
+                          </div>
                         </div>
                       </div>
+                      
+                      {/* Ownership Filter */}
+                      <div className="mb-4">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Ownership</p>
+                        <RadioGroup 
+                          value={filterOwnership}
+                          onValueChange={setFilterOwnership}
+                          className="flex gap-4"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="my" id="ownership-my" />
+                            <Label htmlFor="ownership-my" className="text-sm">My Activities</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="all" id="ownership-all" />
+                            <Label htmlFor="ownership-all" className="text-sm">All Activities</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+                      
+                      {/* Status Filter */}
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Status</p>
+                        <RadioGroup 
+                          value={filterStatus}
+                          onValueChange={setFilterStatus}
+                          className="flex gap-4"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="open" id="status-open" />
+                            <Label htmlFor="status-open" className="text-sm">Open</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="closed" id="status-closed" />
+                            <Label htmlFor="status-closed" className="text-sm">Closed</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="all" id="status-all" />
+                            <Label htmlFor="status-all" className="text-sm">All</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
                     </div>
-                    
-                    {/* Ownership Filter */}
-                    <div className="mb-4">
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Ownership</p>
-                      <RadioGroup 
-                        value={filterOwnership}
-                        onValueChange={setFilterOwnership}
-                        className="flex gap-4"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="my" id="ownership-my" />
-                          <Label htmlFor="ownership-my" className="text-sm">My Activities</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="all" id="ownership-all" />
-                          <Label htmlFor="ownership-all" className="text-sm">All Activities</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                    
-                    {/* Status Filter */}
-                    <div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Status</p>
-                      <RadioGroup 
-                        value={filterStatus}
-                        onValueChange={setFilterStatus}
-                        className="flex gap-4"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="open" id="status-open" />
-                          <Label htmlFor="status-open" className="text-sm">Open</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="closed" id="status-closed" />
-                          <Label htmlFor="status-closed" className="text-sm">Closed</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="all" id="status-all" />
-                          <Label htmlFor="status-all" className="text-sm">All</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  </div>
+                  )}
                 </Card>
               </div>
             </div>
