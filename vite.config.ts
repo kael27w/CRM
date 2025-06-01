@@ -18,6 +18,21 @@ export default defineConfig({
         ]
       : []),
   ],
+  optimizeDeps: {
+    exclude: [
+      "@twilio/voice-sdk", // Exclude from optimization due to complex module structure
+      "bufferutil", // Optional dependency that can cause problems
+    ],
+    include: [
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "@radix-ui/react-slot",
+      "@radix-ui/react-dialog",
+      "lucide-react",
+    ],
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
