@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppContext } from '@/lib/context/app-context';
+import { useAuth } from '@/lib/context/AuthContext';
 import { 
   Bell, 
   Plus, 
@@ -10,7 +11,8 @@ import {
   X,
   Settings as SettingsIcon,
   FileCheck,
-  Zap
+  Zap,
+  LogOut
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -28,10 +30,36 @@ import {
   DropdownMenuPortal
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
+import { toast } from 'sonner';
 
 const Header: React.FC = () => {
   const { toggleTheme, theme, toggleSidebar, isSidebarOpen } = useAppContext();
+  const { user, profile, signOut } = useAuth();
+  const [, setLocation] = useLocation();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('Successfully logged out');
+      setLocation('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to log out. Please try again.');
+    }
+  };
+
+  // Get user display name and initials
+  const displayName = profile?.first_name && profile?.last_name 
+    ? `${profile.first_name} ${profile.last_name}`
+    : user?.email || 'User';
+  
+  const initials = profile?.first_name && profile?.last_name
+    ? `${profile.first_name[0]}${profile.last_name[0]}`
+    : user?.email ? user.email.substring(0, 2).toUpperCase()
+    : 'U';
+
+  const displayEmail = user?.email || profile?.email || '';
 
   return (
     <div className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-700">
@@ -139,17 +167,16 @@ const Header: React.FC = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="User" />
-                  <AvatarFallback>AD</AvatarFallback>
+                  <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">Alex Davis</p>
+                  <p className="text-sm font-medium leading-none">{displayName}</p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    a.davis@example.com
+                    {displayEmail}
                   </p>
                 </div>
               </DropdownMenuLabel>
@@ -157,7 +184,10 @@ const Header: React.FC = () => {
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Account Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Log out</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

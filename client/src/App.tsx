@@ -5,10 +5,17 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster as ShadcnToaster } from "./components/ui/toaster";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "./lib/context/app-context";
+import { AuthProvider, useAuth } from "./lib/context/AuthContext";
+import { Redirect } from "wouter";
+import { Loader2 } from "lucide-react";
 import NotFound from "./pages/not-found";
 import MainLayout from "./components/layouts/main-layout";
 import Dashboard from "./pages/dashboard";
 import Settings from "./pages/settings";
+
+// Authentication pages
+import LoginPage from "./pages/LoginPage";
+import SignUpPage from "./pages/SignUpPage";
 
 // Import our actual implemented pages
 import ContactsPage from "./pages/contacts";
@@ -31,28 +38,115 @@ const PlaceholderPage: React.FC<{title: string}> = ({title}) => (
 // Help page placeholder
 const HelpPage = () => <PlaceholderPage title="Help & Support" />;
 
+// Protected wrapper component
+const ProtectedWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { session, isLoadingAuth } = useAuth();
+
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Redirect to="/login" />;
+  }
+
+  return <MainLayout>{children}</MainLayout>;
+};
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/dashboard/:type" component={Dashboard} />
-      <Route path="/pipelines" component={PipelinesPage} />
-      <Route path="/contacts" component={ContactsPage} />
+      {/* Public routes */}
+      <Route path="/login" component={LoginPage} />
+      <Route path="/signup" component={SignUpPage} />
+      
+      {/* Protected routes */}
+      <Route path="/">
+        <ProtectedWrapper>
+          <Dashboard />
+        </ProtectedWrapper>
+      </Route>
+      
+      <Route path="/dashboard/:type">
+        {(params) => (
+          <ProtectedWrapper>
+            <Dashboard />
+          </ProtectedWrapper>
+        )}
+      </Route>
+      
+      <Route path="/pipelines">
+        <ProtectedWrapper>
+          <PipelinesPage />
+        </ProtectedWrapper>
+      </Route>
+      
+      <Route path="/contacts">
+        <ProtectedWrapper>
+          <ContactsPage />
+        </ProtectedWrapper>
+      </Route>
+      
       <Route path="/contacts/:id">
-        {(params) => <ContactDetailPage contactId={params.id} />}
+        {(params) => (
+          <ProtectedWrapper>
+            <ContactDetailPage contactId={params.id} />
+          </ProtectedWrapper>
+        )}
       </Route>
-      <Route path="/companies" component={CompaniesPage} />
-      <Route path="/products" component={ProductsPage} />
-      <Route path="/activities" component={ActivitiesPage} />
-      <Route path="/settings" component={Settings} />
-      <Route path="/help" component={HelpPage} />
+      
+      <Route path="/companies">
+        <ProtectedWrapper>
+          <CompaniesPage />
+        </ProtectedWrapper>
+      </Route>
+      
+      <Route path="/products">
+        <ProtectedWrapper>
+          <ProductsPage />
+        </ProtectedWrapper>
+      </Route>
+      
+      <Route path="/activities">
+        <ProtectedWrapper>
+          <ActivitiesPage />
+        </ProtectedWrapper>
+      </Route>
+      
+      <Route path="/settings">
+        <ProtectedWrapper>
+          <Settings />
+        </ProtectedWrapper>
+      </Route>
+      
+      <Route path="/help">
+        <ProtectedWrapper>
+          <HelpPage />
+        </ProtectedWrapper>
+      </Route>
+      
       <Route path="/contact-detail/:id">
-        {(params) => <ContactDetailPage contactId={params.id} />}
+        {(params) => (
+          <ProtectedWrapper>
+            <ContactDetailPage contactId={params.id} />
+          </ProtectedWrapper>
+        )}
       </Route>
+      
       {/* Test route with hardcoded contact ID for testing */}
       <Route path="/test-contact-detail">
-        {() => <ContactDetailPage contactId={1} />}
+        <ProtectedWrapper>
+          <ContactDetailPage contactId={1} />
+        </ProtectedWrapper>
       </Route>
+      
       <Route component={NotFound} />
     </Switch>
   );
@@ -62,11 +156,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <MainLayout>
+        <AuthProvider>
           <Router />
-        </MainLayout>
-        <ShadcnToaster />
-        <Toaster position="top-right" richColors />
+          <ShadcnToaster />
+          <Toaster position="top-right" richColors />
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

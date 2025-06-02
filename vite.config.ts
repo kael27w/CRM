@@ -18,6 +18,14 @@ export default defineConfig({
         ]
       : []),
   ],
+  optimizeDeps: {
+    exclude: [
+      // Exclude problematic dependencies that cause chunk loading issues
+      "@radix-ui/react-alert-dialog",
+      "@radix-ui/react-popover",
+    ],
+    force: true, // Force dependency re-optimization
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
