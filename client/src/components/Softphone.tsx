@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as Twilio from '@twilio/voice-sdk';
+import { Device, Call as TwilioCall } from '@twilio/voice-sdk';
 import { fetchTwilioToken, fetchContactByPhone, createNoteActivity, NewNoteData } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,8 +27,8 @@ type CallStatus =
  */
 const Softphone: React.FC = () => {
   // References and state
-  const deviceRef = useRef<Twilio.Device | null>(null);
-  const connectionRef = useRef<Twilio.Call | null>(null);
+  const deviceRef = useRef<Device | null>(null);
+  const connectionRef = useRef<TwilioCall | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [status, setStatus] = useState<CallStatus>('disconnected');
@@ -106,7 +106,7 @@ const Softphone: React.FC = () => {
       
       // Initialize new Device with debug logging
       console.log('Creating new Device instance...');
-      deviceRef.current = new Twilio.Device(token, {
+      deviceRef.current = new Device(token, {
         logLevel: 'debug', // Enhanced logging
         // Add other options as needed
       });
@@ -212,7 +212,7 @@ const Softphone: React.FC = () => {
     });
     
     // Called when there's an incoming call
-    deviceRef.current.on('incoming', (connection: Twilio.Call) => {
+    deviceRef.current.on('incoming', (connection: TwilioCall) => {
       // Immediate logging first for debugging
       console.log('>>> DEVICE EVENT: incoming', connection);
       // @ts-ignore: parameters is not in TwilioCall typings but is present at runtime
@@ -270,13 +270,13 @@ const Softphone: React.FC = () => {
     });
     
     // Additional device events to monitor
-    deviceRef.current.on('connect', (connection: Twilio.Call) => {
+    deviceRef.current.on('connect', (connection: TwilioCall) => {
       console.log('>>> DEVICE EVENT: connect - Successfully established call', connection);
       connectionRef.current = connection;
       registerConnectionEvents(connection);
     });
     
-    deviceRef.current.on('disconnect', (connection: Twilio.Call) => {
+    deviceRef.current.on('disconnect', (connection: TwilioCall) => {
       console.log('>>> DEVICE EVENT: disconnect - Call ended', connection);
       connectionRef.current = null;
       setStatus('disconnected');
@@ -312,7 +312,7 @@ const Softphone: React.FC = () => {
   };
   
   // Register event handlers for a specific call connection
-  const registerConnectionEvents = (connection: Twilio.Call) => {
+  const registerConnectionEvents = (connection: TwilioCall) => {
     if (!connection) {
       console.error('Cannot register connection events - Connection is null');
       return;
@@ -592,7 +592,7 @@ const Softphone: React.FC = () => {
     try {
       const params = { To: numberToDial };
       console.log("Starting call to:", numberToDial, "with params:", params);
-      const callInstance: Twilio.Call = await deviceRef.current.connect({ params });
+      const callInstance: TwilioCall = await deviceRef.current.connect({ params });
       
       // Log call parameters
       console.log("Call instance created:", callInstance);
