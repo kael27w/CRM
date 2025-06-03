@@ -12,6 +12,7 @@ import {
 } from "../shared/schema.js"; // Assuming path alias @shared might still be an issue for some setups
 import { supabase, normalizePhone } from "./supabase.js";
 import { twilioWebhook, handleVoiceWebhook, handleStatusCallback, generateTwilioToken } from "./twilio.js";
+import { protectRoute, type AuthenticatedRequest } from "./middleware/authMiddleware.js";
 import twilio from "twilio";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2467,6 +2468,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test routes (consider removing for production or securing them)
   // app.post("/api/test/twilio/voice", handleVoiceWebhook);
   // app.post("/api/test/twilio/status-callback", handleStatusCallback);
+
+  // === PROFILE ROUTES ===
+  
+  // GET /api/profile - Fetches profile for the authenticated user
+  app.get("/api/profile", protectRoute, async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: 'User not authenticated.' });
+    }
+    const userId = req.user.id;
+
+    try {
+      console.log(`GET /api/profile - Fetching profile for user: ${userId}`);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, job_title, bio, avatar_url, phone_number, updated_at')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') { // PostgREST error for "No rows found" with .single()
+          console.log(`GET /api/profile - Profile not found for user: ${userId}`);
+          return res.status(404).json({ message: 'Profile not found for this user.' });
+        }
+        console.error('GET /api/profile - Error fetching profile:', error);
+        return res.status(500).json({ message: 'Error fetching profile', error: error.message });
+      }
+      
+      if (data) {
+        console.log(`GET /api/profile - Profile found for user: ${userId}`);
+        return res.json(data);
+      } else {
+        // This case should ideally be caught by error.code === 'PGRST116'
+        return res.status(404).json({ message: 'Profile not found.' });
+      }
+    } catch (err) {
+      console.error('GET /api/profile - Unexpected error fetching profile:', err);
+      return res.status(500).json({ message: 'Unexpected server error.' });
+    }
+  });
+
+  // PATCH /api/profile - Updates profile for the authenticated user
+  app.patch("/api/profile", protectRoute, async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: 'User not authenticated.' });
+    }
+    const userId = req.user.id;
+    const { first_name, last_name, job_title, bio, phone_number } = req.body;
+
+    console.log(`PATCH /api/profile - Updating profile for user: ${userId}`, req.body);
+
+    // Basic validation (can be more sophisticated)
+    if (first_name === undefined || last_name === undefined) {
+      // first_name and last_name are NOT NULL in the DB.
+      // If they are sent as empty strings, that's allowed by this check
+      // but you might want stricter validation depending on requirements.
+      return res.status(400).json({ message: 'First name and last name are required.' });
+    }
+    
+    const profileDataToUpdate: { 
+      first_name?: string, 
+      last_name?: string, 
+      job_title?: string, 
+      bio?: string, 
+      phone_number?: string
+    } = {};
+
+    if (first_name !== undefined) profileDataToUpdate.first_name = first_name;
+    if (last_name !== undefined) profileDataToUpdate.last_name = last_name;
+    if (job_title !== undefined) profileDataToUpdate.job_title = job_title;
+    if (bio !== undefined) profileDataToUpdate.bio = bio;
+    if (phone_number !== undefined) profileDataToUpdate.phone_number = phone_number;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(profileDataToUpdate)
+        .eq('id', userId)
+        .select('id, first_name, last_name, job_title, bio, avatar_url, phone_number, updated_at') // Select the updated data to return
+        .single(); // Use .single() if you expect exactly one row to be updated and want it back
+
+      if (error) {
+        console.error('PATCH /api/profile - Error updating profile:', error);
+        return res.status(500).json({ message: 'Error updating profile', error: error.message });
+      }
+      
+      if (data) {
+        console.log(`PATCH /api/profile - Profile updated successfully for user: ${userId}`);
+        return res.json(data);
+      } else {
+        return res.status(404).json({ message: 'Profile not found or no changes made.' });
+      }
+    } catch (err) {
+      console.error('PATCH /api/profile - Unexpected error updating profile:', err);
+      return res.status(500).json({ message: 'Unexpected server error.' });
+    }
+  });
 
   // GET /api/activities - Fetch activities with optional filtering
   app.get("/api/activities", async (req: Request, res: Response) => {

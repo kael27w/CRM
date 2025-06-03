@@ -232,3 +232,12 @@
    - [x] Create Login page with email/password form
    - [x] Implement protected routes and route guards
    - [x] Add logout functionality to main layout
+
+2. [x] **Backend Profile Management Implementation (06/02/2025)**
+   - [x] Install jsonwebtoken library and TypeScript types
+   - [x] Create authentication middleware with JWT verification
+   - [x] Implement GET /api/profile endpoint with authentication
+   - [x] Implement PATCH /api/profile endpoint with validation
+   - [x] Add proper error handling and logging
+   - [ ] Set up SUPABASE_JWT_SECRET environment variable
+   - [ ] Test profile endpoints with authenticated requests
