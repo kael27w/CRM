@@ -254,3 +254,14 @@
    - [x] Ensured profile updates immediately reflect in AuthContext
    - [x] Updated routing in App.tsx to use new SettingsPage component
    - [x] Included placeholder tabs for future settings sections
+
+4. [x] **CRITICAL BUG FIX: Profile Data Cross-User Contamination (01/28/2025)**
+   - [x] **Issue**: Users could see previous user's profile data in Settings form after logout/login
+   - [x] **Root Cause 1**: React Query cache key was static `['profile']` instead of user-specific `['profile', userId]`
+   - [x] **Root Cause 2**: Component didn't listen to user changes, only profile data changes
+   - [x] **Fix**: Updated SettingsPage.tsx to use user-specific cache keys `['profile', currentUserId]`
+   - [x] **Fix**: Added useEffect to detect user changes and reset form state appropriately
+   - [x] **Fix**: Added currentUserId dependency to profile data useEffect
+   - [x] **Fix**: Added debugging logs to track user and profile data changes
+   - [x] **Result**: Settings form now correctly shows empty/appropriate data for each user
+   - [x] **Security**: Eliminated risk of cross-user data exposure in frontend forms

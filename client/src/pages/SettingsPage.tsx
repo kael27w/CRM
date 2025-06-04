@@ -26,7 +26,7 @@ import { toast } from 'sonner';
 
 const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('profile');
-  const { profile: contextProfile, setProfileData } = useAuth();
+  const { profile: contextProfile, setProfileData, user } = useAuth();
   const queryClient = useQueryClient();
 
   // Form state for profile editing
@@ -38,15 +38,19 @@ const SettingsPage: React.FC = () => {
     phone: '',
   });
 
-  // Fetch profile data
+  // Get current user ID for cache key
+  const currentUserId = user?.id;
+
+  // Fetch profile data with user-specific cache key
   const {
     data: profileData,
     isLoading: isLoadingProfile,
     error: profileError,
   } = useQuery({
-    queryKey: ['profile'],
+    queryKey: ['profile', currentUserId], // ← FIX: User-specific cache key
     queryFn: fetchProfile,
     retry: 1,
+    enabled: !!currentUserId, // Only fetch when we have a user ID
   });
 
   // Update profile mutation
@@ -56,8 +60,8 @@ const SettingsPage: React.FC = () => {
       toast.success('Profile updated successfully!');
       // Update the profile in AuthContext
       setProfileData(updatedProfile);
-      // Update React Query cache
-      queryClient.setQueryData(['profile'], updatedProfile);
+      // Update React Query cache with user-specific key
+      queryClient.setQueryData(['profile', currentUserId], updatedProfile);
     },
     onError: (error: Error) => {
       console.error('Error updating profile:', error);
@@ -65,9 +69,28 @@ const SettingsPage: React.FC = () => {
     },
   });
 
-  // Update form data when profile is loaded
+  // Reset form data when user changes (user logout/login)
   useEffect(() => {
-    if (profileData) {
+    console.log('🔄 [SETTINGS] User changed, resetting form data. User ID:', currentUserId);
+    if (!currentUserId) {
+      // User logged out, clear form
+      setFormData({
+        first_name: '',
+        last_name: '',
+        job_title: '',
+        bio: '',
+        phone: '',
+      });
+    }
+  }, [currentUserId]);
+
+  // Update form data when profile is loaded for the current user
+  useEffect(() => {
+    console.log('📋 [SETTINGS] Profile data changed for user:', currentUserId);
+    console.log('📋 [SETTINGS] Profile data:', profileData);
+    
+    if (profileData && currentUserId) {
+      console.log('✅ [SETTINGS] Updating form data with profile for user:', currentUserId);
       setFormData({
         first_name: profileData.first_name || '',
         last_name: profileData.last_name || '',
@@ -75,8 +98,18 @@ const SettingsPage: React.FC = () => {
         bio: profileData.bio || '',
         phone: profileData.phone || '',
       });
+    } else if (currentUserId && !profileData) {
+      console.log('🆕 [SETTINGS] No profile data for user, using empty form:', currentUserId);
+      // User has no profile data, start with empty form
+      setFormData({
+        first_name: '',
+        last_name: '',
+        job_title: '',
+        bio: '',
+        phone: '',
+      });
     }
-  }, [profileData]);
+  }, [profileData, currentUserId]); // ← FIX: Added currentUserId dependency
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({

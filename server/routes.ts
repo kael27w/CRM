@@ -2473,13 +2473,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // GET /api/profile - Fetches profile for the authenticated user
   app.get("/api/profile", protectRoute, async (req: AuthenticatedRequest, res: Response) => {
+    console.log('👤 [GET_PROFILE] Route handler started');
+    console.log('👤 [GET_PROFILE] req.user object:', req.user);
+    
     if (!req.user || !req.user.id) {
+      console.error('👤 [GET_PROFILE] ❌ User not authenticated - req.user:', req.user);
       return res.status(401).json({ message: 'User not authenticated.' });
     }
     const userId = req.user.id;
 
+    console.log(`👤 [GET_PROFILE] ✅ Authenticated user ID extracted: ${userId}`);
+    console.log(`👤 [GET_PROFILE] User ID type: ${typeof userId}, length: ${userId.length}`);
+
     try {
-      console.log(`GET /api/profile - Fetching profile for user: ${userId}`);
+      console.log(`👤 [GET_PROFILE] 🔍 Executing Supabase query for user: ${userId}`);
       
       const { data, error } = await supabase
         .from('profiles')
@@ -2487,43 +2494,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .eq('id', userId)
         .single();
 
+      console.log(`👤 [GET_PROFILE] 📊 Supabase query completed for user: ${userId}`);
       if (error) {
+        console.error(`👤 [GET_PROFILE] ❌ Supabase error for user ${userId}:`, error);
         if (error.code === 'PGRST116') { // PostgREST error for "No rows found" with .single()
-          console.log(`GET /api/profile - Profile not found for user: ${userId}`);
+          console.log(`👤 [GET_PROFILE] ❌ Profile not found for user: ${userId}`);
           return res.status(404).json({ message: 'Profile not found for this user.' });
         }
-        console.error('GET /api/profile - Error fetching profile:', error);
+        console.error('👤 [GET_PROFILE] ❌ Error fetching profile:', error);
         return res.status(500).json({ message: 'Error fetching profile', error: error.message });
       }
       
       if (data) {
-        console.log(`GET /api/profile - Profile found for user: ${userId}`);
-        return res.json(data);
+        console.log(`👤 [GET_PROFILE] ✅ Profile found for user: ${userId}`);
+        console.log(`👤 [GET_PROFILE] ✅ Profile data ID: ${data.id}, Name: ${data.first_name} ${data.last_name}`);
+        // Map database fields to frontend expected fields
+        const mappedData = {
+          ...data,
+          phone: data.phone_number, // Map phone_number to phone for frontend
+          email: null // Profiles table doesn't have email, get from auth.users
+        };
+        return res.json(mappedData);
       } else {
         // This case should ideally be caught by error.code === 'PGRST116'
+        console.error(`👤 [GET_PROFILE] ❌ No data returned for user: ${userId}`);
         return res.status(404).json({ message: 'Profile not found.' });
       }
     } catch (err) {
-      console.error('GET /api/profile - Unexpected error fetching profile:', err);
+      console.error(`👤 [GET_PROFILE] ❌ Unexpected error fetching profile for user ${userId}:`, err);
       return res.status(500).json({ message: 'Unexpected server error.' });
     }
   });
 
   // PATCH /api/profile - Updates profile for the authenticated user
   app.patch("/api/profile", protectRoute, async (req: AuthenticatedRequest, res: Response) => {
+    console.log('👤 [PATCH_PROFILE] Route handler started');
+    console.log('👤 [PATCH_PROFILE] req.user object:', req.user);
+    
     if (!req.user || !req.user.id) {
+      console.error('👤 [PATCH_PROFILE] ❌ User not authenticated - req.user:', req.user);
       return res.status(401).json({ message: 'User not authenticated.' });
     }
     const userId = req.user.id;
-    const { first_name, last_name, job_title, bio, phone_number } = req.body;
+    const { first_name, last_name, job_title, bio, phone } = req.body;
 
-    console.log(`PATCH /api/profile - Updating profile for user: ${userId}`, req.body);
+    console.log(`👤 [PATCH_PROFILE] ✅ Authenticated user ID extracted: ${userId}`);
+    console.log(`👤 [PATCH_PROFILE] User ID type: ${typeof userId}, length: ${userId.length}`);
+    console.log(`👤 [PATCH_PROFILE] 📝 Update data received:`, req.body);
 
     // Basic validation (can be more sophisticated)
     if (first_name === undefined || last_name === undefined) {
       // first_name and last_name are NOT NULL in the DB.
       // If they are sent as empty strings, that's allowed by this check
       // but you might want stricter validation depending on requirements.
+      console.error(`👤 [PATCH_PROFILE] ❌ Missing required fields for user ${userId}`);
       return res.status(400).json({ message: 'First name and last name are required.' });
     }
     
@@ -2539,9 +2563,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (last_name !== undefined) profileDataToUpdate.last_name = last_name;
     if (job_title !== undefined) profileDataToUpdate.job_title = job_title;
     if (bio !== undefined) profileDataToUpdate.bio = bio;
-    if (phone_number !== undefined) profileDataToUpdate.phone_number = phone_number;
+    if (phone !== undefined) profileDataToUpdate.phone_number = phone; // Map phone to phone_number for database
+
+    console.log(`👤 [PATCH_PROFILE] 📝 Prepared update data for user ${userId}:`, profileDataToUpdate);
 
     try {
+      console.log(`👤 [PATCH_PROFILE] 🔍 Executing Supabase update for user: ${userId}`);
+      
       const { data, error } = await supabase
         .from('profiles')
         .update(profileDataToUpdate)
@@ -2549,19 +2577,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select('id, first_name, last_name, job_title, bio, avatar_url, phone_number, updated_at') // Select the updated data to return
         .single(); // Use .single() if you expect exactly one row to be updated and want it back
 
+      console.log(`👤 [PATCH_PROFILE] 📊 Supabase update completed for user: ${userId}`);
       if (error) {
-        console.error('PATCH /api/profile - Error updating profile:', error);
+        console.error(`👤 [PATCH_PROFILE] ❌ Supabase error for user ${userId}:`, error);
         return res.status(500).json({ message: 'Error updating profile', error: error.message });
       }
       
       if (data) {
-        console.log(`PATCH /api/profile - Profile updated successfully for user: ${userId}`);
-        return res.json(data);
+        console.log(`👤 [PATCH_PROFILE] ✅ Profile updated successfully for user: ${userId}`);
+        console.log(`👤 [PATCH_PROFILE] ✅ Updated profile data ID: ${data.id}, Name: ${data.first_name} ${data.last_name}`);
+        // Map database fields to frontend expected fields
+        const mappedData = {
+          ...data,
+          phone: data.phone_number, // Map phone_number to phone for frontend
+          email: null // Profiles table doesn't have email
+        };
+        return res.json(mappedData);
       } else {
+        console.error(`👤 [PATCH_PROFILE] ❌ No data returned after update for user: ${userId}`);
         return res.status(404).json({ message: 'Profile not found or no changes made.' });
       }
     } catch (err) {
-      console.error('PATCH /api/profile - Unexpected error updating profile:', err);
+      console.error(`👤 [PATCH_PROFILE] ❌ Unexpected error updating profile for user ${userId}:`, err);
       return res.status(500).json({ message: 'Unexpected server error.' });
     }
   });
