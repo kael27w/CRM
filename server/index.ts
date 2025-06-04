@@ -1,3 +1,17 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory name in ES module scope
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Configure dotenv to load from server/.env file (current directory)
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+// Debug log to verify JWT secret is loaded
+console.log('[BACKEND ENV CHECK] SUPABASE_JWT_SECRET:', process.env.SUPABASE_JWT_SECRET ? 'Loaded' : 'NOT LOADED');
+
 import express, { type Request, Response, NextFunction } from "express";
 import cors from 'cors';
 import { registerRoutes } from "./routes.js";

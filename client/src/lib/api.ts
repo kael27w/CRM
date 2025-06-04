@@ -2,8 +2,10 @@
  * API call related functions and type definitions
  */
 
+import { supabase } from './supabaseClient';
+
 // Base API URL configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://crm-2lmw.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3002';
 
 // Add this for debugging purposes
 console.log("API base URL:", API_BASE_URL);
@@ -1961,4 +1963,98 @@ export async function deleteEvent(eventId: string | number): Promise<{ message: 
  */
 export async function fetchEvents(params?: Omit<ActivityQueryParams, 'type'>): Promise<ActivityEntry[]> {
   return fetchActivities({ ...params, type: 'event' });
+}
+
+/**
+ * Interface representing a user profile entry from the API
+ */
+export interface Profile {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  job_title: string | null;
+  bio: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Type for the data expected when updating a profile
+ */
+export type ProfileUpdateData = {
+  first_name?: string;
+  last_name?: string;
+  job_title?: string;
+  bio?: string;
+  phone?: string;
+};
+
+/**
+ * Helper function to get Authorization header with JWT token
+ */
+async function getAuthHeaders(): Promise<{ Authorization: string } | {}> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    return { Authorization: `Bearer ${session.access_token}` };
+  }
+  return {};
+}
+
+/**
+ * Fetch the current user's profile data
+ */
+export async function fetchProfile(): Promise<Profile> {
+  try {
+    const authHeaders = await getAuthHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/profile`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const profile = await response.json();
+    return profile;
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update the current user's profile data
+ */
+export async function updateProfile(profileData: ProfileUpdateData): Promise<Profile> {
+  try {
+    const authHeaders = await getAuthHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/profile`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+      body: JSON.stringify(profileData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const updatedProfile = await response.json();
+    return updatedProfile;
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    throw error;
+  }
 }

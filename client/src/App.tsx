@@ -11,7 +11,7 @@ import { Loader2 } from "lucide-react";
 import NotFound from "./pages/not-found";
 import MainLayout from "./components/layouts/main-layout";
 import Dashboard from "./pages/dashboard";
-import Settings from "./pages/settings";
+import SettingsPage from "./pages/SettingsPage";
 
 // Authentication pages
 import LoginPage from "./pages/LoginPage";
@@ -122,7 +122,7 @@ function Router() {
       
       <Route path="/settings">
         <ProtectedWrapper>
-          <Settings />
+          <SettingsPage />
         </ProtectedWrapper>
       </Route>
       

@@ -32,7 +32,9 @@ interface Contact {
  * Fetches the list of contacts from the API
  */
 const fetchContacts = async (): Promise<Contact[]> => {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3002";
+  
+  console.log('📞 Fetching contacts from:', `${apiBaseUrl}/api/contacts/list`);
   
   const response = await fetch(`${apiBaseUrl}/api/contacts/list`);
   
