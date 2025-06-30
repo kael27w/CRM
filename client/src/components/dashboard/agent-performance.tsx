@@ -50,19 +50,19 @@ const AgentPerformance: React.FC<AgentPerformanceProps> = ({ agents }) => {
   const getRetentionBadge = (retention: number) => {
     if (retention >= 95) {
       return (
-        <Badge variant="success" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+        <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
           {retention}%
         </Badge>
       );
     } else if (retention >= 90) {
       return (
-        <Badge variant="warning" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+        <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
           {retention}%
         </Badge>
       );
     } else {
       return (
-        <Badge variant="danger" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
+        <Badge variant="destructive" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
           {retention}%
         </Badge>
       );

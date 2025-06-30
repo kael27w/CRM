@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Task } from '../../types';
-import { apiRequest } from '../queryClient';
+import { fetchTasks, updateTaskStatus, createTask as apiCreateTask, TaskEntry } from '../api';
 
 // Local storage key for tasks
 const TASKS_STORAGE_KEY = 'insurance-tracker-tasks';
@@ -14,14 +14,31 @@ export type CreateTaskInput = {
   policyId?: number;
 };
 
+// Helper function to convert TaskEntry to Task
+function convertTaskEntryToTask(taskEntry: TaskEntry): Task {
+  return {
+    id: taskEntry.id,
+    title: taskEntry.title,
+    description: taskEntry.description || '',
+    dueDate: taskEntry.due_date,
+    completed: taskEntry.completed,
+    assignedToId: 1, // Default user assignment
+    clientId: undefined, // TaskEntry doesn't have this field
+    policyId: undefined, // TaskEntry doesn't have this field
+    createdAt: new Date().toISOString(), // TaskEntry doesn't have this field, use current time
+    client: undefined, // TaskEntry doesn't have this field
+  };
+}
+
 /**
  * Custom hook for fetching and managing tasks
  * This provides a centralized way to access tasks data across different components
+ * @param view - 'mine' to show only user's tasks, 'all' to show all tasks (admin only)
  */
-export function useTasks() {
+export function useTasks(view: 'mine' | 'all' = 'mine') {
   const queryClient = useQueryClient();
 
-  // Fetch all tasks
+  // Fetch all tasks with proper authentication and view filtering
   const { 
     data: tasks, 
     isLoading, 
@@ -29,35 +46,39 @@ export function useTasks() {
     error, 
     refetch 
   } = useQuery<Task[], Error>({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', view],
     queryFn: async () => {
       try {
-        const response = await apiRequest('GET', '/api/tasks');
-        if (!response.ok) {
-          throw new Error(`Error fetching tasks: ${response.status} ${response.statusText}`);
+        console.log(`[useTasks] Fetching tasks with view: ${view}`);
+        const data = await fetchTasks(view);
+        
+        // Convert TaskEntry[] to Task[]
+        const convertedTasks = data.map(convertTaskEntryToTask);
+        
+        // Save to localStorage (only for 'mine' view to avoid admin data leakage)
+        if (view === 'mine') {
+          localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(convertedTasks));
         }
-        const data = await response.json();
         
-        // Save to localStorage
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(data));
-        
-        return data as Task[];
+        return convertedTasks;
       } catch (err) {
         console.error('Error fetching tasks:', err);
         
-        // Try to get tasks from localStorage first
-        const storedTasks = localStorage.getItem(TASKS_STORAGE_KEY);
-        if (storedTasks) {
-          return JSON.parse(storedTasks) as Task[];
+        // Only try localStorage fallback for 'mine' view and if not an auth error
+        if (view === 'mine' && !(err instanceof Error && err.message.includes('403'))) {
+          const storedTasks = localStorage.getItem(TASKS_STORAGE_KEY);
+          if (storedTasks) {
+            return JSON.parse(storedTasks) as Task[];
+          }
+          
+          // If no stored tasks, return mock data for development
+          const mockTasks = getMockTasks();
+          localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(mockTasks));
+          return mockTasks;
         }
         
-        // If no stored tasks, return mock data for development
-        const mockTasks = getMockTasks();
-        
-        // Save mock tasks to localStorage
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(mockTasks));
-        
-        return mockTasks;
+        // For 'all' view or auth errors, don't fall back to localStorage/mock
+        throw err;
       }
     },
     refetchOnWindowFocus: false, // Disable automatic refetch on window focus
@@ -67,47 +88,42 @@ export function useTasks() {
   const toggleTaskMutation = useMutation({
     mutationFn: async ({ id, completed }: { id: number, completed: boolean }) => {
       try {
-        const url = `/api/activities/${id}`;
-        const method = 'PATCH';
-        const body = { completed, status: completed ? 'completed' : 'pending' };
-        
-        const response = await apiRequest(method, url, body);
-        if (!response.ok) {
-          throw new Error(`Error updating task: ${response.status} ${response.statusText}`);
-        }
-        
-        return await response.json();
+        console.log(`[useTasks] Toggling task ${id} completion to: ${completed}`);
+        return await updateTaskStatus(id, completed);
       } catch (err) {
         console.error('Error toggling task completion:', err);
         
-        // For development, update task in localStorage
-        if (tasks) {
+        // For development, update task in localStorage (only for 'mine' view)
+        if (view === 'mine' && tasks) {
           const updatedTasks = tasks.map(task => 
             task.id === id ? { ...task, completed } : task
           );
           localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
         }
         
-        // Return a successful mock response
+        // Return a successful mock response for development
         return { id, completed };
       }
     },
     onSuccess: (data) => {
       // Update local cache with the updated task
-      queryClient.setQueryData(['tasks'], (oldTasks: Task[] | undefined) => {
+      queryClient.setQueryData(['tasks', view], (oldTasks: Task[] | undefined) => {
         if (!oldTasks) return oldTasks;
         const updatedTasks = oldTasks.map(task => 
           task.id === data.id ? { ...task, completed: data.completed } : task
         );
         
-        // Update localStorage with the updated tasks
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+        // Update localStorage with the updated tasks (only for 'mine' view)
+        if (view === 'mine') {
+          localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+        }
         
         return updatedTasks;
       });
       
-      // Invalidate dashboard data to keep it in sync
+      // Invalidate related queries to keep them in sync
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
     },
   });
 
@@ -115,8 +131,6 @@ export function useTasks() {
   const createTaskMutation = useMutation({
     mutationFn: async (newTask: CreateTaskInput) => {
       try {
-        // Use the createTask function from api.ts which correctly calls /api/activities
-        // and handles the proper payload structure
         const taskData = {
           title: newTask.title,
           description: newTask.description,
@@ -125,52 +139,59 @@ export function useTasks() {
           // These would need to be mapped to contact_id and company_id if needed
         };
         
-        console.log('useTasks: Creating task with data:', taskData);
+        console.log('[useTasks] Creating task with data:', taskData);
+        const createdTaskEntry = await apiCreateTask(taskData);
         
-        // Import and use the createTask function from api.ts
-        const { createTask: apiCreateTask } = await import('../../lib/api');
-        return await apiCreateTask(taskData);
+        // Convert TaskEntry to Task for consistency
+        return convertTaskEntryToTask(createdTaskEntry);
       } catch (err) {
         console.error('Error creating task:', err);
         
-        // For development, create a mock task with a unique ID
-        const mockTask: Task = {
-          id: Date.now(), // Use timestamp as a unique ID
-          title: newTask.title,
-          description: newTask.description || '',
-          dueDate: newTask.dueDate,
-          completed: false,
-          assignedToId: 1, // Current user
-          clientId: newTask.clientId,
-          policyId: newTask.policyId,
-          createdAt: new Date().toISOString(),
-          client: newTask.clientId 
-            ? { 
-                id: newTask.clientId, 
-                name: 'Client Name', // This would be fetched in a real app
-                status: 'Active',
-                createdAt: new Date().toISOString() 
-              } 
-            : undefined,
-        };
+        // For development, create a mock task with a unique ID (only for 'mine' view)
+        if (view === 'mine') {
+          const mockTask: Task = {
+            id: Date.now(), // Use timestamp as a unique ID
+            title: newTask.title,
+            description: newTask.description || '',
+            dueDate: newTask.dueDate,
+            completed: false,
+            assignedToId: 1, // Current user
+            clientId: newTask.clientId,
+            policyId: newTask.policyId,
+            createdAt: new Date().toISOString(),
+            client: newTask.clientId 
+              ? { 
+                  id: newTask.clientId, 
+                  name: 'Client Name', // This would be fetched in a real app
+                  status: 'Active',
+                  createdAt: new Date().toISOString() 
+                } 
+              : undefined,
+          };
+          
+          return mockTask;
+        }
         
-        return mockTask;
+        throw err;
       }
     },
     onSuccess: (newTask) => {
       // Update the tasks cache
-      queryClient.setQueryData(['tasks'], (oldTasks: Task[] | undefined) => {
+      queryClient.setQueryData(['tasks', view], (oldTasks: Task[] | undefined) => {
         if (!oldTasks) return [newTask];
         const updatedTasks = [...oldTasks, newTask];
         
-        // Update localStorage with the updated tasks
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+        // Update localStorage with the updated tasks (only for 'mine' view)
+        if (view === 'mine') {
+          localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+        }
         
         return updatedTasks;
       });
       
-      // Invalidate dashboard data to keep it in sync
+      // Invalidate related queries to keep them in sync
       queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
     },
   });
 

@@ -4,7 +4,7 @@ import { createContactManually, linkCallToContact, type CallLogEntry, type NewCo
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+
 import { DialogFooter } from '@/components/ui/dialog';
 
 interface CreateContactFromCallFormProps {
@@ -25,6 +25,7 @@ export function CreateContactFromCallForm({
     phone: call.from_number,
     email: '',
     company: '',
+    status: 'active',
   });
 
   const queryClient = useQueryClient();

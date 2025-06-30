@@ -19,7 +19,7 @@ interface TasksWidgetProps {
 const TasksWidget: React.FC<TasksWidgetProps> = ({ tasks, onToggleTask, showViewAllLink = true }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [displayTasks, setDisplayTasks] = useState<Task[]>([]);
-  const { refetch } = useTasks();
+  const { refetch } = useTasks('mine');
 
   // On initial load, show only incomplete tasks
   useEffect(() => {

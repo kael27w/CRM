@@ -75,7 +75,7 @@ function Router() {
       </Route>
       
       <Route path="/dashboard/:type">
-        {(params) => (
+        {() => (
           <ProtectedWrapper>
             <Dashboard />
           </ProtectedWrapper>

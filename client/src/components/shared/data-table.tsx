@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   flexRender,
   getCoreRowModel,
@@ -32,21 +32,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '../ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '../ui/dialog';
+// Dialog components removed - not used in this component
 import {
   ChevronLeft, 
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   Settings,
-  Filter,
+
   Plus,
   Tags,
   User,
@@ -64,12 +57,12 @@ import { toast } from 'sonner';
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  title: string;
-  description?: string;
+  title?: string;         // <--- Add '?' to make it optional
+  description?: string;   // <--- Add '?' to make it optional
   searchPlaceholder?: string;
-  searchColumn?: string;
+
   onRowClick?: (row: Row<TData>) => void;
-  onAddField?: () => void;
+
   onNewItem?: () => void; // Handler for the "New [Item]" button
   pageType?: 'contacts' | 'companies' | 'products'; // To determine which bulk actions to show
   actionsColumn?: ColumnDef<TData, TValue>; // Actions column to be positioned correctly
@@ -83,9 +76,8 @@ export function DataTable<TData, TValue>({
   title,
   description,
   searchPlaceholder = "Search...",
-  searchColumn = "name",
+
   onRowClick,
-  onAddField,
   onNewItem,
   pageType = 'contacts',
   actionsColumn,
@@ -110,11 +102,7 @@ export function DataTable<TData, TValue>({
   // State for tags
   const [itemTags, setItemTags] = useState<Record<string, string[]>>({});
 
-  // State for bulk actions dialogs
-  const [showOwnerDialog, setShowOwnerDialog] = useState(false);
-  const [showTagsDialog, setShowTagsDialog] = useState(false);
-  const [showUpdateFieldDialog, setShowUpdateFieldDialog] = useState(false);
-  const [bulkActionType, setBulkActionType] = useState<'add' | 'remove'>('add');
+  // State for bulk actions dialogs - removed unused dialog states
 
   // Add refresh key to force re-renders when localStorage changes
   const [refreshKey, setRefreshKey] = useState(0);
@@ -551,27 +539,33 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{title}</h1>
-          {description && (
-            <p className="text-slate-500 dark:text-slate-400 mt-1">
-              {description}
-            </p>
+      {(title || description || onNewItem) && (
+        <div className="flex items-center justify-between">
+          {(title || description) && (
+            <div>
+              {title && <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{title}</h1>}
+              {description && (
+                <p className="text-slate-500 dark:text-slate-400 mt-1">
+                  {description}
+                </p>
+              )}
+            </div>
+          )}
+          {onNewItem && (
+            <div className="flex items-center space-x-4">
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2"
+                onClick={onNewItem}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {title === "Companies" ? "New Company" : title && title.length > 0 ? `New ${title.slice(0, -1)}` : "New Item"}
+              </Button>
+            </div>
           )}
         </div>
-        <div className="flex items-center space-x-4">
-          <Button 
-            variant="default" 
-            size="sm" 
-            className="flex items-center bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2"
-            onClick={onNewItem}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            {title === "Companies" ? "New Company" : `New ${title.slice(0, -1)}`}
-          </Button>
-        </div>
-      </div>
+      )}
 
       <div className="flex items-center justify-between py-4 gap-4">
         <div className="flex items-center gap-2">

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,9 +11,7 @@ import {
   Users, 
   Settings as SettingsIcon, 
   Bell, 
-  Lock, 
   Workflow, 
-  Database, 
   Save,
   Shield,
   UploadCloud,
@@ -26,7 +24,7 @@ import { toast } from 'sonner';
 
 const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('profile');
-  const { profile: contextProfile, setProfileData, user } = useAuth();
+  const { setProfileData, user } = useAuth();
   const queryClient = useQueryClient();
 
   // Form state for profile editing
@@ -58,8 +56,8 @@ const SettingsPage: React.FC = () => {
     mutationFn: (data: ProfileUpdateData) => updateProfile(data),
     onSuccess: (updatedProfile) => {
       toast.success('Profile updated successfully!');
-      // Update the profile in AuthContext
-      setProfileData(updatedProfile);
+      // Update the profile in AuthContext with the admin status preserved
+      setProfileData({ ...updatedProfile, is_admin: (profileData as any)?.is_admin || false });
       // Update React Query cache with user-specific key
       queryClient.setQueryData(['profile', currentUserId], updatedProfile);
     },

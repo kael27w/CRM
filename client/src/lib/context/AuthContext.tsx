@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabaseClient';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Profile type matching the database structure
 export interface Profile {
@@ -11,6 +12,7 @@ export interface Profile {
   phone: string | null;
   job_title: string | null;
   bio: string | null;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const queryClient = useQueryClient();
 
   const user = session?.user || null;
 
@@ -75,11 +78,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    console.log('🚪 Starting sign out process...');
+    
+    // CRITICAL: Clear React Query cache to prevent data leakage between users
+    console.log('🧹 Clearing React Query cache to prevent data leakage...');
+    queryClient.clear();
+    
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error('Error signing out:', error);
+      console.error('❌ Error signing out:', error);
       throw error;
     }
+    
+    console.log('✅ Sign out completed and cache cleared');
   };
 
   const setProfileData = (newProfile: Profile) => {
@@ -126,6 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         console.log('👻 User signed out, clearing profile');
         setProfile(null);
+        // CRITICAL: Clear cache when user signs out via auth state change
+        console.log('🧹 Clearing React Query cache on auth state change...');
+        queryClient.clear();
       }
       
       setIsLoadingAuth(false);
@@ -136,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('🧹 Cleaning up auth subscription');
       subscription.unsubscribe();
     };
-  }, []);
+  }, [queryClient]);
 
   const value = {
     session,

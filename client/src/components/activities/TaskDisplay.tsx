@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchTasks, updateTaskStatus, TaskEntry } from '../../lib/api';
 import { Checkbox } from '../ui/checkbox'; // Assuming shadcn/ui Checkbox path
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../ui/card'; // Assuming shadcn/ui Card path
+import { Card, CardContent, CardFooter, CardHeader } from '../ui/card'; // Assuming shadcn/ui Card path
 import { Button } from '../ui/button'; // Added Button import
 import {
   Dialog,
@@ -11,8 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter, // Added DialogFooter
-  DialogClose, // Added DialogClose
 } from '../ui/dialog'; // Added Dialog imports
 import { AddTaskForm } from './AddTaskForm'; // Added AddTaskForm import
 import { format } from 'date-fns'; // For date formatting

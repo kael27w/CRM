@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -12,10 +12,7 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
-  SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -28,12 +25,9 @@ import {
   deleteDeal,
   fetchCompanies,
   fetchContacts,
-  type DBPipeline, 
-  type Pipeline as APIPipeline,
-  type NewDealData,
-  type Company,
-  type ContactEntry
+  type NewDealData
 } from '../lib/api';
+import { useAuth } from '../lib/context/AuthContext';
 import { 
   Card, 
   CardContent, 
@@ -42,31 +36,23 @@ import {
   CardHeader, 
   CardTitle 
 } from "../components/ui/card";
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from "../components/ui/tabs";
+
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { 
   Plus, 
   MoreHorizontal,
-  Users,
-  Building,
-  DollarSign,
   Calendar,
   BarChart3,
   HeartPulse,
   Home,
-  Landmark
+  Landmark,
+  Building2
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
@@ -77,7 +63,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "../components/ui/dialog";
 import {
   AlertDialog,
@@ -88,7 +73,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
 import {
   Select,
@@ -97,6 +81,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Switch } from "../components/ui/switch";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { useToast } from "../hooks/use-toast";
@@ -292,7 +277,35 @@ const PipelinesPage: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentDealId, setCurrentDealId] = useState<number | null>(null);
   const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
-  const [dialogReady, setDialogReady] = useState(false);
+  
+  // Auth context
+  const { profile, isLoadingProfile, user } = useAuth();
+  const isConfirmedAdmin = !isLoadingProfile && !!profile?.is_admin;
+  const currentUserId = user?.id;
+
+  // Toggle state for "My Deals" vs "All Deals" with localStorage persistence per user
+  const [showAllDeals, setShowAllDeals] = useState(() => {
+    if (!currentUserId) return false;
+    const stored = localStorage.getItem(`pipelinesViewShowAll_${currentUserId}`);
+    return stored === 'true' && isConfirmedAdmin;
+  });
+
+  // Save showAllDeals preference to localStorage when it changes (user-specific)
+  useEffect(() => {
+    if (currentUserId) {
+      localStorage.setItem(`pipelinesViewShowAll_${currentUserId}`, showAllDeals.toString());
+    }
+  }, [showAllDeals, currentUserId]);
+
+  // Reset to "My Deals" when user profile loads and user is not admin
+  useEffect(() => {
+    if (!isLoadingProfile && profile !== undefined && !isConfirmedAdmin && showAllDeals) {
+      setShowAllDeals(false);
+    }
+  }, [isLoadingProfile, profile, isConfirmedAdmin, showAllDeals]);
+
+  // Determine current view for API calls
+  const currentView: 'mine' | 'all' = showAllDeals && isConfirmedAdmin ? 'all' : 'mine';
   
   // Get today's date in YYYY-MM-DD format without timezone issues
   const getTodayString = () => {
@@ -336,29 +349,93 @@ const PipelinesPage: React.FC = () => {
 
   // Fetch all pipelines for the sidebar
   const { data: pipelinesList, isLoading: pipelinesLoading, error: pipelinesError } = useQuery({
-    queryKey: ['pipelines'],
+    queryKey: ['pipelines', currentUserId], // Include user ID for cache isolation
     queryFn: fetchPipelines,
+    enabled: !!currentUserId,
   });
 
-  // Fetch companies for dropdowns
-  const { data: companiesList, isLoading: companiesLoading } = useQuery({
-    queryKey: ['companies'],
-    queryFn: fetchCompanies,
+  // Fetch companies for dropdowns - UPDATED: Respect user permissions
+  const { data: companiesList = [], isLoading: companiesLoading, error: companiesError } = useQuery({
+    queryKey: ['companies-dropdown', currentView, currentUserId, isConfirmedAdmin], // Include admin status for cache isolation
+    queryFn: () => {
+      console.log(`🔍 [DROPDOWN_COMPANIES] Fetching companies for dropdown with view: ${currentView}, user: ${currentUserId}, isAdmin: ${isConfirmedAdmin}`);
+      // Admin users can see all companies, regular users only see their own
+      return fetchCompanies(isConfirmedAdmin ? 'all' : 'mine');
+    },
+    enabled: !!currentUserId && profile !== null, // Wait for profile to be loaded
   });
 
-  // Fetch contacts for dropdowns
-  const { data: contactsList, isLoading: contactsLoading } = useQuery({
-    queryKey: ['contacts'],
-    queryFn: fetchContacts,
+  // Fetch contacts for dropdowns - UPDATED: Respect user permissions  
+  const { data: contactsList = [], isLoading: contactsLoading, error: contactsError } = useQuery({
+    queryKey: ['contacts-dropdown', currentView, currentUserId, isConfirmedAdmin], // Include admin status for cache isolation
+    queryFn: () => {
+      console.log(`🔍 [DROPDOWN_CONTACTS] Fetching contacts for dropdown with view: ${currentView}, user: ${currentUserId}, isAdmin: ${isConfirmedAdmin}`);
+      // Admin users can see all contacts, regular users only see their own
+      return fetchContacts(isConfirmedAdmin ? 'all' : 'mine');
+    },
+    enabled: !!currentUserId && profile !== null, // Wait for profile to be loaded
   });
+
+  // CRITICAL: Debug logging for dropdown data
+  useEffect(() => {
+    console.log(`🔍 [DROPDOWN_DEBUG] Dropdown data state:`, {
+      companiesCount: companiesList?.length || 0,
+      contactsCount: contactsList?.length || 0,
+      companiesLoading,
+      contactsLoading,
+      companiesError: companiesError?.message,
+      contactsError: contactsError?.message,
+      isConfirmedAdmin,
+      currentUserId,
+      currentView
+    });
+    
+    if (companiesList && companiesList.length > 0) {
+      console.log(`🔍 [DROPDOWN_DEBUG] Sample companies:`, companiesList.slice(0, 3).map(c => ({
+        id: c.id,
+        name: c.company_name
+      })));
+    }
+    
+    if (contactsList && contactsList.length > 0) {
+      console.log(`🔍 [DROPDOWN_DEBUG] Sample contacts:`, contactsList.slice(0, 3).map(c => ({
+        id: c.id,
+        name: `${c.first_name} ${c.last_name}`
+      })));
+    }
+  }, [companiesList, contactsList, companiesLoading, contactsLoading, companiesError, contactsError, isConfirmedAdmin]);
+
+  // CRITICAL: Debug logging when Add Deal dialog opens
+  useEffect(() => {
+    if (isAddDealOpen) {
+      console.log(`🔍 [ADD_DEAL_DEBUG] Add Deal dialog opened!`);
+      console.log(`🔍 [ADD_DEAL_DEBUG] Available companies:`, companiesList?.length || 0);
+      console.log(`🔍 [ADD_DEAL_DEBUG] Available contacts:`, contactsList?.length || 0);
+      console.log(`🔍 [ADD_DEAL_DEBUG] Form state:`, addDealForm);
+      console.log(`🔍 [ADD_DEAL_DEBUG] User permissions:`, { isConfirmedAdmin, currentUserId });
+      
+      if ((!companiesList || companiesList.length === 0) && !companiesLoading) {
+        console.warn(`⚠️ [ADD_DEAL_DEBUG] No companies available for dropdown!`);
+        if (companiesError) {
+          console.error(`❌ [ADD_DEAL_DEBUG] Companies error:`, companiesError);
+        }
+      }
+      
+      if ((!contactsList || contactsList.length === 0) && !contactsLoading) {
+        console.warn(`⚠️ [ADD_DEAL_DEBUG] No contacts available for dropdown!`);
+        if (contactsError) {
+          console.error(`❌ [ADD_DEAL_DEBUG] Contacts error:`, contactsError);
+        }
+      }
+    }
+  }, [isAddDealOpen, companiesList, contactsList, companiesLoading, contactsLoading, companiesError, contactsError, addDealForm, isConfirmedAdmin, currentUserId]);
 
   // Focus management for edit dialog - IMPROVED VERSION
   React.useEffect(() => {
     if (isEditDealOpen && currentDealId) {
       console.log(`[EDIT_DIALOG_FOCUS] Dialog opened for deal ID: ${currentDealId}`);
       
-      // Set dialog ready immediately - no complex focus management needed
-      setDialogReady(true);
+      // Dialog ready - no complex focus management needed
       
       // Optional: Focus the name input after a short delay to ensure DOM is ready
       // Only if no Select components are causing issues
@@ -376,11 +453,9 @@ const PipelinesPage: React.FC = () => {
       
       return () => {
         clearTimeout(focusTimer);
-        setDialogReady(false);
       };
     } else {
       console.log(`[EDIT_DIALOG_FOCUS] Dialog closed or no deal ID`);
-      setDialogReady(false);
     }
   }, [isEditDealOpen, currentDealId]);
 
@@ -422,19 +497,19 @@ const PipelinesPage: React.FC = () => {
     };
   }, []);
 
-  // Fetch the active pipeline data
+  // Fetch the active pipeline data - CRITICAL FIX: Include user ID in queryKey for proper cache isolation
   const { data: currentPipelineData, isLoading: pipelineLoading, error: pipelineError } = useQuery({
-    queryKey: ['pipeline', activePipeline],
-    queryFn: () => fetchPipelineData(activePipeline),
-    enabled: !!activePipeline,
+    queryKey: ['pipeline', activePipeline, currentView, currentUserId], // SECURITY: Added currentUserId
+    queryFn: () => fetchPipelineData(activePipeline, currentView),
+    enabled: !!activePipeline && !!currentUserId, // PERFORMANCE FIX: Only enabled when user is loaded
   });
 
   // Mutation for creating a new deal
   const createDealMutation = useMutation({
     mutationFn: createDeal,
     onSuccess: () => {
-      // Targeted cache invalidation - only invalidate the specific pipeline data
-      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
+      // SECURITY FIX: Include user ID in cache invalidation
+      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline, currentView, currentUserId] });
       setIsAddDealOpen(false);
       // Reset form state immediately
       resetFormState();
@@ -461,8 +536,8 @@ const PipelinesPage: React.FC = () => {
     mutationFn: ({ dealId, dealData }: { dealId: number; dealData: Partial<any> }) => 
       updateDeal(dealId, dealData),
     onSuccess: () => {
-      // Targeted cache invalidation - only invalidate the specific pipeline data
-      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
+      // SECURITY FIX: Include user ID in cache invalidation
+      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline, currentView, currentUserId] });
       setIsEditDealOpen(false);
       setCurrentDealId(null);
       // Reset form state immediately
@@ -491,8 +566,8 @@ const PipelinesPage: React.FC = () => {
   const deleteDealMutation = useMutation({
     mutationFn: deleteDeal,
     onSuccess: () => {
-      // Targeted cache invalidation - only invalidate the specific pipeline data
-      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline] });
+      // SECURITY FIX: Include user ID in cache invalidation
+      queryClient.invalidateQueries({ queryKey: ['pipeline', activePipeline, currentView, currentUserId] });
       setIsDeleteDialogOpen(false);
       setDealToDelete(null);
       // Reset form state immediately
@@ -948,7 +1023,6 @@ const PipelinesPage: React.FC = () => {
       // Ensure dialog is closed and state is clean before starting
       console.log(`[EDIT_DEAL_CLICK] Step 0: Ensuring clean state...`);
       setIsEditDealOpen(false);
-      setDialogReady(false);
       setCurrentDealId(null);
       
       console.log(`[EDIT_DEAL_CLICK] Step 1: Getting active pipeline data...`);
@@ -1210,6 +1284,42 @@ const PipelinesPage: React.FC = () => {
     });
   };
   
+  // CRITICAL: Debug logging to track data leakage issues
+  useEffect(() => {
+    console.log(`🔍 [PIPELINES_DEBUG] User session state:`, {
+      currentUserId,
+      profileId: profile?.id,
+      isConfirmedAdmin,
+      currentView,
+      activePipeline,
+      showAllDeals
+    });
+  }, [currentUserId, profile?.id, isConfirmedAdmin, currentView, activePipeline, showAllDeals]);
+
+  // CRITICAL: Debug logging when pipeline data changes
+  useEffect(() => {
+    if (currentPipelineData) {
+      const totalDeals = currentPipelineData.stages?.reduce((sum, stage) => sum + (stage.deals?.length || 0), 0) || 0;
+      console.log(`🔍 [PIPELINE_DATA_DEBUG] Data loaded for user ${currentUserId}:`, {
+        pipelineId: currentPipelineData.id,
+        pipelineName: currentPipelineData.name,
+        totalDeals,
+        currentView,
+        isAdmin: isConfirmedAdmin,
+        queryKey: ['pipeline', activePipeline, currentView, currentUserId]
+      });
+      
+      // Log first few deals for debugging ownership
+      if (totalDeals > 0) {
+        const firstFewDeals = currentPipelineData.stages
+          ?.flatMap(stage => stage.deals || [])
+          .slice(0, 3)
+          .map(deal => ({ id: deal.id, name: deal.name }));
+        console.log(`🔍 [PIPELINE_DATA_DEBUG] Sample deals:`, firstFewDeals);
+      }
+    }
+  }, [currentPipelineData, currentUserId, currentView, isConfirmedAdmin, activePipeline]);
+
   return (
     <div className="flex flex-col h-full">
       <div className="py-4 px-5 border-b">
@@ -1257,7 +1367,21 @@ const PipelinesPage: React.FC = () => {
               <div className="p-4 bg-background border-b">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h2 className="text-lg font-semibold">{currentPipeline.name}</h2>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-semibold">{currentPipeline.name}</h2>
+                      {!isLoadingProfile && !!profile && isConfirmedAdmin && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Building2 className="h-4 w-4" />
+                          <span className="text-muted-foreground">My Deals</span>
+                          <Switch
+                            checked={showAllDeals}
+                            onCheckedChange={setShowAllDeals}
+                            className="data-[state=checked]:bg-blue-600"
+                          />
+                          <span className="text-muted-foreground">All Deals</span>
+                        </div>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       {summary.totalDeals} deals · ${summary.totalAmount.toLocaleString()}
                     </p>
@@ -1346,16 +1470,37 @@ const PipelinesPage: React.FC = () => {
               <Select 
                 value={addDealForm.company_id?.toString() || undefined} 
                 onValueChange={(value) => handleFormChange('company_id', value ? parseInt(value) : null)}
+                disabled={companiesLoading}
               >
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a company" />
+                  <SelectValue placeholder={
+                    companiesLoading 
+                      ? "Loading companies..." 
+                      : (companiesList && companiesList.length > 0) 
+                        ? "Select a company" 
+                        : isConfirmedAdmin 
+                          ? "No companies available" 
+                          : "No companies found (check your permissions)"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {companiesList?.map(company => (
-                    <SelectItem key={company.id} value={company.id.toString()}>
-                      {company.company_name}
+                  {companiesLoading ? (
+                    <SelectItem value="loading" disabled>
+                      Loading companies...
                     </SelectItem>
-                  ))}
+                  ) : companiesList && companiesList.length > 0 ? (
+                    companiesList.map(company => (
+                      <SelectItem key={company.id} value={company.id.toString()}>
+                        {company.company_name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-data" disabled>
+                      {isConfirmedAdmin 
+                        ? "No companies available" 
+                        : "No companies found - you may need to create one first"}
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1367,16 +1512,37 @@ const PipelinesPage: React.FC = () => {
               <Select 
                 value={addDealForm.contact_id?.toString() || undefined} 
                 onValueChange={(value) => handleFormChange('contact_id', value ? parseInt(value) : null)}
+                disabled={contactsLoading}
               >
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a contact" />
+                  <SelectValue placeholder={
+                    contactsLoading 
+                      ? "Loading contacts..." 
+                      : (contactsList && contactsList.length > 0) 
+                        ? "Select a contact" 
+                        : isConfirmedAdmin 
+                          ? "No contacts available" 
+                          : "No contacts found (check your permissions)"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {contactsList?.map(contact => (
-                    <SelectItem key={contact.id} value={contact.id.toString()}>
-                      {contact.first_name} {contact.last_name}
+                  {contactsLoading ? (
+                    <SelectItem value="loading" disabled>
+                      Loading contacts...
                     </SelectItem>
-                  ))}
+                  ) : contactsList && contactsList.length > 0 ? (
+                    contactsList.map(contact => (
+                      <SelectItem key={contact.id} value={contact.id.toString()}>
+                        {contact.first_name} {contact.last_name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-data" disabled>
+                      {isConfirmedAdmin 
+                        ? "No contacts available" 
+                        : "No contacts found - you may need to create one first"}
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1455,7 +1621,6 @@ const PipelinesPage: React.FC = () => {
             // Clean up state when dialog closes
             setIsEditDealOpen(false);
             setCurrentDealId(null);
-            setDialogReady(false);
             resetFormState();
           } else if (!isEditDealOpen) {
             // Only set to open if it's not already open (prevent duplicate opens)
@@ -1563,14 +1728,34 @@ const PipelinesPage: React.FC = () => {
                 disabled={companiesLoading}
               >
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder={companiesLoading ? "Loading companies..." : "Select a company"} />
+                  <SelectValue placeholder={
+                    companiesLoading 
+                      ? "Loading companies..." 
+                      : (companiesList && companiesList.length > 0) 
+                        ? "Select a company" 
+                        : isConfirmedAdmin 
+                          ? "No companies available" 
+                          : "No companies found (check your permissions)"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {companiesList?.map(company => (
-                    <SelectItem key={company.id} value={company.id.toString()}>
-                      {company.company_name}
+                  {companiesLoading ? (
+                    <SelectItem value="loading" disabled>
+                      Loading companies...
                     </SelectItem>
-                  ))}
+                  ) : companiesList && companiesList.length > 0 ? (
+                    companiesList.map(company => (
+                      <SelectItem key={company.id} value={company.id.toString()}>
+                        {company.company_name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-data" disabled>
+                      {isConfirmedAdmin 
+                        ? "No companies available" 
+                        : "No companies found - you may need to create one first"}
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1586,14 +1771,34 @@ const PipelinesPage: React.FC = () => {
                 disabled={contactsLoading}
               >
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder={contactsLoading ? "Loading contacts..." : "Select a contact"} />
+                  <SelectValue placeholder={
+                    contactsLoading 
+                      ? "Loading contacts..." 
+                      : (contactsList && contactsList.length > 0) 
+                        ? "Select a contact" 
+                        : isConfirmedAdmin 
+                          ? "No contacts available" 
+                          : "No contacts found (check your permissions)"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {contactsList?.map(contact => (
-                    <SelectItem key={contact.id} value={contact.id.toString()}>
-                      {contact.first_name} {contact.last_name}
+                  {contactsLoading ? (
+                    <SelectItem value="loading" disabled>
+                      Loading contacts...
                     </SelectItem>
-                  ))}
+                  ) : contactsList && contactsList.length > 0 ? (
+                    contactsList.map(contact => (
+                      <SelectItem key={contact.id} value={contact.id.toString()}>
+                        {contact.first_name} {contact.last_name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-data" disabled>
+                      {isConfirmedAdmin 
+                        ? "No contacts available" 
+                        : "No contacts found - you may need to create one first"}
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1604,7 +1809,6 @@ const PipelinesPage: React.FC = () => {
               console.log(`[EDIT_DIALOG_FULL] Cancel button clicked`);
               setIsEditDealOpen(false);
               setCurrentDealId(null);
-              setDialogReady(false);
               resetFormState();
             }}>
               Cancel

@@ -1,17 +1,15 @@
-import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Clock } from 'lucide-react';
+import { CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { createEvent, fetchContacts, fetchCompanies, type NewEventData, type ContactEntry, type Company } from '../../lib/api';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { Label } from '../ui/label';
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -80,14 +78,14 @@ export function AddEventDialog({ open, onOpenChange, defaultDate }: AddEventDial
   // Fetch contacts for dropdown
   const { data: contacts = [] } = useQuery<ContactEntry[]>({
     queryKey: ['contacts'],
-    queryFn: fetchContacts,
+    queryFn: () => fetchContacts('all'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch companies for dropdown
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ['companies'],
-    queryFn: fetchCompanies,
+    queryFn: () => fetchCompanies('all'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 

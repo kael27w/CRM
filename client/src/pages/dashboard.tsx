@@ -237,7 +237,7 @@ const Dashboard: React.FC = () => {
   });
 
   // Get tasks from the useTasks hook
-  const { tasks, toggleTask } = useTasks();
+  const { tasks, toggleTask } = useTasks('mine');
   
   // Update the handleToggleTask function to use the toggleTask from useTasks hook
   const handleToggleTask = (id: number, completed: boolean) => {

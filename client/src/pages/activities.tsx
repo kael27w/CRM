@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '../components/shared/data-table';
 import { Badge } from '../components/ui/badge';
-import { apiRequest } from '../lib/queryClient';
 import { 
   Tabs, 
   TabsContent, 
@@ -16,25 +14,23 @@ import {
 } from "../components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Label } from "../components/ui/label";
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, Phone, Mail, CheckSquare, Filter, Edit, Trash2, MapPin, User, Building, ArrowLeft } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, Clock, Phone, Mail, CheckSquare, Edit, Trash2, MapPin, User, Building, ArrowLeft } from 'lucide-react';
 import CalendarEventDialog, { CalendarEvent } from '../components/calendar/calendar-event-dialog';
 import { Button } from "../components/ui/button";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "../lib/queryClient";
 import { useTasks } from '../lib/hooks/useTasks';
 import { useLocation } from 'wouter';
 import TaskDialog from '../components/dashboard/task-dialog';
 import { Task } from '../types';
-import { CallLogDisplay } from '../components/activities/CallLogDisplay';
 import { AddEventDialog } from '../components/activities/AddEventDialog';
 import { EditEventDialog } from '../components/activities/EditEventDialog';
+import { CallLogDisplay } from '../components/activities/CallLogDisplay';
+import { useAuth } from '../lib/context/AuthContext';
 import { 
   fetchEvents, 
   fetchActivities,
   fetchCallLogs,
   deleteEvent, 
   type ActivityEntry,
-  type CallLogEntry,
   updateActivity
 } from '../lib/api';
 import { toast } from 'sonner';
@@ -450,6 +446,14 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity, onStatusChange, o
 };
 
 const ActivitiesPage: React.FC = () => {
+  // Get admin status and user info from auth context
+  const { profile, user, isLoadingProfile } = useAuth();
+  const isConfirmedAdmin = !isLoadingProfile && !!profile && profile.is_admin === true;
+  const currentUserId = user?.id;
+  
+  // Debug logging for admin status
+  console.log('[ACTIVITIES_PAGE] isLoadingProfile:', isLoadingProfile, 'Profile:', profile ? { is_admin: profile.is_admin } : null, 'isConfirmedAdmin:', isConfirmedAdmin);
+  
   // Parse URL params to get initial tab
   const [location] = useLocation();
   const getInitialTab = () => {
@@ -468,13 +472,13 @@ const ActivitiesPage: React.FC = () => {
     call: true,
     email: true
   });
-  const [filterOwnership, setFilterOwnership] = useState<string>("my"); // my, all
+  const [filterOwnership, setFilterOwnership] = useState<string>("mine"); // mine, all (updated to match API)
   const [filterStatus, setFilterStatus] = useState<string>("open"); // open, closed, all
   
   // Add dialog state for event and task dialogs
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
-  const [currentEditEvent, setCurrentEditEvent] = useState<Activity | null>(null);
+  const [currentEditEvent] = useState<Activity | null>(null);
   
   // Event-related state
   const [isAddEventDialogOpen, setIsAddEventDialogOpen] = useState(false);
@@ -486,8 +490,8 @@ const ActivitiesPage: React.FC = () => {
   // Query client for invalidating queries
   const queryClient = useQueryClient();
   
-  // Use the tasks hook to access and manage tasks
-  const { tasks, toggleTask, refetch: refetchTasks } = useTasks();
+  // Use the tasks hook to access and manage tasks with proper view filtering
+  const { tasks, toggleTask, refetch: refetchTasks } = useTasks(filterOwnership as 'mine' | 'all');
   
   // State for tasks displayed in the Tasks tab
   const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
@@ -539,17 +543,21 @@ const ActivitiesPage: React.FC = () => {
     }
   }, [activeTab, location]);
 
-  // Fetch all activities for calendar integration
+  // Fetch all activities for calendar integration with data ownership support
   const { data: allActivities = [], isLoading: activitiesLoading } = useQuery({
-    queryKey: ['activities'],
-    queryFn: () => fetchActivities(),
+    queryKey: ['activities', filterOwnership, isConfirmedAdmin, currentUserId],
+    queryFn: () => fetchActivities({ 
+      view: filterOwnership as 'mine' | 'all' 
+    }),
+    enabled: !!currentUserId && !isLoadingProfile, // Wait for user and profile to be loaded
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   // Fetch call logs for calendar integration
   const { data: callLogs = [], isLoading: callLogsLoading } = useQuery({
-    queryKey: ['call-logs'],
+    queryKey: ['call-logs', currentUserId],
     queryFn: fetchCallLogs,
+    enabled: !!currentUserId && !isLoadingProfile, // Wait for user and profile to be loaded
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
@@ -710,7 +718,6 @@ const ActivitiesPage: React.FC = () => {
       header: "Related To",
       cell: ({ row }) => {
         const relatedType = row.original.relatedType;
-        const prefix = relatedType === 'deal' ? '' : '';
         
         return (
           <div className="flex items-center">
@@ -766,12 +773,6 @@ const ActivitiesPage: React.FC = () => {
       },
     },
   ];
-
-  // Filter activities based on active tab
-  const filteredActivities = calendarActivities.filter(activity => {
-    if (activeTab === 'all') return true;
-    return activity.type === activeTab;
-  });
 
   // Fetch events
   const { data: events = [], isLoading: eventsLoading, error: eventsError } = useQuery({
@@ -914,7 +915,7 @@ const ActivitiesPage: React.FC = () => {
       if (!filterTypes[activity.type]) return false;
       
       // Apply ownership filter (assumption: current user is Current User)
-      if (filterOwnership === "my" && activity.assignedTo !== "Current User") return false;
+      if (filterOwnership === "mine" && activity.assignedTo !== "Current User") return false;
       
       // Apply status filter
       if (filterStatus === "open" && activity.status === "completed") return false;
@@ -947,6 +948,16 @@ const ActivitiesPage: React.FC = () => {
       ...filterTypes,
       [type]: !filterTypes[type]
     });
+  };
+
+  // Handle ownership filter change (with admin verification)
+  const handleOwnershipFilterChange = (value: string) => {
+    // Only allow 'all' view for admins
+    if (value === 'all' && !isConfirmedAdmin) {
+      toast.error('Access denied: Admin privileges required to view all activities');
+      return;
+    }
+    setFilterOwnership(value);
   };
   
   // Handle task dialog
@@ -1089,12 +1100,42 @@ const ActivitiesPage: React.FC = () => {
     setIsEventDialogOpen(false);
   };
   
+  // Show loading state while profile is loading
+  if (isLoadingProfile) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-lg">Loading user permissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if no user authenticated
+  if (!currentUserId) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-lg text-red-600">
+            Authentication required to access activities
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Activities</h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">
           Manage tasks, events, calls, and other activities
+          {isConfirmedAdmin && (
+            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+              Admin View Available
+            </span>
+          )}
         </p>
       </div>
       
@@ -1195,8 +1236,8 @@ const ActivitiesPage: React.FC = () => {
                         // Apply type filters
                         if (!filterTypes[activity.type]) return false;
                         
-                        // Apply ownership filter (assumption: current user is Current User)
-                        if (filterOwnership === "my" && activity.assignedTo !== "Current User") return false;
+                              // Apply ownership filter (assumption: current user is Current User)
+      if (filterOwnership === "mine" && activity.assignedTo !== "Current User") return false;
                         
                         // Apply status filter
                         if (filterStatus === "open" && activity.status === "completed") return false;
@@ -1324,20 +1365,29 @@ const ActivitiesPage: React.FC = () => {
                       
                       {/* Ownership Filter */}
                       <div className="mb-4">
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Ownership</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                          Ownership
+                          {isConfirmedAdmin && (
+                            <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                              Admin
+                            </span>
+                          )}
+                        </p>
                         <RadioGroup 
                           value={filterOwnership}
-                          onValueChange={setFilterOwnership}
+                          onValueChange={handleOwnershipFilterChange}
                           className="flex gap-4"
                         >
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="my" id="ownership-my" />
-                            <Label htmlFor="ownership-my" className="text-sm">My Activities</Label>
+                            <RadioGroupItem value="mine" id="ownership-mine" />
+                            <Label htmlFor="ownership-mine" className="text-sm">My Activities</Label>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="all" id="ownership-all" />
-                            <Label htmlFor="ownership-all" className="text-sm">All Activities</Label>
-                          </div>
+                          {isConfirmedAdmin && (
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="all" id="ownership-all" />
+                              <Label htmlFor="ownership-all" className="text-sm">All Activities</Label>
+                            </div>
+                          )}
                         </RadioGroup>
                       </div>
                       

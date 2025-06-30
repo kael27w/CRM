@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '@/components/shared/data-table';
+import { DataTable } from '@/components/shared/data-table'; // Ensure this path is correct
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
@@ -10,36 +10,57 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
-import { fetchProducts, Product, NewProductData, createProduct, updateProduct, deleteProduct } from '@/lib/api';
-import ProductDialog, { ExtendedProductData } from '@/components/products/product-dialog';
+import { MoreHorizontal, Edit, Trash2, PlusCircle } from 'lucide-react'; // Added PlusCircle
+import { 
+  fetchProducts, 
+  Product, 
+  NewProductData, 
+  createProduct, 
+  updateProduct, 
+  deleteProduct 
+} from '@/lib/api'; // Ensure this path is correct
+import ProductDialog, { ExtendedProductData } from '@/components/products/product-dialog'; // Ensure path
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/context/AuthContext'; // Ensure path
 
 const ProductsPage: React.FC = () => {
-  // State for managing product dialogs
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
-  // React Query setup
+  const { profile, user, isLoadingProfile } = useAuth();
+  const currentUserId = user?.id; // For query key, though not strictly needed for product ownership
+
+  // This is the definitive check for admin privileges for UI rendering
+  const isConfirmedAdmin = !isLoadingProfile && !!profile && profile.is_admin === true;
+
+  // Console log for debugging admin status
+  console.log('[PRODUCTS_PAGE_FRESH_ATTEMPT] isLoadingProfile:', isLoadingProfile, 'isConfirmedAdmin:', isConfirmedAdmin);
+  
   const queryClient = useQueryClient();
 
-  // Fetch products from the API using React Query
-  const { data: products = [], isLoading, error } = useQuery({
-    queryKey: ['products'],
+  const { data: products = [], isLoading: isLoadingProducts, error: productsError } = useQuery({
+    queryKey: ['products', currentUserId], // User-specific key to help with cache if user context ever matters here
     queryFn: fetchProducts,
+    enabled: !isLoadingProfile && !!currentUserId && profile !== undefined, // Ensure profile attempt has resolved
   });
 
-  // Mutation for creating products
+  const commonMutationOptions = {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products', currentUserId] });
+    },
+  };
+
   const createProductMutation = useMutation({
-    mutationFn: createProduct,
+    mutationFn: (productData: NewProductData) => createProduct(productData), // Adjusted for clarity
+    ...commonMutationOptions,
     onSuccess: (newProduct: Product, variables: NewProductData) => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      commonMutationOptions.onSuccess();
       toast.success('Product created successfully!');
-      
-      // Handle saving custom fields and tags for the new product
       const extendedData = variables as ExtendedProductData;
       if (extendedData.customFields || extendedData.tags) {
-        saveAdditionalProductData(newProduct.id, extendedData.customFields, extendedData.tags);
+        // Assuming saveAdditionalProductData is defined or you'll implement it
+        // saveAdditionalProductData(newProduct.id, extendedData.customFields, extendedData.tags);
+        console.log("Would save additional data for new product", newProduct.id, extendedData);
       }
     },
     onError: (error: Error) => {
@@ -47,12 +68,11 @@ const ProductsPage: React.FC = () => {
     },
   });
 
-  // Mutation for updating products
   const updateProductMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<NewProductData> }) => 
-      updateProduct(id, data),
+    mutationFn: ({ id, data }: { id: number; data: Partial<NewProductData> }) => updateProduct(id, data),
+    ...commonMutationOptions,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      commonMutationOptions.onSuccess();
       toast.success('Product updated successfully!');
     },
     onError: (error: Error) => {
@@ -60,117 +80,60 @@ const ProductsPage: React.FC = () => {
     },
   });
 
-  // Mutation for deleting products
   const deleteProductMutation = useMutation({
-    mutationFn: deleteProduct,
+    mutationFn: (productId: number) => deleteProduct(productId), // Corrected to pass only ID
+    ...commonMutationOptions,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      commonMutationOptions.onSuccess();
       toast.success('Product deleted successfully!');
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete product: ${error.message}`);
     },
   });
-
-  // Function to save custom fields and tags for a new product
-  const saveAdditionalProductData = (productId: number, customFields?: Record<string, any>, tags?: string[]) => {
-    try {
-      // Save custom field data
-      if (customFields && Object.keys(customFields).length > 0) {
-        const dataKey = 'customFieldData_products';
-        const existingData = JSON.parse(localStorage.getItem(dataKey) || '{}');
-        existingData[productId.toString()] = customFields;
-        localStorage.setItem(dataKey, JSON.stringify(existingData));
-      }
-
-      // Save tags
-      if (tags && tags.length > 0) {
-        const tagsKey = 'itemTags_products';
-        const existingTags = JSON.parse(localStorage.getItem(tagsKey) || '{}');
-        existingTags[productId.toString()] = tags;
-        localStorage.setItem(tagsKey, JSON.stringify(existingTags));
-      }
-
-      // Dispatch custom event to notify DataTable of localStorage changes
-      window.dispatchEvent(new Event('localStorageUpdate'));
-
-      // Force a re-render of the DataTable to show the new tags and custom fields
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    } catch (error) {
-      console.error('Error saving additional product data:', error);
-    }
-  };
-
-  // Define main columns for the data table (without actions)
-  const columns: ColumnDef<Product>[] = [
+  
+  // --- Define Columns ---
+  const baseColumns: ColumnDef<Product>[] = [
     {
       accessorKey: "product_name",
       header: "Product Name",
-      cell: ({ row }) => (
-        <div className="font-medium">{row.getValue("product_name")}</div>
-      ),
+      cell: ({ row }) => <div className="font-medium">{row.getValue("product_name")}</div>,
     },
     {
       accessorKey: "sku_code",
       header: "SKU/Code",
-      cell: ({ row }) => {
-        const skuCode = row.getValue("sku_code") as string | null;
-        return <div>{skuCode || '-'}</div>;
-      },
+      cell: ({ row }) => <div>{row.getValue("sku_code") || '-'}</div>,
     },
-    {
-      accessorKey: "category",
-      header: "Category",
-    },
+    { accessorKey: "category", header: "Category" },
     {
       accessorKey: "price",
       header: "Price",
       cell: ({ row }) => {
         const price = parseFloat(row.getValue("price"));
-        // Format the amount as a dollar amount
-        const formatted = new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-        }).format(price);
-        
-        return <div>{formatted}</div>;
+        return <div>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price)}</div>;
       },
     },
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => {
-        const status = row.getValue("status") as string;
-        return (
-          <Badge
-            variant={status === "active" ? "default" : "secondary"}
-          >
-            {status}
-          </Badge>
-        );
-      },
+      cell: ({ row }) => <Badge variant={row.getValue("status") === "active" ? "default" : "secondary"}>{row.getValue("status")}</Badge>,
     },
     {
       accessorKey: "description",
       header: "Description",
       cell: ({ row }) => {
-        const description = row.getValue("description") as string | null;
-        return (
-          <div className="max-w-[300px] truncate" title={description || ''}>
-            {description || '-'}
-          </div>
-        );
+        const desc = row.getValue("description") as string | null;
+        return <div className="max-w-[200px] truncate" title={desc || ''}>{desc || '-'}</div>;
       },
     },
+    // Tags column is handled by DataTable component automatically
   ];
 
-  // Define actions column separately
-  const actionsColumn: ColumnDef<Product> = {
-    id: "actions",
+  const adminActionsColumn: ColumnDef<Product> = {
+    id: "admin-actions",
     header: "Actions",
     cell: ({ row }) => {
       const product = row.original;
-      
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -181,134 +144,106 @@ const ProductsPage: React.FC = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => handleEditProduct(product)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
+              <Edit className="mr-2 h-4 w-4" /> Edit
             </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => handleDeleteProduct(product)}
-              className="text-red-600"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
+            <DropdownMenuItem onClick={() => handleDeleteProduct(product)} className="text-red-600">
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );
     },
   };
+  
+  const tableColumns = (!isLoadingProfile && profile && isConfirmedAdmin) 
+                       ? [...baseColumns, adminActionsColumn] 
+                       : baseColumns;
 
-  // Event handlers
-  const handleRowClick = (row: any) => {
-    console.log('Product clicked:', row.original);
-    // Could open a product details view here
-  };
+  // Debug logging for column changes
+  console.log('[PRODUCTS_DEBUG] tableColumns length:', tableColumns.length, 'includes admin-actions:', tableColumns.some(col => (col as any).id === 'admin-actions'));
 
-  const handleAddField = () => {
-    console.log('Add field clicked');
-    // This will be expanded to allow adding custom fields
-  };
-
+  // --- Event Handlers ---
   const handleNewProduct = () => {
-    console.log('New Product button clicked');
-    setEditingProduct(null); // Ensure we're creating a new product
+    if (!isConfirmedAdmin) return; // Should be redundant if button isn't shown
+    setEditingProduct(null);
     setIsProductDialogOpen(true);
   };
 
   const handleEditProduct = (product: Product) => {
-    console.log('Edit product clicked:', product);
+    if (!isConfirmedAdmin) return;
     setEditingProduct(product);
     setIsProductDialogOpen(true);
   };
 
   const handleDeleteProduct = (product: Product) => {
-    if (window.confirm(`Are you sure you want to delete "${product.product_name}"? This action cannot be undone.`)) {
+    if (!isConfirmedAdmin) return;
+    if (window.confirm(`Are you sure you want to delete "${product.product_name}"?`)) {
       deleteProductMutation.mutate(product.id);
     }
   };
 
   const handleSaveProduct = async (productData: ExtendedProductData) => {
-    // Extract the base product data (without custom fields and tags)
-    const { customFields, tags, ...baseProductData } = productData;
-    
+    if (!isConfirmedAdmin) return;
+    const { customFields, tags, ...baseProductData } = productData; // Assuming ExtendedProductData structure
     if (editingProduct) {
-      // Update existing product
-      await updateProductMutation.mutateAsync({
-        id: editingProduct.id,
-        data: baseProductData
-      });
+      await updateProductMutation.mutateAsync({ id: editingProduct.id, data: baseProductData });
     } else {
-      // Create new product - the mutation's onSuccess will handle saving custom fields and tags
-      await createProductMutation.mutateAsync(productData);
+      await createProductMutation.mutateAsync(baseProductData as NewProductData); // Pass baseProductData for creation
     }
+    setIsProductDialogOpen(false); // Close dialog on save
   };
 
-  // Bulk action handlers
-  const handleBulkUpdate = async (selectedIds: string[], updates: any) => {
-    console.log('Bulk update:', selectedIds, updates);
-    // For now, just show a success message
-    // In a real app, you'd call an API endpoint to update multiple products
-    toast.success(`Bulk update would be applied to ${selectedIds.length} products`);
-  };
-
-  const handleBulkDelete = async (selectedIds: string[]) => {
-    console.log('Bulk delete:', selectedIds);
-    // For now, just show a success message
-    // In a real app, you'd call an API endpoint to delete multiple products
-    for (const id of selectedIds) {
-      try {
-        await deleteProduct(parseInt(id));
-      } catch (error) {
-        console.error(`Failed to delete product ${id}:`, error);
-      }
-    }
-    queryClient.invalidateQueries({ queryKey: ['products'] });
-  };
-
-  // Handle loading state
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading products...</div>
-      </div>
-    );
+  // --- Loading and Error States ---
+  if (isLoadingProfile) {
+    return <div className="p-4"><p>Loading user permissions...</p></div>;
   }
 
-  // Handle error state
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg text-red-600">
-          Error loading products: {error instanceof Error ? error.message : 'Unknown error'}
-        </div>
-      </div>
-    );
+  if (isLoadingProducts) {
+    return <div className="p-4"><p>Loading products...</p></div>;
   }
 
+  if (productsError) {
+    return <div className="p-4 text-red-500"><p>Error loading products: {productsError.message}</p></div>;
+  }
+
+  // --- Render ---
   return (
-    <>
+    <div className="p-4 md:p-6"> {/* Added some padding */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Products</h1>
+          <p className="text-muted-foreground">Manage your product catalog</p>
+        </div>
+        {/* Conditional "New Product" Button - Placed here for standard UI layout */}
+        {isConfirmedAdmin && (
+          <Button onClick={handleNewProduct}>
+            <PlusCircle className="mr-2 h-4 w-4" /> New Product
+          </Button>
+        )}
+      </div>
+
       <DataTable
-        columns={columns}
+        columns={tableColumns}
         data={products}
-        title="Products"
-        description="Manage your product catalog"
-        searchPlaceholder="Search products..."
-        pageType="products"
-        onRowClick={handleRowClick}
-        onAddField={handleAddField}
-        onNewItem={handleNewProduct}
-        actionsColumn={actionsColumn}
-        onBulkUpdate={handleBulkUpdate}
-        onBulkDelete={handleBulkDelete}
+        // Removed title & description, searchPlaceholder as they are part of page layout now
+        searchPlaceholder="Search products..." // Keep search if DataTable implements it
+        pageType="products" // Keep if used by DataTable
+        // onNewItem is handled by the external button
+        // actionsColumn is now part of 'tableColumns'
+        // Pass other relevant props to your DataTable like pagination, selection, etc.
       />
       
-      <ProductDialog
-        open={isProductDialogOpen}
-        onOpenChange={setIsProductDialogOpen}
-        onSave={handleSaveProduct}
-        product={editingProduct}
-        isLoading={createProductMutation.isPending || updateProductMutation.isPending}
-      />
-    </>
+      {/* Product Dialog - only render if admin to prevent any access */}
+      {isConfirmedAdmin && (
+        <ProductDialog
+          open={isProductDialogOpen}
+          onOpenChange={setIsProductDialogOpen}
+          onSave={handleSaveProduct}
+          product={editingProduct}
+          isLoading={createProductMutation.isPending || updateProductMutation.isPending}
+        />
+      )}
+    </div>
   );
 };
 

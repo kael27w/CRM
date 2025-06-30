@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,7 +11,7 @@ import { updateEvent, fetchContacts, fetchCompanies, type EventUpdateData, type 
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { Label } from '../ui/label';
+
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -120,14 +120,14 @@ export function EditEventDialog({ open, onOpenChange, event }: EditEventDialogPr
   // Fetch contacts for dropdown
   const { data: contacts = [] } = useQuery<ContactEntry[]>({
     queryKey: ['contacts'],
-    queryFn: fetchContacts,
+    queryFn: () => fetchContacts('all'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch companies for dropdown
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ['companies'],
-    queryFn: fetchCompanies,
+    queryFn: () => fetchCompanies('all'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 

@@ -272,20 +272,43 @@ export async function fetchCallLogs(): Promise<CallLogEntry[]> {
 
 /**
  * Fetches tasks from the API
+ * @param view - 'mine' to show only user's tasks, 'all' to show all tasks (admin only)
  * @returns Promise containing an array of task entries
  */
-export async function fetchTasks(): Promise<TaskEntry[]> {
+export async function fetchTasks(view: 'mine' | 'all' = 'mine'): Promise<TaskEntry[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/tasks`);
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('fetchTasks: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
+    const url = view === 'all' ? '/api/tasks?view=all' : '/api/tasks?view=mine';
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+    });
     
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error("fetchTasks - HTTP error:", response.status, errorText);
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You do not have permission to view tasks');
+      }
+      
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
     
     const data = await response.json();
+    console.log(`fetchTasks - Success: ${data.length} tasks fetched with view ${view}`);
     return data as TaskEntry[];
   } catch (error) {
-    console.error('Error fetching tasks:', error);
+    console.error('fetchTasks - Error:', error);
     // It's good practice to re-throw the error or handle it appropriately
     // For TanStack Query, re-throwing allows it to manage the error state
     throw error instanceof Error ? error : new Error('Unknown error fetching tasks');
@@ -295,15 +318,24 @@ export async function fetchTasks(): Promise<TaskEntry[]> {
 /**
  * Updates the status of a task
  * @param taskId - The ID of the task to update
- * @param updates - An object containing the fields to update (e.g., { completed: boolean; status: string })
+ * @param completed - Boolean indicating if the task is completed
  * @returns Promise containing the updated task entry
  */
-export async function updateTaskStatus(taskId: number, updates: { completed: boolean; status: string }): Promise<TaskEntry> {
+export async function updateTaskStatus(taskId: number, completed: boolean): Promise<TaskEntry> {
+  const updates = { completed, status: completed ? 'completed' : 'pending' };
   try {
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('updateTaskStatus: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/activities/${taskId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(updates),
     });
@@ -319,13 +351,19 @@ export async function updateTaskStatus(taskId: number, updates: { completed: boo
       } catch (parseError) {
         // Ignore if response is not JSON or empty
       }
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You can only update your own tasks');
+      }
+      
       throw new Error(errorMessage);
     }
 
     const data = await response.json();
+    console.log(`updateTaskStatus - Success: Task ${taskId} updated`);
     return data as TaskEntry;
   } catch (error) {
-    console.error(`Error updating task ${taskId}:`, error);
+    console.error(`updateTaskStatus - Error updating task ${taskId}:`, error);
     throw error instanceof Error ? error : new Error('Unknown error updating task');
   }
 }
@@ -357,6 +395,13 @@ export type NewTaskData = {
 export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
   // Log the API base URL for debugging
   console.log("API_BASE_URL:", API_BASE_URL);
+
+  // Get authentication headers
+  const authHeaders = await getAuthHeaders();
+  if (!('Authorization' in authHeaders)) {
+    console.error('createTask: No authorization token found.');
+    throw new Error('Unauthorized: No token available for API request.');
+  }
 
   const payload = {
     type: 'task' as const, // Ensure 'type' is 'task'
@@ -432,6 +477,7 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
         body: JSON.stringify(taskPayload),
         signal: controller.signal,
@@ -524,9 +570,6 @@ export async function createTask(newTaskData: NewTaskData): Promise<TaskEntry> {
 export async function createContactManually(contactData: NewContactData): Promise<ContactEntry> {
   console.log('[API_CLIENT_CREATE_CONTACT] Received contactData:', JSON.stringify(contactData, null, 2));
   console.log(`[API_CLIENT_CREATE_CONTACT] Status field: "${contactData.status}", Type: ${typeof contactData.status}`);
-  
-  // Ensure status is valid before sending to API
-  const validStatuses = ["Lead", "Prospect", "Active Client", "Inactive Client", "Client"];
   
   // Create a copy of the data to avoid mutating the original
   const contactDataToSend = { ...contactData };
@@ -689,11 +732,23 @@ export async function fetchContactActivities(contactId: string | number): Promis
   console.log("Fetching contact activities from URL:", url);
 
   try {
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('fetchContactActivities: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
     // Add timeout handling
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
     const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
       signal: controller.signal
     });
     
@@ -718,6 +773,11 @@ export async function fetchContactActivities(contactId: string | number): Promis
           console.warn("Could not get error response text either");
         }
       }
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You do not have permission to view activities for this contact');
+      }
+      
       throw new Error(errorMessage);
     }
     
@@ -756,12 +816,19 @@ export type NewNoteData = {
 };
 
 /**
- * Creates a new note activity for a contact
+ * Creates a new note activity for a contact (will be owned by the authenticated user)
  * @param noteData - The data for the new note activity
  * @returns Promise containing the newly created note activity
  */
 export async function createNoteActivity(noteData: NewNoteData): Promise<UnifiedActivityEntry> {
   console.log("createNoteActivity API function called with payload:", noteData);
+  
+  // Get authentication headers
+  const authHeaders = await getAuthHeaders();
+  if (!('Authorization' in authHeaders)) {
+    console.error('createNoteActivity: No authorization token found.');
+    throw new Error('Unauthorized: No token available for API request.');
+  }
   
   // The payload is the noteData directly since we don't need defaults like tasks
   const payload = noteData;
@@ -775,6 +842,7 @@ export async function createNoteActivity(noteData: NewNoteData): Promise<Unified
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(payload),
     });
@@ -931,17 +999,25 @@ export async function updateContact(contactId: string | number, contactData: Par
 }
 
 /**
- * Updates an activity (note, task, etc.)
+ * Updates an activity (note, task, etc.) - only allowed for the owner
  * @param activityId - The ID of the activity to update
  * @param updateData - The data to update
  * @returns Promise containing the updated activity
  */
 export async function updateActivity(activityId: string | number, updateData: ActivityUpdateData): Promise<ActivityData> {
   try {
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('updateActivity: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/activities/${activityId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(updateData),
     });
@@ -956,6 +1032,14 @@ export async function updateActivity(activityId: string | number, updateData: Ac
       } catch (parseError) {
         // Ignore if response is not JSON or empty
       }
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You can only update your own activities');
+      }
+      if (response.status === 404) {
+        throw new Error(`Activity with ID ${activityId} not found`);
+      }
+      
       throw new Error(errorMessage);
     }
 
@@ -968,16 +1052,24 @@ export async function updateActivity(activityId: string | number, updateData: Ac
 }
 
 /**
- * Deletes an activity (note, task, etc.)
+ * Deletes an activity (note, task, etc.) - only allowed for the owner
  * @param activityId - The ID of the activity to delete
  * @returns Promise containing a success message
  */
 export async function deleteActivity(activityId: string | number): Promise<{ message: string }> {
   try {
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('deleteActivity: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/activities/${activityId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
     });
 
@@ -991,6 +1083,14 @@ export async function deleteActivity(activityId: string | number): Promise<{ mes
       } catch (parseError) {
         // Ignore if response is not JSON or empty
       }
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You can only delete your own activities');
+      }
+      if (response.status === 404) {
+        throw new Error(`Activity with ID ${activityId} not found`);
+      }
+      
       throw new Error(errorMessage);
     }
 
@@ -1011,7 +1111,14 @@ export async function fetchProducts(): Promise<Product[]> {
   console.log("Fetching products from:", fullUrl);
   
   try {
-    const response = await fetch(fullUrl);
+    const authHeaders = await getAuthHeaders();
+    
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      }
+    });
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -1022,6 +1129,40 @@ export async function fetchProducts(): Promise<Product[]> {
   } catch (error) {
     console.error('Error fetching products:', error);
     throw error instanceof Error ? error : new Error('Unknown error fetching products');
+  }
+}
+
+/**
+ * Fetches a single product by ID via the API
+ * @param productId - The ID of the product to fetch
+ * @returns Promise containing the product entry
+ */
+export async function fetchProductById(productId: string | number): Promise<Product> {
+  const fullUrl = `${API_BASE_URL}/api/products/${productId}`;
+  console.log("Fetching product from:", fullUrl);
+  
+  try {
+    const authHeaders = await getAuthHeaders();
+    
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Product with ID ${productId} not found`);
+      }
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data as Product;
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    throw error instanceof Error ? error : new Error('Unknown error fetching product');
   }
 }
 
@@ -1046,6 +1187,8 @@ export async function createProduct(productData: NewProductData): Promise<Produc
     try {
       console.log(`Attempt ${retryCount + 1}/${maxRetries}: Sending POST request to: ${apiUrl}`);
       
+      const authHeaders = await getAuthHeaders();
+      
       // Use AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -1054,6 +1197,7 @@ export async function createProduct(productData: NewProductData): Promise<Produc
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders
         },
         body: JSON.stringify(productData),
         signal: controller.signal,
@@ -1160,6 +1304,8 @@ export async function updateProduct(productId: string | number, productData: Par
     try {
       console.log(`Attempt ${retryCount + 1}/${maxRetries}: Sending PATCH request to: ${apiUrl}`);
       
+      const authHeaders = await getAuthHeaders();
+      
       // Use AbortController for timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -1168,6 +1314,7 @@ export async function updateProduct(productId: string | number, productData: Par
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders
         },
         body: JSON.stringify(productData),
         signal: controller.signal,
@@ -1207,7 +1354,7 @@ export async function updateProduct(productId: string | number, productData: Par
         }
         
         // For client errors (4xx), don't retry
-        console.error("Error details for updateProduct:", errorMessage, "Payload sent:", productData);
+        console.error("Error details for updateProduct:", errorMessage, "ID:", productId, "Payload sent:", productData);
         throw new Error(errorMessage);
       }
 
@@ -1235,7 +1382,7 @@ export async function updateProduct(productId: string | number, productData: Par
       }
       
       // For other errors or if we've exhausted retries
-      console.error('Error updating product:', error, "Payload attempted:", productData);
+      console.error('Error updating product:', error, "ID:", productId, "Payload attempted:", productData);
       if (error instanceof Error) {
         throw error;
       }
@@ -1259,6 +1406,8 @@ export async function deleteProduct(productId: string | number): Promise<{ messa
   console.log("Making API request to:", apiUrl);
   
   try {
+    const authHeaders = await getAuthHeaders();
+    
     // Use AbortController for timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -1267,6 +1416,7 @@ export async function deleteProduct(productId: string | number): Promise<{ messa
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders
       },
       signal: controller.signal,
     });
@@ -1353,18 +1503,26 @@ export type NewCompanyData = {
 };
 
 /**
- * Fetches all companies from the API
+ * Fetches companies from the API with optional view parameter
+ * @param view - Whether to fetch 'mine' (user's own) or 'all' companies (admin only)
  * @returns Promise containing an array of company entries
  */
-export async function fetchCompanies(): Promise<Company[]> {
-  const fullUrl = `${API_BASE_URL}/api/companies`;
-  console.log("Fetching companies from:", fullUrl);
+export async function fetchCompanies(view: 'mine' | 'all' = 'mine'): Promise<Company[]> {
+  const url = new URL(`${API_BASE_URL}/api/companies`);
+  if (view) {
+    url.searchParams.append('view', view);
+  }
+  
+  console.log("Fetching companies from:", url.toString(), "with view:", view);
   
   try {
-    const response = await fetch(fullUrl, {
+    const headers = await getAuthHeaders();
+    
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        ...headers,
       },
     });
     
@@ -1375,7 +1533,7 @@ export async function fetchCompanies(): Promise<Company[]> {
     }
     
     const data = await response.json();
-    console.log(`Successfully fetched ${data.length} companies`);
+    console.log(`Successfully fetched ${data.length} companies (view: ${view})`);
     return data as Company[];
   } catch (error) {
     console.error('Error fetching companies:', error);
@@ -1399,10 +1557,13 @@ export async function createCompany(companyData: NewCompanyData): Promise<Compan
   console.log("Creating company at:", fullUrl, "with data:", companyData);
   
   try {
+    const headers = await getAuthHeaders();
+    
     const response = await fetch(fullUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...headers,
       },
       body: JSON.stringify(companyData),
     });
@@ -1445,10 +1606,13 @@ export async function fetchCompanyById(companyId: string | number): Promise<Comp
   console.log("Fetching company by ID from:", fullUrl);
   
   try {
+    const headers = await getAuthHeaders();
+    
     const response = await fetch(fullUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        ...headers,
       },
     });
     
@@ -1489,10 +1653,13 @@ export async function updateCompany(companyId: string | number, companyData: Par
   console.log("Updating company at:", fullUrl, "with data:", companyData);
   
   try {
+    const headers = await getAuthHeaders();
+    
     const response = await fetch(fullUrl, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        ...headers,
       },
       body: JSON.stringify(companyData),
     });
@@ -1538,10 +1705,13 @@ export async function deleteCompany(companyId: string | number): Promise<{ messa
   console.log("Deleting company at:", fullUrl);
   
   try {
+    const headers = await getAuthHeaders();
+    
     const response = await fetch(fullUrl, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        ...headers,
       },
     });
     
@@ -1607,24 +1777,40 @@ export async function fetchPipelines(): Promise<DBPipeline[]> {
 /**
  * Fetches a single pipeline with all its stages and deals
  * @param pipelineId - The ID of the pipeline to fetch
+ * @param view - View parameter: 'mine' for user's own deals, 'all' for admin to see all deals
  * @returns Promise containing the complete pipeline data
  */
-export async function fetchPipelineData(pipelineId: string): Promise<Pipeline> {
-  const fullUrl = `${API_BASE_URL}/api/pipelines/${pipelineId}`;
-  console.log("Fetching pipeline data from:", fullUrl);
-  
+export async function fetchPipelineData(pipelineId: string, view: 'mine' | 'all' = 'mine'): Promise<Pipeline> {
   try {
-    const response = await fetch(fullUrl);
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('fetchPipelineData: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+
+    const fullUrl = `${API_BASE_URL}/api/pipelines/${pipelineId}?view=${view}`;
+    console.log("Fetching pipeline data from:", fullUrl, "with view:", view);
+    
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+      },
+    });
     
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error(`Pipeline with ID ${pipelineId} not found`);
       }
+      if (response.status === 403) {
+        throw new Error('Access denied: You do not have permission to view this data');
+      }
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
     
     const data = await response.json();
-    console.log(`Successfully fetched pipeline data for ${pipelineId}:`, data);
+    console.log(`Successfully fetched pipeline data for ${pipelineId} with view ${view}:`, data);
     return data as Pipeline;
   } catch (error) {
     console.error('Error fetching pipeline data:', error);
@@ -1638,14 +1824,21 @@ export async function fetchPipelineData(pipelineId: string): Promise<Pipeline> {
  * @returns Promise containing the created deal
  */
 export async function createDeal(dealData: NewDealData): Promise<DBDeal> {
-  const fullUrl = `${API_BASE_URL}/api/deals`;
-  console.log("Creating deal at:", fullUrl, "with data:", dealData);
-  
   try {
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('createDeal: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+
+    const fullUrl = `${API_BASE_URL}/api/deals`;
+    console.log("Creating deal at:", fullUrl, "with data:", dealData);
+    
     const response = await fetch(fullUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(dealData),
     });
@@ -1678,14 +1871,21 @@ export async function createDeal(dealData: NewDealData): Promise<DBDeal> {
  * @returns Promise containing the updated deal
  */
 export async function updateDeal(dealId: string | number, dealData: Partial<DBDeal>): Promise<DBDeal> {
-  const fullUrl = `${API_BASE_URL}/api/deals/${dealId}`;
-  console.log("Updating deal at:", fullUrl, "with data:", dealData);
-  
   try {
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('updateDeal: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+
+    const fullUrl = `${API_BASE_URL}/api/deals/${dealId}`;
+    console.log("Updating deal at:", fullUrl, "with data:", dealData);
+    
     const response = await fetch(fullUrl, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(dealData),
     });
@@ -1720,14 +1920,21 @@ export async function updateDeal(dealId: string | number, dealData: Partial<DBDe
  * @returns Promise that resolves when the deal is deleted
  */
 export async function deleteDeal(dealId: string | number): Promise<void> {
-  const fullUrl = `${API_BASE_URL}/api/deals/${dealId}`;
-  console.log("Deleting deal at:", fullUrl);
-  
   try {
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('deleteDeal: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+
+    const fullUrl = `${API_BASE_URL}/api/deals/${dealId}`;
+    console.log("Deleting deal at:", fullUrl);
+    
     const response = await fetch(fullUrl, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
     });
     
@@ -1749,31 +1956,47 @@ export async function deleteDeal(dealId: string | number): Promise<void> {
 }
 
 /**
- * Fetch all contacts from the API
+ * Fetch all contacts from the API with data ownership support
+ * @param view - View parameter: 'mine' for user's own contacts, 'all' for admin to see all contacts
  */
-export async function fetchContacts(): Promise<ContactEntry[]> {
+export async function fetchContacts(view: 'mine' | 'all' = 'mine'): Promise<ContactEntry[]> {
   try {
-    console.log("Fetching all contacts from API...");
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('fetchContacts: No authorization token found.');
+      // Depending on how your app handles this, you might throw an error
+      // or return an empty array, but throwing is often better for queryClient error handling.
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+
+    console.log(`Fetching contacts from API with view: ${view}`);
     
-    const response = await fetch(`${API_BASE_URL}/api/contacts/list`, {
+    // Corrected endpoint based on typical backend setup (usually /api/contacts for list)
+    // and adding the view parameter
+    const response = await fetch(`${API_BASE_URL}/api/contacts?view=${view}`, { 
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders, // <-- ADDED AUTH HEADERS
       },
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Failed to fetch contacts. Status: ${response.status}, Response: ${errorText}`);
-      throw new Error(`Failed to fetch contacts: ${response.status} ${response.statusText}`);
+      const errorData = await response.json().catch(() => ({ message: response.statusText }));
+      console.error(`Failed to fetch contacts. Status: ${response.status}`, errorData);
+      throw new Error(`Failed to fetch contacts: ${response.status} ${errorData.message || response.statusText}`);
     }
 
     const contacts: ContactEntry[] = await response.json();
-    console.log(`Successfully fetched ${contacts.length} contacts`);
+    console.log(`Successfully fetched ${contacts.length} contacts with view: ${view}`);
     return contacts;
   } catch (error) {
     console.error("Error fetching contacts:", error);
+    // Re-throw the error so React Query or the calling function can handle it
+    if (error instanceof Error) {
     throw error;
+    }
+    throw new Error('Unknown error fetching contacts');
   }
 }
 
@@ -1818,14 +2041,24 @@ export interface ActivityQueryParams {
   contact_id?: number;
   company_id?: number;
   user_id?: number;
+  view?: 'mine' | 'all'; // Data ownership parameter
 }
 
 /**
- * Fetch activities with optional filtering
+ * Fetch activities with optional filtering and data ownership support
+ * @param params - Query parameters including view for data ownership
+ * @returns Promise containing an array of activity entries
  */
 export async function fetchActivities(params?: ActivityQueryParams): Promise<ActivityEntry[]> {
   try {
     console.log("fetchActivities - Request params:", params);
+    
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('fetchActivities: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
     
     // Build query string
     const queryParams = new URLSearchParams();
@@ -1835,27 +2068,34 @@ export async function fetchActivities(params?: ActivityQueryParams): Promise<Act
     if (params?.contact_id) queryParams.append('contact_id', params.contact_id.toString());
     if (params?.company_id) queryParams.append('company_id', params.company_id.toString());
     if (params?.user_id) queryParams.append('user_id', params.user_id.toString());
+    if (params?.view) queryParams.append('view', params.view);
     
     const queryString = queryParams.toString();
     const url = `${API_BASE_URL}/api/activities${queryString ? `?${queryString}` : ''}`;
     
-    console.log("fetchActivities - Making request to:", url);
+    console.log("fetchActivities - Making request to:", url, "with view:", params?.view || 'default');
     
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("fetchActivities - HTTP error:", response.status, errorText);
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You do not have permission to view this data');
+      }
+      
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
-    console.log("fetchActivities - Success:", data);
+    console.log("fetchActivities - Success:", `${data.length} activities fetched with view: ${params?.view || 'default'}`);
     return data as ActivityEntry[];
   } catch (error) {
     console.error("fetchActivities - Error:", error);
@@ -1864,7 +2104,7 @@ export async function fetchActivities(params?: ActivityQueryParams): Promise<Act
 }
 
 /**
- * Create a new event
+ * Create a new event (will be owned by the authenticated user)
  */
 export async function createEvent(eventData: NewEventData): Promise<ActivityEntry> {
   try {
@@ -1873,10 +2113,18 @@ export async function createEvent(eventData: NewEventData): Promise<ActivityEntr
     console.log("[CREATE_EVENT_API] Event data title:", eventData.title);
     console.log("[CREATE_EVENT_API] Event data start_datetime:", eventData.start_datetime);
     
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('createEvent: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/activities`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(eventData),
     });
@@ -1887,6 +2135,11 @@ export async function createEvent(eventData: NewEventData): Promise<ActivityEntr
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[CREATE_EVENT_API] HTTP error:", response.status, errorText);
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You do not have permission to create activities');
+      }
+      
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
@@ -1900,16 +2153,24 @@ export async function createEvent(eventData: NewEventData): Promise<ActivityEntr
 }
 
 /**
- * Update an existing event
+ * Update an existing event (only allowed for the owner)
  */
 export async function updateEvent(eventId: string | number, updateData: EventUpdateData): Promise<ActivityEntry> {
   try {
     console.log(`updateEvent - Request for ID ${eventId}:`, updateData);
     
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('updateEvent: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/activities/${eventId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify(updateData),
     });
@@ -1917,6 +2178,14 @@ export async function updateEvent(eventId: string | number, updateData: EventUpd
     if (!response.ok) {
       const errorText = await response.text();
       console.error("updateEvent - HTTP error:", response.status, errorText);
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You can only update your own activities');
+      }
+      if (response.status === 404) {
+        throw new Error(`Event with ID ${eventId} not found`);
+      }
+      
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
@@ -1930,22 +2199,38 @@ export async function updateEvent(eventId: string | number, updateData: EventUpd
 }
 
 /**
- * Delete an event
+ * Delete an event (only allowed for the owner)
  */
 export async function deleteEvent(eventId: string | number): Promise<{ message: string }> {
   try {
     console.log(`deleteEvent - Request for ID ${eventId}`);
     
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('deleteEvent: No authorization token found.');
+      throw new Error('Unauthorized: No token available for API request.');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/activities/${eventId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("deleteEvent - HTTP error:", response.status, errorText);
+      
+      if (response.status === 403) {
+        throw new Error('Access denied: You can only delete your own activities');
+      }
+      if (response.status === 404) {
+        throw new Error(`Event with ID ${eventId} not found`);
+      }
+      
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
@@ -2055,6 +2340,70 @@ export async function updateProfile(profileData: ProfileUpdateData): Promise<Pro
     return updatedProfile;
   } catch (error) {
     console.error('Error updating profile:', error);
+    throw error;
+  }
+}
+
+/**
+ * Interface representing the CSV import summary response
+ */
+export interface CsvImportSummary {
+  totalRows: number;
+  successfulImports: number;
+  duplicatesSkipped: number;
+  companiesCreated: number;
+  errors: number;
+  errorDetails?: string[];
+}
+
+/**
+ * Interface representing the CSV import response
+ */
+export interface CsvImportResponse {
+  message: string;
+  summary: CsvImportSummary;
+}
+
+/**
+ * Import contacts from a CSV file
+ */
+export async function importContactsCsv(file: File): Promise<CsvImportResponse> {
+  try {
+    console.log('importContactsCsv - Starting CSV import for file:', file.name);
+    
+    // Get authentication headers
+    const authHeaders = await getAuthHeaders();
+    if (!('Authorization' in authHeaders)) {
+      console.error('importContactsCsv: No authorization token found.');
+      throw new Error('Unauthorized: User is not logged in.');
+    }
+    
+    // Create FormData with the CSV file
+    const formData = new FormData();
+    formData.append('csv', file); // Field name must match backend expectation
+    
+    const response = await fetch(`${API_BASE_URL}/api/contacts/import-csv`, {
+      method: 'POST',
+      headers: {
+        // DO NOT set 'Content-Type': 'multipart/form-data' - browser sets this automatically
+        ...authHeaders, // Adds Authorization: Bearer <token>
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ 
+        message: `Import failed with status: ${response.status}` 
+      }));
+      console.error("importContactsCsv - HTTP error:", response.status, errorData);
+      throw new Error(errorData.message || `Import failed with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("importContactsCsv - Success:", data);
+    return data as CsvImportResponse;
+  } catch (error) {
+    console.error("importContactsCsv - Error:", error);
     throw error;
   }
 }

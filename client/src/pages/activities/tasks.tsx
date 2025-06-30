@@ -20,7 +20,7 @@ interface ExtendedTask extends Task {
  * Displays a list of tasks with filtering and sorting capabilities
  */
 const TasksPage: React.FC = () => {
-  const { tasks, isLoading, isError, error, toggleTask } = useTasks();
+  const { tasks, isLoading, isError, error, toggleTask } = useTasks('mine');
   const [searchTerm, setSearchTerm] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'open' | 'completed'>('all');
 
